@@ -15,7 +15,7 @@ logger = logging.getLogger("starburst.builder")
 
 
 class Starburst(PayloadType):
-    name = "Starburst"
+    name = "starburst"
     file_extension = "bin"
     author = "@Lavender-exe"
     semver = "1.0.0"
