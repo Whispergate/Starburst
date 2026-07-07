@@ -1,0 +1,29 @@
+{
+    "payload_type": "Starburst",
+    "supported_features": {
+        "bof": {
+            "bof_command": "execute_coff",
+            "bof_file_parameter_name": "file",
+            "bof_argument_array_parameter_name": "arguments",
+            "bof_entrypoint_parameter_name": "entrypoint"
+        },
+        "execute_assembly": {
+            "execute_assembly_command": "execute_assembly",
+            "execute_assembly_file_parameter_name": "file",
+            "execute_assembly_arguments_parameter_name": "arguments"
+        },
+        "shell": {
+            "shell_command": "shell",
+            "shell_command_parameter_name": "command"
+        },
+        "upload": {
+            "upload_command": "upload",
+            "upload_file_parameter_name": "file_id",
+            "upload_path_parameter_name": "remote_path"
+        },
+        "download": {
+            "download_command": "download",
+            "download_path_parameter_name": "file"
+        }
+    }
+}
