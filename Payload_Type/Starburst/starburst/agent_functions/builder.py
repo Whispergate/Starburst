@@ -21,7 +21,7 @@ class Starburst(PayloadType):
     semver = "1.0.0"
     supported_os = [ SupportedOS.Windows, SupportedOS.Linux ]
     wrapper = False
-    wrapped_payloads = []
+    wrapped_payloads = ["erebus_wrapper", "service_wrapper", "scarecrow_wrapper"]
     note = "PIC shellcode agent based on Stardust framework and Crystal Palace."
     supports_dynamic_loading = True
     c2_profiles = ["http", "httpx", "github", "smb", "tcp"]

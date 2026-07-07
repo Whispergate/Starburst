@@ -1,0 +1,14 @@
+{
+  "os": ["Windows", "Linux"],
+  "languages": ["C"] ,
+  "features": {
+    "mythic": ["agent"],
+    "custom": ["bofs","key exchange", "killdate", "execute pic", "execute assembly", "shellcode injection"]
+  },
+  "payload_output": ["bin", "shellcode", "exe", "dll", "service_exe"],
+  "architectures": ["x86_64"],
+  "c2": [],
+  "mythic_version": "3.4.13",
+  "agent_version": "1.0.0",
+  "supported_wrappers": ["erebus_wrapper", "service_wrapper", "scarecrow_wrapper"]
+}
