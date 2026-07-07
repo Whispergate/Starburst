@@ -1,11 +1,8 @@
 +++
-title = "starburst"
+title = "Starburst"
 chapter = true
 weight = 5
-pre = "<b>1. </b>"
 +++
-
-![Starburst](/agents/starburst/starburst.svg?width=600px)
 
 ## Summary
 
@@ -35,10 +32,13 @@ Starburst is a Windows PIC (Position-Independent Code) agent for [Mythic](https:
 - File timestamp modification (timestomp)
 - Draugr N-frame call stack spoofing with operator-customizable profiles
 - [Arsenal Kit](https://github.com/Whispergate/Starburst.ArsenalKit) - modular, operator-swappable injection techniques (CRT/APC/Section/Custom), sleep masks (Default/Full Image/Heap/Custom), and call stack spoof profiles via compile-time selection headers
+- Forge compatible - execute_coff, execute_assembly, execute_pic, and shinject support file-at-execution-time via Default/New parameter groups
 - Multiple output formats: raw shellcode, EXE, DLL, Windows service
 
 ### Authors
 
 - [@Lavender-exe](https://github.com/Lavender-exe)
+
+## Table of Contents
 
 {{% children %}}
