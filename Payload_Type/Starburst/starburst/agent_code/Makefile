@@ -9,6 +9,21 @@ CFLAGS += -fno-ident -fpack-struct=8 -falign-functions=1 -s -w -mno-sse
 CFLAGS += -ffunction-sections -falign-jumps=1 -falign-labels=1 -fno-jump-tables
 CFLAGS += -Wl,-s,--no-seh,--enable-stdcall-fixup -masm=intel -fno-exceptions
 CFLAGS += -fms-extensions -Iinclude -Wl,-Tscripts/linker.ld
+
+# Detect mingw-w64 C++ headers for cross-compilation (clang often can't find them)
+GCC_X64_CXX := $(wildcard /usr/lib/gcc/x86_64-w64-mingw32/*/include/c++)
+GCC_X86_CXX := $(wildcard /usr/lib/gcc/i686-w64-mingw32/*/include/c++)
+ifneq ($(GCC_X64_CXX),)
+  GCC_X64_DIR := $(firstword $(GCC_X64_CXX))
+  GCC_X64_VER := $(patsubst /usr/lib/gcc/x86_64-w64-mingw32/%/include/c++,%,$(GCC_X64_DIR))
+  CFLAGS_X64_INC := -isystem $(GCC_X64_DIR) -isystem $(GCC_X64_DIR)/x86_64-w64-mingw32
+endif
+ifneq ($(GCC_X86_CXX),)
+  GCC_X86_DIR := $(firstword $(GCC_X86_CXX))
+  GCC_X86_VER := $(patsubst /usr/lib/gcc/i686-w64-mingw32/%/include/c++,%,$(GCC_X86_DIR))
+  CFLAGS_X86_INC := -isystem $(GCC_X86_DIR) -isystem $(GCC_X86_DIR)/i686-w64-mingw32
+endif
+
 GCC_TOOLCHAIN ?=
 ifneq ($(GCC_TOOLCHAIN),)
 CFLAGS += --gcc-toolchain=$(GCC_TOOLCHAIN)
@@ -32,23 +47,23 @@ x86-debug: x86
 
 x64: nasm64 $(OBJ64)
 	@ echo "compiling x64 project"
-	@ $(CCX64) bin/obj/*.x64.obj -o bin/$(NAME).x64.exe $(CFLAGS)
+	@ $(CCX64) bin/obj/*.x64.obj -o bin/$(NAME).x64.exe $(CFLAGS) $(CFLAGS_X64_INC)
 	@ objcopy --dump-section .text=bin/$(NAME).x64.bin bin/$(NAME).x64.exe
 	@ rm bin/$(NAME).x64.exe
 
 x86: nasm86 $(OBJ86)
 	@ echo "compiling x86 project"
-	@ $(CCX86) bin/obj/*.x86.obj -o bin/$(NAME).x86.exe $(CFLAGS)
+	@ $(CCX86) bin/obj/*.x86.obj -o bin/$(NAME).x86.exe $(CFLAGS) $(CFLAGS_X86_INC)
 	@ objcopy --dump-section .text=bin/$(NAME).x86.bin bin/$(NAME).x86.exe
 	@ rm bin/$(NAME).x86.exe
 
 %.x64.obj: %.cc
 	@ echo "-> compiling $< to $(notdir $@)"
-	@ $(CCX64) -o bin/obj/$(notdir $@) -c $< $(CFLAGS)
+	@ $(CCX64) -o bin/obj/$(notdir $@) -c $< $(CFLAGS) $(CFLAGS_X64_INC)
 
 %.x86.obj: %.cc
 	@ echo "-> compiling $< to $(notdir $@)"
-	@ $(CCX86) -o bin/obj/$(notdir $@) -c $< $(CFLAGS)
+	@ $(CCX86) -o bin/obj/$(notdir $@) -c $< $(CFLAGS) $(CFLAGS_X86_INC)
 
 nasm64:
 	@ $(ASMCC) -f win64 src/asm/entry.x64.asm -o bin/obj/entry.x64.obj
