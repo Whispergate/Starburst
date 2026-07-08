@@ -80,6 +80,9 @@ CMD_MAP = {
     "browserpivot":          0x38,
     "connect":               0x39,
     "disconnect":            0x3A,
+    "powerpick":             0x3B,
+    "spawnto_x64":           0x3C,
+    "spawnto_x86":           0x3D,
 }
 
 CMD_MAP_REV = {v: k for k, v in CMD_MAP.items()}

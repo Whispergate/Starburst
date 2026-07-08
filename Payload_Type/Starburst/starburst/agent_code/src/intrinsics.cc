@@ -7,6 +7,7 @@ extern "C" {
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wmissing-prototypes"
 
+__attribute__((section(".text$B")))
 void* memset( void* dst, int val, size_t_pic len ) {
     auto p = static_cast<unsigned char*>( dst );
     for ( size_t_pic i = 0; i < len; i++ ) {
@@ -15,6 +16,7 @@ void* memset( void* dst, int val, size_t_pic len ) {
     return dst;
 }
 
+__attribute__((section(".text$B")))
 void* memcpy( void* dst, const void* src, size_t_pic len ) {
     auto d = static_cast<unsigned char*>( dst );
     auto s = static_cast<const unsigned char*>( src );
@@ -24,21 +26,25 @@ void* memcpy( void* dst, const void* src, size_t_pic len ) {
     return dst;
 }
 
+__attribute__((section(".text$B")))
 size_t_pic strlen( const char* s ) {
     size_t_pic len = 0;
     while ( s[len] ) len++;
     return len;
 }
 
+__attribute__((section(".text$B")))
 size_t_pic wcslen( const wchar_t* s ) {
     size_t_pic len = 0;
     while ( s[len] ) len++;
     return len;
 }
 
+__attribute__((section(".text$B")))
 void ___chkstk_ms( void ) {
 }
 
+__attribute__((section(".text$B")))
 void __chkstk_ms( void ) {
 }
 

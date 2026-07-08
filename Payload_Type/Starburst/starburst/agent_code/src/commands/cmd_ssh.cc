@@ -10,6 +10,7 @@
 using namespace stardust;
 using namespace starburst;
 
+__attribute__((section(".text$B")))
 static bool pipe_write(instance& inst, HANDLE pipe, const char* data, uint32_t len) {
     DWORD written = 0;
     uint32_t total = 0;
@@ -21,10 +22,12 @@ static bool pipe_write(instance& inst, HANDLE pipe, const char* data, uint32_t l
     return true;
 }
 
+__attribute__((section(".text$B")))
 static bool pipe_write_str(instance& inst, HANDLE pipe, const char* str) {
     return pipe_write(inst, pipe, str, str_len(str));
 }
 
+__attribute__((section(".text$B")))
 static void deploy_linux(
     instance& inst, HANDLE h_stdin_write,
     const char* binary_b64, uint32_t binary_b64_len
@@ -63,6 +66,7 @@ static void deploy_linux(
     inst.ntdll.NtDelayExecution(FALSE, &delay);
 }
 
+__attribute__((section(".text$B")))
 static void deploy_windows(
     instance& inst, HANDLE h_stdin_write,
     const char* binary_b64, uint32_t binary_b64_len

@@ -5,6 +5,8 @@ RUN apt-get update && apt-get install -y \
     gcc \
     nasm \
     mingw-w64 \
+    g++-mingw-w64-x86-64 \
+    g++-mingw-w64-i686 \
     binutils-mingw-w64 \
     make \
     openjdk-11-jre-headless \

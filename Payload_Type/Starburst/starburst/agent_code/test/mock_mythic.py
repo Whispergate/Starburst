@@ -59,6 +59,7 @@ CMD_MAP = {
     "idletime": 0x36, "getuid": 0x37,
     "browserpivot": 0x38,
     "connect": 0x39, "disconnect": 0x3A,
+    "powerpick": 0x3B,
 }
 CMD_MAP_REV = {v: k for k, v in CMD_MAP.items()}
 

@@ -159,16 +159,18 @@ def parse_download_init(p, task_id):
 
     is_screenshot = full_path.lower().endswith((".bmp", ".png", ".jpg", ".jpeg")) and "screenshot" in full_path.lower()
 
-    return {
+    result = {
         "task_id": task_id,
         "completed": False,
         "download": {
             "total_chunks": total_chunks,
             "full_path": full_path,
-            "is_screenshot": is_screenshot,
         },
         "user_output": f"Downloading {full_path} ({total_size} bytes, {total_chunks} chunks)",
     }
+    if is_screenshot:
+        result["is_screenshot"] = True
+    return result
 
 
 def parse_download_chunk(p, task_id, status_byte):

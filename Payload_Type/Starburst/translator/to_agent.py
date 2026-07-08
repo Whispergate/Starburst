@@ -260,6 +260,20 @@ def pack_command_params(cmd_name, params):
         link_info = params.get("link_info", {})
         pk.add_string(link_info.get("callback_uuid", ""))
 
+    elif cmd_name == "powerpick":
+        import base64
+        runner_b64 = params.get("runner_data", "")
+        if runner_b64:
+            runner_raw = base64.b64decode(runner_b64)
+            pk.add_bytes(runner_raw)
+        else:
+            pk.add_bytes(b"")
+        pk.add_string(params.get("script", ""))
+
+    elif cmd_name in ("spawnto_x64", "spawnto_x86"):
+        pk.add_string(params.get("application", ""))
+        pk.add_string(params.get("arguments", ""))
+
     return pk.build()
 
 

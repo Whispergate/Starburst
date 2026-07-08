@@ -17,7 +17,7 @@ class ScreenshotCommand(CommandBase):
     help_cmd = "screenshot"
     description = "Capture a screenshot of the current desktop."
     version = 1
-    supported_ui_features = []
+    supported_ui_features = ["callback_table:screenshot"]
     author = "@Lavender-exe"
     attackmapping = ["T1113"]
     argument_class = ScreenshotArguments

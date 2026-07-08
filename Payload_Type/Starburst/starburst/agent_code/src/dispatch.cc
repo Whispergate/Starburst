@@ -193,6 +193,15 @@ auto declfn dispatch_command(
 #ifdef INCLUDE_CMD_DISCONNECT
         case CMD_DISCONNECT: cmd_disconnect( inst, task_uuid, params ); return;
 #endif
+#ifdef INCLUDE_CMD_POWERPICK
+        case CMD_POWERPICK: cmd_powerpick( inst, task_uuid, params ); return;
+#endif
+#ifdef INCLUDE_CMD_SPAWNTO_X64
+        case CMD_SPAWNTO_X64: cmd_spawnto_x64( inst, task_uuid, params ); return;
+#endif
+#ifdef INCLUDE_CMD_SPAWNTO_X86
+        case CMD_SPAWNTO_X86: cmd_spawnto_x86( inst, task_uuid, params ); return;
+#endif
         default: break;
     }
 

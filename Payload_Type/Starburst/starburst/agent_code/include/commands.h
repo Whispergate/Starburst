@@ -245,6 +245,18 @@ namespace starburst {
     auto declfn cmd_disconnect( instance& inst, char* task_uuid, Parser* params ) -> void;
 #endif
 
+#ifdef INCLUDE_CMD_POWERPICK
+    auto declfn cmd_powerpick( instance& inst, char* task_uuid, Parser* params ) -> void;
+#endif
+
+#ifdef INCLUDE_CMD_SPAWNTO_X64
+    auto declfn cmd_spawnto_x64( instance& inst, char* task_uuid, Parser* params ) -> void;
+#endif
+
+#ifdef INCLUDE_CMD_SPAWNTO_X86
+    auto declfn cmd_spawnto_x86( instance& inst, char* task_uuid, Parser* params ) -> void;
+#endif
+
 }
 
 #endif
