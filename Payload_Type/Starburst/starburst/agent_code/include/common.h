@@ -53,6 +53,14 @@ namespace stardust
         );
     }
 
+    template <typename T>
+    inline T symbol(const typename std::remove_pointer<T>::type* s) {
+        return reinterpret_cast<T>(
+            reinterpret_cast<uintptr_t>(RipData()) -
+            (reinterpret_cast<uintptr_t>(&RipData) - reinterpret_cast<uintptr_t>(s))
+        );
+    }
+
     class instance {
 
     public:
