@@ -231,8 +231,13 @@ static BOOL __cdecl declfn beacon_is_admin() {
 }
 
 static DWORD __cdecl declfn beacon_get_spawn_to( BOOL x86, char* buf, int len ) {
-    (void)x86; (void)buf; (void)len;
-    return 0;
+    auto inst = coff_get_inst();
+    if ( !inst || !buf || len <= 0 ) return 0;
+    const char* src = x86 ? inst->spawnto.x86 : inst->spawnto.x64;
+    int i = 0;
+    while ( src[i] && i < len - 1 ) { buf[i] = src[i]; i++; }
+    buf[i] = '\0';
+    return static_cast<DWORD>( i );
 }
 
 static void __cdecl declfn beacon_cleanup_thread( void* ctx ) {

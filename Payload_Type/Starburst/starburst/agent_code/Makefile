@@ -8,7 +8,7 @@ CFLAGS := -Os -nostdlib -fno-asynchronous-unwind-tables -std=c++20
 CFLAGS += -fno-ident -fpack-struct=8 -falign-functions=1 -s -w -mno-sse
 CFLAGS += -ffunction-sections -falign-jumps=1 -falign-labels=1 -fno-jump-tables
 CFLAGS += -Wl,-s,--no-seh,--enable-stdcall-fixup -masm=intel -fno-exceptions
-CFLAGS += -fms-extensions -Iinclude -Wl,-Tscripts/linker.ld
+CFLAGS += -fms-extensions -Iinclude -Wl,-Tscripts/linker.ld --gcc-toolchain=/usr
 
 DEFINES ?=
 CFLAGS  += $(DEFINES)

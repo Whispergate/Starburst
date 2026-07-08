@@ -97,6 +97,10 @@ auto declfn evasion_on_init( instance& inst ) -> void {
 #if defined(INCLUDE_EVASION_SPOOF) && defined(_WIN64)
     spoof_init( inst );
 #endif
+
+#ifdef INCLUDE_EVASION_ETW
+    evasion_patch_etw( inst );
+#endif
 }
 
 auto declfn evasion_on_cleanup( instance& inst ) -> void {

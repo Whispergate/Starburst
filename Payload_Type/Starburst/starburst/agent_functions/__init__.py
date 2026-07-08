@@ -42,3 +42,4 @@ from starburst.agent_functions.net_localgroup_member import *
 from starburst.agent_functions.jobkill import *
 from starburst.agent_functions.link import *
 from starburst.agent_functions.unlink import *
+from starburst.agent_functions.powerpick import *

