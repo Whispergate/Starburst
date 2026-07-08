@@ -64,6 +64,7 @@
 #define INCLUDE_CMD_POWERPICK
 #define INCLUDE_CMD_SPAWNTO_X64
 #define INCLUDE_CMD_SPAWNTO_X86
+#define INCLUDE_CMD_SPAWN
 
 #define INCLUDE_EVASION_SPOOF
 #define INCLUDE_EVASION_AMSI
@@ -166,6 +167,7 @@
 #define CMD_POWERPICK            0x3B
 #define CMD_SPAWNTO_X64           0x3C
 #define CMD_SPAWNTO_X86           0x3D
+#define CMD_SPAWN                 0x3E
 
 #define RESPONSE_SUCCESS    0x00
 #define RESPONSE_ERROR      0x01

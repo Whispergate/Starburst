@@ -257,6 +257,10 @@ namespace starburst {
     auto declfn cmd_spawnto_x86( instance& inst, char* task_uuid, Parser* params ) -> void;
 #endif
 
+#ifdef INCLUDE_CMD_SPAWN
+    auto declfn cmd_spawn( instance& inst, char* task_uuid, Parser* params ) -> void;
+#endif
+
 }
 
 #endif

