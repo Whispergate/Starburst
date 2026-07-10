@@ -49,13 +49,11 @@ x64: nasm64 $(OBJ64)
 	@ echo "compiling x64 project"
 	@ $(CCX64) bin/obj/*.x64.obj -o bin/$(NAME).x64.exe $(CFLAGS) $(CFLAGS_X64_INC)
 	@ objcopy --dump-section .text=bin/$(NAME).x64.bin bin/$(NAME).x64.exe
-	@ rm bin/$(NAME).x64.exe
 
 x86: nasm86 $(OBJ86)
 	@ echo "compiling x86 project"
 	@ $(CCX86) bin/obj/*.x86.obj -o bin/$(NAME).x86.exe $(CFLAGS) $(CFLAGS_X86_INC)
 	@ objcopy --dump-section .text=bin/$(NAME).x86.bin bin/$(NAME).x86.exe
-	@ rm bin/$(NAME).x86.exe
 
 %.x64.obj: %.cc
 	@ echo "-> compiling $< to $(notdir $@)"

@@ -320,6 +320,7 @@ class Starburst(PayloadType):
 
             # Step 4: Read shellcode and optionally wrap
             bin_path = os.path.join(dst_path, "bin", f"starburst.{arch}.bin")
+            exe_path = os.path.join(dst_path, "bin", f"starburst.{arch}.exe")
             with open(bin_path, "rb") as f:
                 shellcode = f.read()
 
@@ -328,8 +329,14 @@ class Starburst(PayloadType):
                 resp.build_message = f"Starburst {arch} shellcode: {len(shellcode)} bytes"
 
             elif output_type == "shellcode":
-                cp_result = await self._link_with_crystal_palace(
-                    shellcode, arch, agent_build_path)
+                if os.path.exists(exe_path):
+                    with open(exe_path, "rb") as f:
+                        pe_bytes = f.read()
+                    cp_result = await self._link_with_crystal_palace(
+                        pe_bytes, arch, agent_build_path)
+                else:
+                    cp_result = None
+                    logger.error(f"PE not found at {exe_path} for Crystal Palace linking")
                 if cp_result is None:
                     resp.status = BuildStatus.Error
                     resp.build_message = "Crystal Palace linking failed"
@@ -344,8 +351,14 @@ class Starburst(PayloadType):
                 resp.build_message = f"Starburst {arch} Crystal Palace shellcode: {len(cp_result)} bytes"
 
             else:
-                linked_sc = await self._link_with_crystal_palace(
-                    shellcode, arch, agent_build_path)
+                if os.path.exists(exe_path):
+                    with open(exe_path, "rb") as f:
+                        pe_bytes = f.read()
+                    linked_sc = await self._link_with_crystal_palace(
+                        pe_bytes, arch, agent_build_path)
+                else:
+                    linked_sc = None
+                    logger.warning(f"PE not found at {exe_path}, falling back to raw shellcode")
                 if linked_sc is None:
                     logger.warning("CPL link failed for DLL/EXE, falling back to raw shellcode")
                     linked_sc = shellcode
@@ -712,12 +725,17 @@ class Starburst(PayloadType):
             cwd=crystal_linker,
             capture_output=True, text=True, timeout=120)
 
+        if proc.stdout:
+            logger.info(f"Crystal Palace stdout: {proc.stdout}")
+        if proc.stderr:
+            logger.info(f"Crystal Palace stderr: {proc.stderr}")
+
         if proc.returncode != 0:
-            logger.error(f"Crystal Palace link failed: {proc.stdout}\n{proc.stderr}")
+            logger.error(f"Crystal Palace link failed (rc={proc.returncode}): {proc.stdout}\n{proc.stderr}")
             return None
 
         if not os.path.exists(out_file):
-            logger.error("Crystal Palace produced no output")
+            logger.error(f"Crystal Palace produced no output at {out_file}")
             return None
 
         with open(out_file, "rb") as f:

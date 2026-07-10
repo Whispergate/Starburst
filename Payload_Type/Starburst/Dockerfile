@@ -18,4 +18,4 @@ RUN pip3 install -r /tmp/requirements.txt
 
 WORKDIR /Mythic/
 
-CMD ["python3", "main.py"]
+CMD ["sh", "-c", "chmod +x /Mythic/loaders/crystal-palace/crystal-linker/cpl 2>/dev/null; exec python3 main.py"]
