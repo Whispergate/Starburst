@@ -17,9 +17,8 @@ def get_crystal_linker_path():
 
 def is_crystal_palace_available():
     linker_path = get_crystal_linker_path()
-    cpl_script = os.path.join(linker_path, "cpl")
     jar_file = os.path.join(linker_path, "crystalpalace.jar")
-    return os.path.exists(cpl_script) or os.path.exists(jar_file)
+    return os.path.exists(jar_file)
 
 
 async def link_shellcode_with_cp(shellcode_bytes, arch="x64", loader_path=None):
@@ -39,11 +38,11 @@ async def link_shellcode_with_cp(shellcode_bytes, arch="x64", loader_path=None):
         with open(sc_path, "wb") as f:
             f.write(shellcode_bytes)
 
-        cpl_bin = os.path.join(crystal_linker, "cpl")
-        command = f"{cpl_bin} link {spec_file} {sc_path} {out_path}"
+        jar_path = os.path.join(crystal_linker, "crystalpalace.jar")
+        command = ["java", "-jar", jar_path, "link", spec_file, sc_path, out_path]
 
-        proc = await asyncio.create_subprocess_shell(
-            command,
+        proc = await asyncio.create_subprocess_exec(
+            *command,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
             cwd=crystal_linker,
@@ -97,11 +96,11 @@ async def convert_postex_to_pic(file_id, args_data=None, arch="x64", agent_uuid=
                 f.write(b"\x00")
 
         spec_file = os.path.join(post_ex_path, "loader.spec")
-        cpl_bin = os.path.join(crystal_linker, "cpl")
-        command = f"{cpl_bin} link {spec_file} {sc_path} {out_path} %ARGFILE='{args_path}'"
+        jar_path = os.path.join(crystal_linker, "crystalpalace.jar")
+        command = ["java", "-jar", jar_path, "link", spec_file, sc_path, out_path, f"%ARGFILE={args_path}"]
 
-        proc = await asyncio.create_subprocess_shell(
-            command,
+        proc = await asyncio.create_subprocess_exec(
+            *command,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
             cwd=crystal_linker,
