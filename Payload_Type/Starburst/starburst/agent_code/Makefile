@@ -11,6 +11,7 @@ CFLAGS += -Wl,-s,--no-seh,--enable-stdcall-fixup -masm=intel -fno-exceptions
 CFLAGS += -fms-extensions -Iinclude -Wl,-Tscripts/linker.ld
 
 # Detect mingw-w64 C++ headers for cross-compilation (clang often can't find them)
+# Linux: headers under /usr/lib/gcc/<triple>/*/include/c++
 GCC_X64_CXX := $(wildcard /usr/lib/gcc/x86_64-w64-mingw32/*/include/c++)
 GCC_X86_CXX := $(wildcard /usr/lib/gcc/i686-w64-mingw32/*/include/c++)
 ifneq ($(GCC_X64_CXX),)
@@ -22,6 +23,28 @@ ifneq ($(GCC_X86_CXX),)
   GCC_X86_DIR := $(firstword $(GCC_X86_CXX))
   GCC_X86_VER := $(patsubst /usr/lib/gcc/i686-w64-mingw32/%/include/c++,%,$(GCC_X86_DIR))
   CFLAGS_X86_INC := -isystem $(GCC_X86_DIR) -isystem $(GCC_X86_DIR)/i686-w64-mingw32
+endif
+
+# MSYS2/Windows: clang can't find mingw sysroot — point it at MSYS2 directories
+MSYS2_X64_HDR := $(wildcard C:/msys64/mingw64/include/windows.h)
+MSYS2_X86_HDR := $(wildcard C:/msys64/mingw32/include/windows.h)
+MSYS2_X64_CXX := $(wildcard C:/msys64/mingw64/include/c++/*)
+MSYS2_X86_CXX := $(wildcard C:/msys64/mingw32/include/c++/*)
+ifneq ($(MSYS2_X64_HDR),)
+  ifeq ($(CFLAGS_X64_INC),)
+    CFLAGS_X64_INC := --sysroot=C:/msys64/mingw64
+    ifneq ($(MSYS2_X64_CXX),)
+      CFLAGS_X64_INC += -isystem $(firstword $(MSYS2_X64_CXX)) -isystem $(firstword $(MSYS2_X64_CXX))/x86_64-w64-mingw32
+    endif
+  endif
+endif
+ifneq ($(MSYS2_X86_HDR),)
+  ifeq ($(CFLAGS_X86_INC),)
+    CFLAGS_X86_INC := --sysroot=C:/msys64/mingw32
+    ifneq ($(MSYS2_X86_CXX),)
+      CFLAGS_X86_INC += -isystem $(firstword $(MSYS2_X86_CXX)) -isystem $(firstword $(MSYS2_X86_CXX))/i686-w64-mingw32
+    endif
+  endif
 endif
 
 GCC_TOOLCHAIN ?=

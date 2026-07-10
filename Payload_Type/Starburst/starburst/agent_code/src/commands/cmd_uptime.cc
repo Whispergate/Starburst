@@ -10,8 +10,7 @@
 using namespace stardust;
 using namespace starburst;
 
-typedef ULONGLONG (WINAPI *fn_GetTickCount64)( void );
-typedef void      (WINAPI *fn_GetSystemTime)( LPSYSTEMTIME );
+typedef void (WINAPI *fn_GetSystemTime)( LPSYSTEMTIME );
 
 auto declfn starburst::cmd_uptime(
     _Inout_ instance& inst,
@@ -22,21 +21,39 @@ auto declfn starburst::cmd_uptime(
 
     auto k32 = (HMODULE)inst.kernel32.handle;
 
-    auto pGetTickCount64 = reinterpret_cast<fn_GetTickCount64>(
-        inst.kernel32.GetProcAddress( k32,
-            symbol<LPCSTR>( "GetTickCount64" ) ) );
     auto pGetSystemTime = reinterpret_cast<fn_GetSystemTime>(
         inst.kernel32.GetProcAddress( k32,
             symbol<LPCSTR>( "GetSystemTime" ) ) );
 
-    if ( !pGetTickCount64 || !pGetSystemTime ) {
+    if ( !pGetSystemTime ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
             symbol<char*>( const_cast<char*>( "API resolution failed" ) ) );
         return;
     }
 
-    ULONGLONG tick_ms = pGetTickCount64();
-    uint32_t total_sec = static_cast<uint32_t>( tick_ms / 1000 );
+#ifdef _WIN64
+    typedef ULONGLONG (WINAPI *fn_GetTickCount64)( void );
+    auto pGTC = reinterpret_cast<fn_GetTickCount64>(
+        inst.kernel32.GetProcAddress( k32,
+            symbol<LPCSTR>( "GetTickCount64" ) ) );
+    if ( !pGTC ) {
+        queue_response( inst, task_uuid, RESPONSE_ERROR,
+            symbol<char*>( const_cast<char*>( "API resolution failed" ) ) );
+        return;
+    }
+    uint32_t total_sec = static_cast<uint32_t>( pGTC() / 1000 );
+#else
+    typedef DWORD (WINAPI *fn_GetTickCount32)( void );
+    auto pGTC = reinterpret_cast<fn_GetTickCount32>(
+        inst.kernel32.GetProcAddress( k32,
+            symbol<LPCSTR>( "GetTickCount" ) ) );
+    if ( !pGTC ) {
+        queue_response( inst, task_uuid, RESPONSE_ERROR,
+            symbol<char*>( const_cast<char*>( "API resolution failed" ) ) );
+        return;
+    }
+    uint32_t total_sec = pGTC() / 1000u;
+#endif
     uint32_t days    = total_sec / 86400;
     uint32_t hours   = ( total_sec % 86400 ) / 3600;
     uint32_t minutes = ( total_sec % 3600 ) / 60;

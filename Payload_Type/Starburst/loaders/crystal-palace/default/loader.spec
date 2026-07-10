@@ -3,7 +3,7 @@ x64:
         make pic +gofirst +optimize
         dfr "resolve" "ror13"
 
-        push $DLL
+        load %SHELLCODE
         preplen
         link "shellcode"
 
@@ -14,7 +14,7 @@ x86:
         make pic +gofirst +optimize
         dfr "resolve" "ror13"
 
-        push $DLL
+        load %SHELLCODE
         preplen
         link "shellcode"
 

