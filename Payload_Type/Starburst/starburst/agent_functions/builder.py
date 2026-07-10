@@ -170,9 +170,9 @@ class Starburst(PayloadType):
             name="sleep_mask",
             group_name="Evasion",
             parameter_type=BuildParameterType.ChooseOne,
-            choices=["default", "full_image", "heap", "custom"],
+            choices=["default", "full_image", "heap", "ekko", "custom"],
             default_value="default",
-            description="Sleep mask type: XOR sensitive fields only, full image encryption, heap masking, or custom",
+            description="Sleep mask type: XOR sensitive fields, full image XOR, heap masking, Ekko timer-queue ROP (x64, encrypts image during sleep), or custom",
         ),
         BuildParameter(
             name="patch_amsi",
@@ -632,6 +632,7 @@ class Starburst(PayloadType):
             "default": "MASK_DEFAULT",
             "full_image": "MASK_FULL_IMAGE",
             "heap": "MASK_HEAP",
+            "ekko": "MASK_EKKO",
             "custom": "MASK_CUSTOM",
         }
         defines.append(f"#define SLEEP_MASK_TYPE {mask_map.get(mask, 'MASK_DEFAULT')}")

