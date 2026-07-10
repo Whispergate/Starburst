@@ -62,6 +62,9 @@ class Starburst(PayloadType):
             parameter_type=BuildParameterType.Boolean,
             default_value=False,
             description="Use custom Crystal Palace UDRL instead of default loader",
+            hide_conditions=[
+                HideCondition(name="output_type", operand=HideConditionOperand.EQ, value="bin"),
+            ],
         ),
         BuildParameter(
             name="udrl_file",
@@ -69,9 +72,10 @@ class Starburst(PayloadType):
             parameter_type=BuildParameterType.File,
             description="Custom Crystal Palace UDRL: ZIP with Makefile + loader.spec + src/",
             required=False,
-            hide_conditions = [
+            hide_conditions=[
+                HideCondition(name="output_type", operand=HideConditionOperand.EQ, value="bin"),
                 HideCondition(name="custom_udrl", operand=HideConditionOperand.EQ, value=False),
-            ]
+            ],
         ),
         BuildParameter(
             name="custom_postex_udrl",
@@ -79,6 +83,9 @@ class Starburst(PayloadType):
             parameter_type=BuildParameterType.Boolean,
             default_value=False,
             description="Use custom Crystal Palace UDRL for post-ex operations",
+            hide_conditions=[
+                HideCondition(name="output_type", operand=HideConditionOperand.EQ, value="bin"),
+            ],
         ),
         BuildParameter(
             name="postex_udrl_file",
@@ -86,9 +93,10 @@ class Starburst(PayloadType):
             parameter_type=BuildParameterType.File,
             description="Custom post-ex UDRL: ZIP with Makefile + loader.spec + src/",
             required=False,
-            hide_conditions = [
+            hide_conditions=[
+                HideCondition(name="output_type", operand=HideConditionOperand.EQ, value="bin"),
                 HideCondition(name="custom_postex_udrl", operand=HideConditionOperand.EQ, value=False),
-            ]
+            ],
         ),
         BuildParameter(
             name="alloc_method",
@@ -97,6 +105,10 @@ class Starburst(PayloadType):
             choices=["VirtualAlloc", "NtAllocateVirtualMemory", "MapViewOfSection"],
             default_value="VirtualAlloc",
             description="Memory allocation method for loader (non-bin output only)",
+            hide_conditions=[
+                HideCondition(name="output_type", operand=HideConditionOperand.EQ, value="bin"),
+                HideCondition(name="output_type", operand=HideConditionOperand.EQ, value="shellcode"),
+            ],
         ),
         BuildParameter(
             name="exec_method",
@@ -104,10 +116,12 @@ class Starburst(PayloadType):
             parameter_type=BuildParameterType.ChooseOne,
             choices=["direct", "CreateThread", "callback", "fiber", "threadpool"],
             default_value="direct",
-            description="Local execution method for loader (non-bin, non-injection only)",
-            hide_conditions = [
+            description="Local execution method for loader",
+            hide_conditions=[
+                HideCondition(name="output_type", operand=HideConditionOperand.EQ, value="bin"),
+                HideCondition(name="output_type", operand=HideConditionOperand.EQ, value="shellcode"),
                 HideCondition(name="injection_mode", operand=HideConditionOperand.NotEQ, value="local"),
-            ]
+            ],
         ),
         BuildParameter(
             name="injection_mode",
@@ -116,6 +130,10 @@ class Starburst(PayloadType):
             choices=["local", "remote", "hollow", "earlybird"],
             default_value="local",
             description="Injection mode: local exec or remote process injection",
+            hide_conditions=[
+                HideCondition(name="output_type", operand=HideConditionOperand.EQ, value="bin"),
+                HideCondition(name="output_type", operand=HideConditionOperand.EQ, value="shellcode"),
+            ],
         ),
         BuildParameter(
             name="injection_target",
@@ -123,9 +141,11 @@ class Starburst(PayloadType):
             parameter_type=BuildParameterType.String,
             default_value="C:\\\\Windows\\\\System32\\\\svchost.exe",
             description="Target process for remote injection",
-            hide_conditions = [
+            hide_conditions=[
+                HideCondition(name="output_type", operand=HideConditionOperand.EQ, value="bin"),
+                HideCondition(name="output_type", operand=HideConditionOperand.EQ, value="shellcode"),
                 HideCondition(name="injection_mode", operand=HideConditionOperand.EQ, value="local"),
-            ]
+            ],
         ),
         BuildParameter(
             name="spoof_profile",
@@ -140,7 +160,7 @@ class Starburst(PayloadType):
         ),
         BuildParameter(
             name="injection_technique",
-            group_name="Evasion",
+            group_name="Injection",
             parameter_type=BuildParameterType.ChooseOne,
             choices=["crt", "apc", "section", "custom"],
             default_value="crt",
