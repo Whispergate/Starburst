@@ -658,10 +658,9 @@ class Starburst(PayloadType):
         cp_path = os.path.join(loaders_path, "crystal-palace")
         crystal_linker = os.path.join(cp_path, "crystal-linker")
 
-        cpl_bin = os.path.join(crystal_linker, "cpl")
         jar_path = os.path.join(crystal_linker, "crystalpalace.jar")
-        if not os.path.exists(cpl_bin) and not os.path.exists(jar_path):
-            logger.error("Crystal Palace not installed - place cpl + crystalpalace.jar in loaders/crystal-palace/crystal-linker/")
+        if not os.path.exists(jar_path):
+            logger.error("Crystal Palace not installed - place crystalpalace.jar in loaders/crystal-palace/crystal-linker/")
             return None
 
         use_custom = self.get_parameter("custom_udrl")
@@ -705,11 +704,11 @@ class Starburst(PayloadType):
             logger.error(f"loader.spec not found at {spec_file}")
             return None
 
-        command = f"{cpl_bin} link {spec_file} {sc_file} {out_file}"
-        logger.info(f"Crystal Palace link: {command}")
+        command = ["java", "-jar", jar_path, "link", spec_file, sc_file, out_file]
+        logger.info(f"Crystal Palace link: {' '.join(command)}")
 
         proc = subprocess.run(
-            command, shell=True,
+            command,
             cwd=crystal_linker,
             capture_output=True, text=True, timeout=120)
 
