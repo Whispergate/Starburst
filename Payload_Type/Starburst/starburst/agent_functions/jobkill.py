@@ -27,8 +27,8 @@ class JobkillCommand(CommandBase):
     cmd = "jobkill"
     needs_admin = False
     help_cmd = "jobkill [task_id]"
-    description = "Kill a running background job by its task ID."
-    version = 1
+    description = "Kill a running background job or interactive session by its task ID."
+    version = 2
     supported_ui_features = ["jobkill", "task:job_kill"]
     author = "@Lavender-exe"
     attackmapping = []

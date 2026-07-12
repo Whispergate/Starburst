@@ -223,22 +223,85 @@ async def convert_postex_to_pic(file_id, args_data=None, arch="x64", agent_uuid=
             return f.read()
 
 
+def _find_spec_dir(root, role="loader"):
+    """Find the directory containing loader.spec inside an extracted archive."""
+    root_spec = os.path.join(root, "loader.spec")
+    if os.path.isfile(root_spec):
+        subdirs = [d for d in sorted(os.listdir(root))
+                    if os.path.isdir(os.path.join(root, d))
+                    and os.path.isfile(os.path.join(root, d, "loader.spec"))]
+        if not subdirs:
+            return root
+
+    spec_dirs = []
+    for entry in sorted(os.listdir(root)):
+        entry_path = os.path.join(root, entry)
+        if os.path.isdir(entry_path) and os.path.isfile(os.path.join(entry_path, "loader.spec")):
+            spec_dirs.append((entry.lower(), entry_path))
+
+    if not spec_dirs:
+        if os.path.isfile(root_spec):
+            return root
+        return None
+
+    if len(spec_dirs) == 1:
+        return spec_dirs[0][1]
+
+    is_postex = lambda n: "postex" in n or "post-ex" in n or "post_ex" in n
+
+    if role == "postex":
+        for name, path in spec_dirs:
+            if is_postex(name):
+                return path
+    else:
+        exact = [p for n, p in spec_dirs if n == "loader"]
+        if exact:
+            return exact[0]
+        for name, path in spec_dirs:
+            if not is_postex(name):
+                return path
+
+    return spec_dirs[0][1]
+
+
+def _find_make_dir(root):
+    """Find the directory to run make in."""
+    if os.path.isfile(os.path.join(root, "Makefile")):
+        return root
+    for entry in os.listdir(root):
+        entry_path = os.path.join(root, entry)
+        if os.path.isdir(entry_path) and os.path.isfile(os.path.join(entry_path, "Makefile")):
+            return entry_path
+    return root
+
+
+def _make_env():
+    env = os.environ.copy()
+    extra = [d for d in [r"C:\msys64\mingw64\bin", r"C:\msys64\mingw32\bin",
+                          "/usr/bin", "/usr/local/bin"] if os.path.isdir(d)]
+    if extra:
+        env["PATH"] = os.pathsep.join(extra) + os.pathsep + env.get("PATH", "")
+    return env
+
+
 async def install_custom_postex_udrl(udrl_zip_bytes, payload_uuid, arch="x64"):
     import zipfile
     import io
 
-    custom_path = os.path.join(LOADERS_PATH, f"postex_{payload_uuid}")
-    os.makedirs(custom_path, exist_ok=True)
+    extract_path = os.path.join(LOADERS_PATH, f"postex_{payload_uuid}_extract")
+    os.makedirs(extract_path, exist_ok=True)
 
     zip_buf = io.BytesIO(udrl_zip_bytes)
     with zipfile.ZipFile(zip_buf, 'r') as z:
-        z.extractall(custom_path)
+        z.extractall(extract_path)
 
-    make_proc = await asyncio.create_subprocess_shell(
-        "make",
+    make_dir = _find_make_dir(extract_path)
+    make_proc = await asyncio.create_subprocess_exec(
+        "make", arch,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
-        cwd=custom_path,
+        cwd=make_dir,
+        env=_make_env(),
     )
     stdout, stderr = await make_proc.communicate()
 
@@ -248,6 +311,16 @@ async def install_custom_postex_udrl(udrl_zip_bytes, payload_uuid, arch="x64"):
             f"stdout: {stdout.decode()}\n"
             f"stderr: {stderr.decode()}"
         )
+
+    postex_dir = _find_spec_dir(extract_path, role="postex")
+    if not postex_dir:
+        raise RuntimeError("No loader.spec found in custom post-ex UDRL archive")
+
+    custom_path = os.path.join(LOADERS_PATH, f"postex_{payload_uuid}")
+    if os.path.exists(custom_path):
+        shutil.rmtree(custom_path)
+    shutil.copytree(postex_dir, custom_path)
+    shutil.rmtree(extract_path, ignore_errors=True)
 
     logger.info(f"Installed custom post-ex UDRL for payload {payload_uuid}")
     return custom_path

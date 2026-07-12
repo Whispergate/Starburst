@@ -345,6 +345,18 @@ namespace starburst {
     auto declfn cmd_inline_execute( instance& inst, char* task_uuid, Parser* params ) -> void;
 #endif
 
+#ifdef INCLUDE_CMD_LOAD
+    auto declfn cmd_load( instance& inst, char* task_uuid, Parser* params ) -> void;
+#endif
+
+#ifdef INCLUDE_CMD_WMIEXEC
+    auto declfn cmd_wmiexec( instance& inst, char* task_uuid, Parser* params ) -> void;
+#endif
+
+#ifdef INCLUDE_CMD_DCOMEXEC
+    auto declfn cmd_dcomexec( instance& inst, char* task_uuid, Parser* params ) -> void;
+#endif
+
 }
 
 #endif

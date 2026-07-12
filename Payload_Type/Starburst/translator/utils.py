@@ -8,7 +8,8 @@ ACTION_LINK_ADD      = 0x05
 ACTION_LINK_MSG      = 0x06
 ACTION_LINK_REMOVE   = 0x07
 ACTION_SOCKS_MSG     = 0x08
-ACTION_RPFWD_MSG     = 0x09
+ACTION_RPFWD_MSG         = 0x09
+ACTION_INTERACTIVE_MSG   = 0x0A
 
 C2_PROFILE_SMB       = 0x00
 C2_PROFILE_TCP       = 0x01
@@ -105,6 +106,9 @@ CMD_MAP = {
     "token_store":           0x51,
     "portscan":              0x52,
     "inline_execute":        0x53,
+    "load":                  0x54,
+    "wmiexec":               0x55,
+    "dcomexec":              0x56,
 }
 
 CMD_MAP_REV = {v: k for k, v in CMD_MAP.items()}

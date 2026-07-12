@@ -333,7 +333,7 @@ auto declfn starburst::cmd_powerpick(
         return;
     }
 
-    // Persistent pipe for stdout capture — .NET Console caches TextWriter on first
+    // Persistent pipe for stdout capture - .NET Console caches TextWriter on first
     // access, so reusing the same pipe across calls avoids stale handle errors.
     if ( !inst.powerpick.stdout_redirected ) {
         SECURITY_ATTRIBUTES sa_pipe = {};

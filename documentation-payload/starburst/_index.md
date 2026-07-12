@@ -10,8 +10,8 @@ Starburst is a Windows PIC (Position-Independent Code) agent for [Mythic](https:
 
 ### Key Features
 
-- True position-independent shellcode - runs from any RWX/RX allocation
-- Crystal Palace compatible (entry at offset 0)
+- True position-independent shellcode - runs from any RWX/RX allocation (x64 and x86)
+- CrystalKit - Crystal Palace integration with custom UDRL/post-ex loader support, flexible archive handling compatible with third-party kits (Picollo, etc.)
 - FNV1a hash-based API resolution with no import table
 - AES256-CBC + HMAC-SHA256 encryption via Windows BCrypt APIs
 - Compact binary TLV wire protocol with Python translation container
@@ -31,7 +31,7 @@ Starburst is a Windows PIC (Position-Independent Code) agent for [Mythic](https:
 - Desktop/window station enumeration
 - File timestamp modification (timestomp)
 - Draugr N-frame call stack spoofing with operator-customizable profiles
-- [Arsenal Kit](https://github.com/Whispergate/Starburst.ArsenalKit) - modular, operator-swappable injection techniques (CRT/APC/Section/Custom), sleep masks (Default/Full Image/Heap/Custom), and call stack spoof profiles via compile-time selection headers
+- [Arsenal Kit](https://github.com/Whispergate/Starburst.ArsenalKit) - operator customization kit: compile-time injection techniques (CRT/APC/Section/Custom), sleep masks (Default/Full Image/Heap/Custom), call stack spoof profiles (5 pre-built + custom), artifact wrappers (EXE/DLL/SVC with pipe/fiber/APC-self/callback bypass), loader kit (module stomping + DLL sideloading), resource kit (PowerShell/HTA/VBS/Python/C#/MSBuild stagers), and operator utilities
 - Forge compatible - execute_coff, execute_assembly, execute_pic, and shinject support file-at-execution-time via Default/New parameter groups
 - Multiple output formats: raw shellcode, EXE, DLL, Windows service
 

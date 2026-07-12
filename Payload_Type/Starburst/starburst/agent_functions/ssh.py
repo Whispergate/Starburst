@@ -1,9 +1,6 @@
 from mythic_container.MythicCommandBase import *
 from mythic_container.MythicRPC import *
-import logging
-import base64
-
-logger = logging.getLogger("starburst.ssh")
+import json
 
 
 class SshArguments(TaskArguments):
@@ -15,6 +12,10 @@ class SshArguments(TaskArguments):
                 cli_name="hostname",
                 type=ParameterType.String,
                 description="Target hostname or IP address",
+                parameter_group_info=[
+                    ParameterGroupInfo(required=True, group_name="Password Auth", ui_position=1),
+                    ParameterGroupInfo(required=True, group_name="Key Auth", ui_position=1),
+                ],
             ),
             CommandParameter(
                 name="port",
@@ -22,60 +23,77 @@ class SshArguments(TaskArguments):
                 type=ParameterType.Number,
                 default_value=22,
                 description="SSH port",
+                parameter_group_info=[
+                    ParameterGroupInfo(required=False, group_name="Password Auth", ui_position=2),
+                    ParameterGroupInfo(required=False, group_name="Key Auth", ui_position=2),
+                ],
             ),
             CommandParameter(
                 name="username",
                 cli_name="username",
                 type=ParameterType.String,
                 description="SSH username",
+                parameter_group_info=[
+                    ParameterGroupInfo(required=True, group_name="Password Auth", ui_position=3),
+                    ParameterGroupInfo(required=True, group_name="Key Auth", ui_position=3),
+                ],
             ),
             CommandParameter(
                 name="credential",
                 cli_name="credential",
                 type=ParameterType.String,
-                description="Password or path to SSH key file",
+                description="SSH password (Password Auth) or key passphrase (Key Auth)",
+                parameter_group_info=[
+                    ParameterGroupInfo(required=True, group_name="Password Auth", ui_position=4),
+                    ParameterGroupInfo(required=False, group_name="Key Auth", ui_position=5),
+                ],
             ),
             CommandParameter(
-                name="use_key",
-                cli_name="use_key",
-                type=ParameterType.Boolean,
-                default_value=False,
-                description="If true, credential is treated as a key file path instead of a password",
-            ),
-            CommandParameter(
-                name="target_os",
-                cli_name="target_os",
-                type=ParameterType.ChooseOne,
-                choices=["linux", "windows"],
-                default_value="linux",
-                description="Target machine operating system",
-            ),
-            CommandParameter(
-                name="payload_file",
-                cli_name="payload_file",
+                name="private_key",
+                cli_name="private_key",
                 type=ParameterType.File,
-                description="Pre-built agent binary to deploy on the target",
+                description="SSH private key file (PEM format, unencrypted RSA)",
+                parameter_group_info=[
+                    ParameterGroupInfo(required=True, group_name="Key Auth", ui_position=4),
+                ],
             ),
         ]
 
     async def parse_arguments(self):
         if len(self.command_line) > 0:
-            self.load_args_from_json_string(self.command_line)
+            if self.command_line[0] == "{":
+                self.load_args_from_json_string(self.command_line)
+            else:
+                parts = self.command_line.split()
+                if len(parts) >= 3:
+                    userhost = parts[0]
+                    if "@" in userhost:
+                        user, host = userhost.split("@", 1)
+                        self.add_arg("username", user)
+                        if ":" in host:
+                            h, p = host.rsplit(":", 1)
+                            self.add_arg("hostname", h)
+                            self.add_arg("port", int(p))
+                        else:
+                            self.add_arg("hostname", host)
+                    self.add_arg("credential", parts[1] if len(parts) > 1 else "")
 
 
 class SshCommand(CommandBase):
     cmd = "ssh"
     needs_admin = False
-    help_cmd = "ssh"
+    help_cmd = "ssh -hostname <host> -username <user> -credential <pass> [-port 22]"
     description = (
-        "Deploy a pre-built agent to a remote host via SSH. "
-        "Supports Linux (/dev/shm) and Windows (%TEMP%) targets. "
-        "The agent checks in to Mythic independently as a new callback."
+        "Interactive SSH2 terminal. Connects to remote hosts using built-in SSH2 "
+        "protocol (ECDH-P256, AES-256-CTR, HMAC-SHA2-256). Opens a PTY shell "
+        "with interactive I/O through Mythic's terminal UI. Supports password "
+        "and RSA private key authentication. No ssh.exe dependency."
     )
-    version = 4
+    version = 10
     author = "@Lavender-exe"
     argument_class = SshArguments
     attackmapping = ["T1021.004"]
+    supported_ui_features = ["task_response:interactive"]
     attributes = CommandAttributes(
         supported_os=[SupportedOS.Windows],
     )
@@ -87,35 +105,68 @@ class SshCommand(CommandBase):
         )
 
         hostname = taskData.args.get_arg("hostname")
-        port = taskData.args.get_arg("port")
+        port = taskData.args.get_arg("port") or 22
         username = taskData.args.get_arg("username")
-        file_id = taskData.args.get_arg("payload_file")
+        credential = taskData.args.get_arg("credential") or ""
 
-        if not file_id:
+        if not hostname or not username:
             response.Success = False
-            response.Error = "No payload file specified"
+            response.Error = "hostname and username required"
             return response
 
-        file_resp = await SendMythicRPCFileGetContent(MythicRPCFileGetContentMessage(
-            AgentFileId=file_id,
-        ))
+        key_data = ""
+        private_key_id = taskData.args.get_arg("private_key")
+        if private_key_id:
+            try:
+                file_resp = await SendMythicRPCFileGetContent(MythicRPCFileGetContentMessage(
+                    AgentFileId=private_key_id
+                ))
+                if not file_resp.Success or not file_resp.Content:
+                    response.Success = False
+                    response.Error = f"Failed to retrieve private key file: {file_resp.Error}"
+                    return response
 
-        if not file_resp.Success:
+                pem_bytes = file_resp.Content
+                passphrase = credential.encode() if credential else None
+
+                try:
+                    from cryptography.hazmat.primitives.serialization import (
+                        load_pem_private_key, Encoding, PrivateFormat, NoEncryption
+                    )
+                    priv_key = load_pem_private_key(pem_bytes, password=passphrase)
+                    key_data = priv_key.private_bytes(
+                        encoding=Encoding.PEM,
+                        format=PrivateFormat.TraditionalOpenSSL,
+                        encryption_algorithm=NoEncryption()
+                    ).decode("utf-8")
+                except ValueError as e:
+                    if "password" in str(e).lower() or "encrypt" in str(e).lower():
+                        response.Success = False
+                        response.Error = "Private key is encrypted - provide the passphrase in the credential field"
+                        return response
+                    raise
+                except TypeError:
+                    response.Success = False
+                    response.Error = "Private key is encrypted - provide the passphrase in the credential field"
+                    return response
+            except Exception as e:
+                if not response.Error:
+                    response.Success = False
+                    response.Error = f"Error processing private key: {str(e)}"
+                return response
+
+        taskData.args.add_arg("key_data", key_data)
+        taskData.args.remove_arg("private_key")
+
+        if not credential and not key_data:
             response.Success = False
-            response.Error = f"Failed to get payload file content: {file_resp.Error}"
+            response.Error = "Either credential (password) or private_key is required"
             return response
 
-        if not file_resp.Content or len(file_resp.Content) == 0:
-            response.Success = False
-            response.Error = "Payload file is empty"
-            return response
+        auth_method = "key" if key_data else "password"
+        response.DisplayParams = f"{username}@{hostname}:{port} ({auth_method})"
 
-        linux_b64 = base64.b64encode(file_resp.Content).decode("ascii")
-        taskData.args.add_arg("linux_binary_b64", linux_b64, ParameterType.String)
-
-        response.DisplayParams = f"{username}@{hostname}:{port}"
         return response
 
     async def process_response(self, task: PTTaskMessageAllData, response: any) -> PTTaskProcessResponseMessageResponse:
-        resp = PTTaskProcessResponseMessageResponse(TaskID=task.Task.ID, Success=True)
-        return resp
+        return PTTaskProcessResponseMessageResponse(TaskID=task.Task.ID, Success=True)

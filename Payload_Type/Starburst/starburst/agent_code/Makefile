@@ -25,7 +25,7 @@ ifneq ($(GCC_X86_CXX),)
   CFLAGS_X86_INC := -isystem $(GCC_X86_DIR) -isystem $(GCC_X86_DIR)/i686-w64-mingw32
 endif
 
-# MSYS2/Windows: clang can't find mingw sysroot — point it at MSYS2 directories
+# MSYS2/Windows: clang can't find mingw sysroot - point it at MSYS2 directories
 MSYS2_X64_HDR := $(wildcard C:/msys64/mingw64/include/windows.h)
 MSYS2_X86_HDR := $(wildcard C:/msys64/mingw32/include/windows.h)
 MSYS2_X64_CXX := $(wildcard C:/msys64/mingw64/include/c++/*)
@@ -99,9 +99,60 @@ stomper:
 	@ $(CCX64) test/stomper.cc -o test/stomper.x64.exe -w
 	@ $(CCX86) test/stomper.cc -o test/stomper.x86.exe -w
 
+# ── PIC Module building ─────────────────────────────────────────
+MODULE_DIR     := bin/modules
+MODULE_HELPERS := src/parser.cc src/package.cc src/strings.cc src/heap.cc \
+                  src/base64.cc src/intrinsics.cc src/resolve.cc src/crypto.cc
+
+# Commands excluded from module builds (core + multi-handler sources)
+MOD_EXCLUDE := cmd_load.cc cmd_exit.cc cmd_sleep.cc cmd_config.cc \
+               cmd_upload.cc cmd_download.cc cmd_spawnto.cc \
+               cmd_wmiexec.cc cmd_dcomexec.cc
+
+MOD_CMD_SRC := $(filter-out $(addprefix src/commands/,$(MOD_EXCLUDE)), \
+               $(wildcard src/commands/cmd_*.cc))
+
+modules-x64:
+	@ mkdir -p $(MODULE_DIR)
+	@ echo "[modules] assembling entry + utils"
+	@ $(ASMCC) -f win64 src/asm/module_entry.x64.asm -o $(MODULE_DIR)/module_entry.x64.obj
+	@ $(ASMCC) -f win64 src/asm/utils.x64.asm -o $(MODULE_DIR)/utils.x64.obj
+	@ for h in $(MODULE_HELPERS); do \
+	    b=$$(basename $$h .cc); \
+	    echo "  [mod-helper] $$b"; \
+	    $(CCX64) -c $$h -o $(MODULE_DIR)/$$b.x64.obj $(CFLAGS) $(CFLAGS_X64_INC); \
+	  done
+	@ HOBJS=""; for h in $(MODULE_HELPERS); do \
+	    b=$$(basename $$h .cc); \
+	    HOBJS="$$HOBJS $(MODULE_DIR)/$$b.x64.obj"; \
+	  done; \
+	  for src in $(MOD_CMD_SRC); do \
+	    name=$$(basename $$src .cc | sed 's/^cmd_//'); \
+	    upper=$$(echo $$name | tr 'a-z' 'A-Z'); \
+	    echo "  [module] $$name"; \
+	    $(CCX64) -c $$src -o $(MODULE_DIR)/cmd_$$name.x64.obj \
+	      $(CFLAGS) $(CFLAGS_X64_INC) -DINCLUDE_CMD_$$upper 2>/dev/null && \
+	    $(CCX64) -c modules/module_init_template.cc -o $(MODULE_DIR)/init_$$name.x64.obj \
+	      $(CFLAGS) $(CFLAGS_X64_INC) -DINCLUDE_CMD_$$upper \
+	      -DMODULE_CMD_ID=CMD_$$upper -DMODULE_NAME=$$name 2>/dev/null && \
+	    $(CCX64) \
+	      $(MODULE_DIR)/module_entry.x64.obj \
+	      $(MODULE_DIR)/init_$$name.x64.obj \
+	      $(MODULE_DIR)/cmd_$$name.x64.obj \
+	      $$HOBJS $(MODULE_DIR)/utils.x64.obj \
+	      -o $(MODULE_DIR)/$$name.x64.exe $(CFLAGS) $(CFLAGS_X64_INC) 2>/dev/null && \
+	    objcopy --dump-section .text=$(MODULE_DIR)/$$name.x64.raw $(MODULE_DIR)/$$name.x64.exe && \
+	    printf '\x00\x00\x00\x00' | cat - $(MODULE_DIR)/$$name.x64.raw > $(MODULE_DIR)/$$name.x64.bin && \
+	    rm -f $(MODULE_DIR)/$$name.x64.raw $(MODULE_DIR)/$$name.x64.exe && \
+	    echo "    -> $$name.x64.bin" || \
+	    echo "    [SKIP] $$name (build failed)"; \
+	  done
+	@ echo "[modules] done"
+
 clean:
 	@ rm -f bin/obj/*.x64.obj
 	@ rm -f bin/obj/*.x86.obj
+	@ rm -f bin/modules/*
 	@ rm -f bin/*.exe
 	@ rm -f bin/*.bin
 	@ echo "removed object files"

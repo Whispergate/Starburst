@@ -17,6 +17,10 @@
 #include <transport_tcp.h>
 #endif
 
+#if defined( SSH_TRANSPORT )
+#include <transport_ssh.h>
+#endif
+
 using namespace stardust;
 
 namespace starburst {
@@ -30,6 +34,8 @@ auto declfn transport_init( instance& inst ) -> bool {
     return smb_init( inst );
 #elif defined( TCP_TRANSPORT )
     return tcp_init( inst );
+#elif defined( SSH_TRANSPORT )
+    return ssh_init( inst );
 #else
     return false;
 #endif
@@ -50,6 +56,8 @@ auto declfn transport_send(
     return smb_send( inst, data, len, response, resp_len );
 #elif defined( TCP_TRANSPORT )
     return tcp_send( inst, data, len, response, resp_len );
+#elif defined( SSH_TRANSPORT )
+    return ssh_send( inst, data, len, response, resp_len );
 #else
     return false;
 #endif
@@ -64,6 +72,8 @@ auto declfn transport_destroy( instance& inst ) -> void {
     smb_destroy( inst );
 #elif defined( TCP_TRANSPORT )
     tcp_destroy( inst );
+#elif defined( SSH_TRANSPORT )
+    ssh_destroy( inst );
 #endif
 }
 

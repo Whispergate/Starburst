@@ -73,6 +73,10 @@ class StarburstTranslator(TranslationContainer):
                 if rpfwd:
                     packed += pack_rpfwd_datagrams(rpfwd)
 
+                interactive = msg.get("interactive", [])
+                if interactive:
+                    packed += pack_interactive_datagrams(interactive)
+
                 response.Message = packed
             else:
                 response.Message = json.dumps(msg).encode()
