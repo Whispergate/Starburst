@@ -3,7 +3,7 @@ import os
 import struct
 import shutil
 import tempfile
-import subprocess
+import asyncio
 import zipfile
 import logging
 
@@ -384,23 +384,26 @@ class Starburst(PayloadType):
 
             os.makedirs(os.path.join(dst_path, "bin", "obj"), exist_ok=True)
 
-            proc = subprocess.run(
-                ["make", make_target],
+            proc = await asyncio.create_subprocess_exec(
+                "make", make_target,
                 cwd=dst_path,
-                capture_output=True,
-                text=True,
-                timeout=120,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
             )
+            stdout_bytes, stderr_bytes = await asyncio.wait_for(
+                proc.communicate(), timeout=120)
+            proc.stdout_text = stdout_bytes.decode(errors="replace")
+            proc.stderr_text = stderr_bytes.decode(errors="replace")
 
             if proc.returncode != 0:
                 resp.status = BuildStatus.Error
-                resp.build_stderr = proc.stderr
-                resp.build_message = f"Compilation failed:\n{proc.stdout}\n{proc.stderr}"
+                resp.build_stderr = proc.stderr_text
+                resp.build_message = f"Compilation failed:\n{proc.stdout_text}\n{proc.stderr_text}"
                 await SendMythicRPCPayloadUpdatebuildStep(MythicRPCPayloadUpdateBuildStepMessage(
                     PayloadUUID=self.uuid,
                     StepName="Compiling",
-                    StepStdout=proc.stdout,
-                    StepStderr=proc.stderr,
+                    StepStdout=proc.stdout_text,
+                    StepStderr=proc.stderr_text,
                     StepSuccess=False,
                 ))
                 return resp
@@ -408,7 +411,7 @@ class Starburst(PayloadType):
             await SendMythicRPCPayloadUpdatebuildStep(MythicRPCPayloadUpdateBuildStepMessage(
                 PayloadUUID=self.uuid,
                 StepName="Compiling",
-                StepStdout=proc.stdout,
+                StepStdout=proc.stdout_text,
                 StepSuccess=True,
             ))
 
@@ -445,7 +448,7 @@ class Starburst(PayloadType):
                     logger.warning("CPL link failed for DLL/EXE, falling back to raw shellcode")
                     linked_sc = shellcode
 
-                wrapped = self._wrap_shellcode(linked_sc, output_type, arch, dst_path)
+                wrapped = await self._wrap_shellcode(linked_sc, output_type, arch, dst_path)
                 if wrapped is None:
                     resp.status = BuildStatus.Error
                     resp.build_message = "Failed to wrap shellcode in loader"
@@ -474,16 +477,15 @@ class Starburst(PayloadType):
             ))
 
             # Build PIC modules for dynamic loading
-            import asyncio as _aio
             mod_arch = arch.split("-")[0] if "-" in arch else arch
             try:
-                mod_proc = await _aio.create_subprocess_exec(
+                mod_proc = await asyncio.create_subprocess_exec(
                     "make", f"modules-{mod_arch}",
                     cwd=dst_path,
-                    stdout=_aio.subprocess.PIPE,
-                    stderr=_aio.subprocess.PIPE,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
                 )
-                mod_stdout, mod_stderr = await _aio.wait_for(
+                mod_stdout, mod_stderr = await asyncio.wait_for(
                     mod_proc.communicate(), timeout=300
                 )
                 mod_stdout_str = mod_stdout.decode(errors="replace") if mod_stdout else ""
@@ -669,7 +671,7 @@ class Starburst(PayloadType):
             s = s.encode("utf-8")
         return struct.pack(">I", len(s)) + s
 
-    def _wrap_shellcode(self, shellcode, output_type, arch, build_path):
+    async def _wrap_shellcode(self, shellcode, output_type, arch, build_path):
         loaders_path = os.path.join(os.path.dirname(str(self.agent_code_path)), "..", "loaders")
 
         if output_type == "exe":
@@ -736,7 +738,12 @@ class Starburst(PayloadType):
         if output_type in ("exe", "service_exe"):
             cmd.append("-mwindows")
 
-        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+        proc = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=60)
         if proc.returncode != 0:
             return None
 
@@ -861,12 +868,16 @@ class Starburst(PayloadType):
                 z.extractall(udrl_dir)
 
             make_dir = _find_make_dir(udrl_dir)
-            make_proc = subprocess.run(
-                ["make", arch],
+            make_proc = await asyncio.create_subprocess_exec(
+                "make", arch,
                 cwd=make_dir, env=_make_env(),
-                capture_output=True, text=True, timeout=60)
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            make_stdout, make_stderr = await asyncio.wait_for(
+                make_proc.communicate(), timeout=60)
             if make_proc.returncode != 0:
-                logger.error(f"Custom UDRL compile failed: {make_proc.stderr}")
+                logger.error(f"Custom UDRL compile failed: {make_stderr.decode()}")
                 return None
 
             loader_path = _find_spec_dir(udrl_dir, role="loader")
@@ -885,7 +896,7 @@ class Starburst(PayloadType):
 
         if use_custom:
             try:
-                dll_path = _wrap_shellcode_in_dll(shellcode, arch, build_path)
+                dll_path = await _wrap_shellcode_in_dll(shellcode, arch, build_path)
             except RuntimeError as e:
                 logger.error(f"DLL stub wrapping failed: {e}")
                 return None
@@ -905,18 +916,24 @@ class Starburst(PayloadType):
 
         logger.info(f"Crystal Palace: {' '.join(command)}")
 
-        proc = subprocess.run(
-            command,
+        proc = await asyncio.create_subprocess_exec(
+            *command,
             cwd=crystal_linker,
-            capture_output=True, text=True, timeout=120)
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        cp_stdout, cp_stderr = await asyncio.wait_for(
+            proc.communicate(), timeout=120)
+        cp_stdout_text = cp_stdout.decode(errors="replace")
+        cp_stderr_text = cp_stderr.decode(errors="replace")
 
-        if proc.stdout:
-            logger.info(f"Crystal Palace stdout: {proc.stdout}")
-        if proc.stderr:
-            logger.info(f"Crystal Palace stderr: {proc.stderr}")
+        if cp_stdout_text:
+            logger.info(f"Crystal Palace stdout: {cp_stdout_text}")
+        if cp_stderr_text:
+            logger.info(f"Crystal Palace stderr: {cp_stderr_text}")
 
         if proc.returncode != 0:
-            logger.error(f"Crystal Palace link failed (rc={proc.returncode}): {proc.stdout}\n{proc.stderr}")
+            logger.error(f"Crystal Palace link failed (rc={proc.returncode}): {cp_stdout_text}\n{cp_stderr_text}")
             return None
 
         if not os.path.exists(out_file):
@@ -950,12 +967,16 @@ class Starburst(PayloadType):
 
         make_dir = _find_make_dir(extract_dir)
         arch = self.get_parameter("architecture")
-        make_proc = subprocess.run(
-            ["make", arch],
+        make_proc = await asyncio.create_subprocess_exec(
+            "make", arch,
             cwd=make_dir, env=_make_env(),
-            capture_output=True, text=True, timeout=60)
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        make_stdout, make_stderr = await asyncio.wait_for(
+            make_proc.communicate(), timeout=60)
         if make_proc.returncode != 0:
-            raise RuntimeError(f"Custom post-ex compile failed: {make_proc.stderr}")
+            raise RuntimeError(f"Custom post-ex compile failed: {make_stderr.decode()}")
 
         postex_dir = _find_spec_dir(extract_dir, role="postex")
         if not postex_dir:
@@ -1081,16 +1102,25 @@ class Starburst(PayloadType):
                 cmd.append("-s")
 
             env = _make_env()
-            proc = subprocess.run(cmd, capture_output=True, text=True, timeout=120, env=env)
+            proc = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+                env=env,
+            )
+            stdout_bytes, stderr_bytes = await asyncio.wait_for(
+                proc.communicate(), timeout=120)
+            stdout_text = stdout_bytes.decode(errors="replace")
+            stderr_text = stderr_bytes.decode(errors="replace")
             if proc.returncode != 0:
                 resp.status = BuildStatus.Error
-                resp.build_stderr = proc.stderr
-                resp.build_message = f"Linux compilation failed:\n{proc.stdout}\n{proc.stderr}"
+                resp.build_stderr = stderr_text
+                resp.build_message = f"Linux compilation failed:\n{stdout_text}\n{stderr_text}"
                 await SendMythicRPCPayloadUpdatebuildStep(MythicRPCPayloadUpdateBuildStepMessage(
                     PayloadUUID=self.uuid,
                     StepName="Compiling",
-                    StepStdout=proc.stdout,
-                    StepStderr=proc.stderr,
+                    StepStdout=stdout_text,
+                    StepStderr=stderr_text,
                     StepSuccess=False,
                 ))
                 return resp
@@ -1098,7 +1128,7 @@ class Starburst(PayloadType):
             await SendMythicRPCPayloadUpdatebuildStep(MythicRPCPayloadUpdateBuildStepMessage(
                 PayloadUUID=self.uuid,
                 StepName="Compiling",
-                StepStdout=f"gcc {arch} succeeded: {proc.stdout.strip()}" if proc.stdout.strip() else f"gcc {arch} succeeded",
+                StepStdout=f"gcc {arch} succeeded: {stdout_text.strip()}" if stdout_text.strip() else f"gcc {arch} succeeded",
                 StepSuccess=True,
             ))
 

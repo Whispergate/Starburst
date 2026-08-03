@@ -2,7 +2,6 @@ import os
 import asyncio
 import shutil
 import tempfile
-import subprocess
 import logging
 
 from mythic_container.MythicRPC import *
@@ -61,7 +60,7 @@ def _toolchain_env(cc_path):
     return env
 
 
-def _wrap_shellcode_in_dll(shellcode_bytes, arch, tmpdir):
+async def _wrap_shellcode_in_dll(shellcode_bytes, arch, tmpdir):
     sc_bin = os.path.join(tmpdir, "payload.bin")
     sc_obj = os.path.join(tmpdir, "payload.o")
     stub_obj = os.path.join(tmpdir, "stub.o")
@@ -75,19 +74,23 @@ def _wrap_shellcode_in_dll(shellcode_bytes, arch, tmpdir):
     objcopy = OBJCOPY_X64 if arch == "x64" else OBJCOPY_X86
     env = _toolchain_env(cc)
 
-    proc = subprocess.run(
-        [ld, "-r", "-b", "binary", "-o", sc_obj, "payload.bin"],
-        cwd=tmpdir, capture_output=True, text=True, timeout=30, env=env,
+    proc = await asyncio.create_subprocess_exec(
+        ld, "-r", "-b", "binary", "-o", sc_obj, "payload.bin",
+        cwd=tmpdir, stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE, env=env,
     )
+    stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=30)
     if proc.returncode != 0:
-        raise RuntimeError(f"ld binary embed failed: {proc.stderr}")
+        raise RuntimeError(f"ld binary embed failed: {stderr.decode()}")
 
-    proc = subprocess.run(
-        [cc, "-c", "-O1", "-o", stub_obj, STUB_SRC],
-        capture_output=True, text=True, timeout=30, env=env,
+    proc = await asyncio.create_subprocess_exec(
+        cc, "-c", "-O1", "-o", stub_obj, STUB_SRC,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE, env=env,
     )
+    stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=30)
     if proc.returncode != 0:
-        raise RuntimeError(f"stub compile failed: {proc.stderr}")
+        raise RuntimeError(f"stub compile failed: {stderr.decode()}")
 
     sym_prefix = "_binary_payload_bin_"
     cdecl_prefix = "_" if arch == "x86" else ""
@@ -96,24 +99,28 @@ def _wrap_shellcode_in_dll(shellcode_bytes, arch, tmpdir):
         (sym_prefix + "start", cdecl_prefix + "sc_payload"),
         (sym_prefix + "end", cdecl_prefix + "sc_payload_end"),
     ]:
-        proc = subprocess.run(
-            [objcopy, "--redefine-sym", f"{old_sym}={new_sym}", sc_obj],
-            capture_output=True, text=True, timeout=30, env=env,
+        proc = await asyncio.create_subprocess_exec(
+            objcopy, "--redefine-sym", f"{old_sym}={new_sym}", sc_obj,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE, env=env,
         )
+        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=30)
         if proc.returncode != 0:
-            raise RuntimeError(f"objcopy redefine failed: {proc.stderr}")
+            raise RuntimeError(f"objcopy redefine failed: {stderr.decode()}")
 
     link_flags = [cc, "-shared", "-nostartfiles", "-e", "DllMain",
                    "-o", dll_path, stub_obj, sc_obj, "-lkernel32"]
     if arch == "x86":
         link_flags.insert(-1, "-Wl,--enable-stdcall-fixup")
 
-    proc = subprocess.run(
-        link_flags,
-        capture_output=True, text=True, timeout=30, env=env,
+    proc = await asyncio.create_subprocess_exec(
+        *link_flags,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE, env=env,
     )
+    stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=30)
     if proc.returncode != 0:
-        raise RuntimeError(f"DLL link failed: {proc.stderr}")
+        raise RuntimeError(f"DLL link failed: {stderr.decode()}")
 
     return dll_path
 
@@ -133,7 +140,7 @@ async def link_shellcode_with_cp(shellcode_bytes, arch="x64", loader_path=None, 
         jar_path = os.path.join(crystal_linker, "crystalpalace.jar")
 
         if use_dll_stub:
-            dll_path = _wrap_shellcode_in_dll(shellcode_bytes, arch, tmpdir)
+            dll_path = await _wrap_shellcode_in_dll(shellcode_bytes, arch, tmpdir)
             command = [
                 "java", "-jar", jar_path, "link", spec_file, dll_path, out_path,
             ]
