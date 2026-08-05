@@ -565,6 +565,8 @@ namespace stardust
                 bool      initialized;
             } ekko = {};
 
+            void*    udrl_user_data = nullptr;
+
 #if defined(INCLUDE_EVASION_SPOOF) && defined(_WIN64)
             SPOOF_STATE spoof = {};
 #endif

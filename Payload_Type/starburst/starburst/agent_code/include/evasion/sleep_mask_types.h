@@ -14,5 +14,6 @@
 #define MASK_HEAP       2
 #define MASK_CUSTOM     3
 #define MASK_EKKO       4
+#define MASK_UDRL       5
 
 #endif /* STARBURST_EVASION_SLEEP_MASK_TYPES_H */

