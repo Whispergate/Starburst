@@ -271,10 +271,7 @@ auto declfn starburst::smb_send(
     // poll with timeout - egress needs a full beacon cycle to relay through Mythic
     for ( int attempt = 0; attempt < 3000; attempt++ ) {
         if ( smb_pipe_recv( inst, inst.h_pipe, &recv_buf, &recv_len ) ) break;
-
-        LARGE_INTEGER delay;
-        delay.QuadPart = -100000LL; // 10ms - 3000 × 10ms = 30s total
-        inst.ntdll.NtDelayExecution( FALSE, &delay );
+        SleepMs( 10 );
     }
 
     if ( !recv_buf || recv_len == 0 ) return false;

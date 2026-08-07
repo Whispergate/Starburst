@@ -742,6 +742,8 @@ class Starburst(PayloadType):
         out_path = os.path.join(build_path, f"starburst.{ext}")
 
         cmd = [cc, stamped_path, "-o", out_path, "-s", "-Os", "-w",
+               "-fno-ident", "-fno-asynchronous-unwind-tables",
+               "-Wl,--strip-all,--no-insert-timestamp",
                f"-I{build_path}", "-lkernel32", "-lntdll"]
         if output_type == "dll":
             cmd.append("-shared")

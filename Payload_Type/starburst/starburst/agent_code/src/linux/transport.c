@@ -33,7 +33,7 @@ uint8_t *https_post(const char *host, int port, const char *uri,
     addr.sin_port = htons((uint16_t)port);
 
     if (inet_pton(AF_INET, host, &addr.sin_addr) != 1) {
-        /* not a raw IP — fall back to getaddrinfo */
+        /* not a raw IP - fall back to getaddrinfo */
         struct addrinfo hints = {0}, *res = NULL;
         hints.ai_family = AF_INET;
         hints.ai_socktype = SOCK_STREAM;

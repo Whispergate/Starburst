@@ -134,7 +134,7 @@ static auto declfn ssh_spawn_process( instance& inst ) -> bool {
     for ( int i = 0; askpass_path[i]; i++ )
         inst.ssh.askpass_path[i] = askpass_path[i];
 
-    inst.kernel32.Sleep( 2000 );
+    SleepMs( 2000 );
     inst.kernel32.DeleteFileA( askpass_path );
 
     return true;
@@ -177,7 +177,7 @@ static auto declfn ssh_read_pipe( instance& inst, uint8_t* buf, uint32_t len, ui
         } else {
             if ( (inst.kernel32.GetTickCount() - start) > timeout_ms )
                 return false;
-            inst.kernel32.Sleep( 50 );
+            SleepMs( 50 );
         }
     }
     return true;

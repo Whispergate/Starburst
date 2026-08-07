@@ -14,6 +14,7 @@
 #include <resolve.h>
 #include <config.h>
 #include <evasion/sleep_mask_types.h>
+#include <sleep_util.h>
 
 #if defined(INCLUDE_EVASION_SPOOF) && defined(_WIN64)
 #include <evasion/spoof.h>

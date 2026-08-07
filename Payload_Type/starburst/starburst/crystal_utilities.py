@@ -84,7 +84,8 @@ async def _wrap_shellcode_in_dll(shellcode_bytes, arch, tmpdir):
         raise RuntimeError(f"ld binary embed failed: {stderr.decode()}")
 
     proc = await asyncio.create_subprocess_exec(
-        cc, "-c", "-O1", "-o", stub_obj, STUB_SRC,
+        cc, "-c", "-O1", "-fno-ident", "-fno-asynchronous-unwind-tables",
+        "-o", stub_obj, STUB_SRC,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE, env=env,
     )
@@ -109,6 +110,7 @@ async def _wrap_shellcode_in_dll(shellcode_bytes, arch, tmpdir):
             raise RuntimeError(f"objcopy redefine failed: {stderr.decode()}")
 
     link_flags = [cc, "-shared", "-nostartfiles", "-e", "DllMain",
+                   "-s", "-Wl,--no-insert-timestamp",
                    "-o", dll_path, stub_obj, sc_obj, "-lkernel32"]
     if arch == "x86":
         link_flags.insert(-1, "-Wl,--enable-stdcall-fixup")

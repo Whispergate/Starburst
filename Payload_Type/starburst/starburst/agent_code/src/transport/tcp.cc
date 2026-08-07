@@ -119,9 +119,7 @@ auto declfn starburst::tcp_send(
 
     for ( int attempt = 0; attempt < 3000; attempt++ ) {
         if ( tcp_link_recv( inst, ts, inst.tcp_client_sock, &recv_buf, &recv_len ) ) break;
-        LARGE_INTEGER delay;
-        delay.QuadPart = -100000LL;
-        inst.ntdll.NtDelayExecution( FALSE, &delay );
+        SleepMs( 10 );
     }
 
     if ( !recv_buf || recv_len == 0 ) return false;

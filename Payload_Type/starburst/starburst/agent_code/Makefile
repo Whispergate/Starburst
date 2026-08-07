@@ -96,8 +96,8 @@ nasm86:
 	@ $(ASMCC) -f win32 src/asm/utils.x86.asm -o bin/obj/utils.x86.obj
 
 stomper:
-	@ $(CCX64) test/stomper.cc -o test/stomper.x64.exe -w
-	@ $(CCX86) test/stomper.cc -o test/stomper.x86.exe -w
+	@ $(CCX64) test/stomper.cc -o test/stomper.x64.exe -w -DAUTORUN -DNOSTDLIB_BUILD -nostdlib -lkernel32 -lntdll -luser32 -lshell32 -ladvapi32 -lole32
+	@ $(CCX86) test/stomper.cc -o test/stomper.x86.exe -w -DAUTORUN -DNOSTDLIB_BUILD -nostdlib -lkernel32 -lntdll -luser32 -lshell32 -ladvapi32 -lole32
 
 # ── PIC Module building ─────────────────────────────────────────
 MODULE_DIR     := bin/modules

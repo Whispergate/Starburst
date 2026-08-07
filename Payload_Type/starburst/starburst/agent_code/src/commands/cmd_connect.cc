@@ -119,9 +119,7 @@ auto declfn starburst::cmd_connect(
 
     for ( int attempt = 0; attempt < 300; attempt++ ) {
         if ( tcp_link_recv( inst, ts, sock, &p2p_data, &p2p_len ) ) break;
-        LARGE_INTEGER delay;
-        delay.QuadPart = -100000LL;
-        inst.ntdll.NtDelayExecution( FALSE, &delay );
+        SleepMs( 10 );
     }
 
     if ( !p2p_data || p2p_len == 0 ) {

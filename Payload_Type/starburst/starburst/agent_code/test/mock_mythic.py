@@ -21,8 +21,8 @@ from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.primitives import padding as sym_padding
 
 # ── Test constants (must match config.h _MANUAL blob) ──
-PAYLOAD_UUID = "11111111-1111-1111-1111-111111111111"
-AES_KEY = bytes(range(32))  # 0x00..0x1f
+PAYLOAD_UUID = "93205a1d-4af1-47d7-8239-8bff8fd9caab"
+AES_KEY = bytes.fromhex("28f33fbe108ab7c4846a1786a38fcc24764b7ccf7fb41eada0efc585c6225afa")
 CALLBACK_UUID = "22222222-2222-2222-2222-222222222222"
 SERVER_UUID = "33333333-3333-3333-3333-333333333333"
 

