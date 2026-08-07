@@ -34,4 +34,4 @@ The rev2self command reverts the current thread's security context to the origin
 
 ## MITRE ATT&CK Mapping
 
-- **T1134** - Access Token Manipulation
+- **T1134.001** - Access Token Manipulation: Token Impersonation/Theft

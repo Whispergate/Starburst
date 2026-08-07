@@ -9,7 +9,7 @@ weight = 202
 Kill a running background job by task ID.
 
 - **Needs Admin:** False
-- **Version:** 1
+- **Version:** 2
 - **Author:** @Lavender-exe
 
 ### Arguments

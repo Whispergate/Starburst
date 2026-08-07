@@ -52,6 +52,7 @@ All Starburst commands are compiled conditionally. Only commands selected during
     * [shell](/agents/starburst/commands/shell/)
     * [run](/agents/starburst/commands/run/)
     * [powerpick](/agents/starburst/commands/powerpick/)
+    * [powershell_import](/agents/starburst/commands/powershell_import/)
     * [execute_assembly](/agents/starburst/commands/execute_assembly/)
     * [execute_coff](/agents/starburst/commands/execute_coff/)
     * [execute_pic](/agents/starburst/commands/execute_pic/)
@@ -60,6 +61,7 @@ All Starburst commands are compiled conditionally. Only commands selected during
     * [spawn](/agents/starburst/commands/spawn/)
     * [runas](/agents/starburst/commands/runas/)
     * [load](/agents/starburst/commands/load/)
+    * [memfd_exec](/agents/starburst/commands/memfd_exec/)
 - Registry
     * [reg_query](/agents/starburst/commands/reg_query/)
     * [reg_write_value](/agents/starburst/commands/reg_write_value/)
@@ -96,10 +98,14 @@ All Starburst commands are compiled conditionally. Only commands selected during
     * [migrate](/agents/starburst/commands/migrate/)
     * [blockdlls](/agents/starburst/commands/blockdlls/)
     * [timestomp](/agents/starburst/commands/timestomp/)
-- Persistence
+- Persistence (Windows)
     * [persist_run](/agents/starburst/commands/persist_run/)
     * [persist_schtask](/agents/starburst/commands/persist_schtask/)
     * [persist_service](/agents/starburst/commands/persist_service/)
+- Persistence (Linux)
+    * [persist_bashrc](/agents/starburst/commands/persist_bashrc/)
+    * [persist_cron](/agents/starburst/commands/persist_cron/)
+    * [persist_systemd](/agents/starburst/commands/persist_systemd/)
 - Credential Access
     * [keylog](/agents/starburst/commands/keylog/)
     * [hashdump](/agents/starburst/commands/hashdump/)

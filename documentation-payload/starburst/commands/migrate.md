@@ -16,14 +16,9 @@ Migrate the agent into another process via process injection. Spawns a new proce
 
 | Argument | Type | Required | Default | Description |
 |----------|------|----------|---------|-------------|
-| `pid` | Number | No | None | Target an existing process by PID. If omitted, a new process is spawned. |
-| `target` | String | No | `notepad.exe` | Path to the executable to spawn as the migration target. Ignored if `pid` is provided. |
+| `pid` | Number | Yes | None | Target process ID to migrate into |
 
 ### Usage
-
-```
-migrate -target "C:\Windows\System32\RuntimeBroker.exe"
-```
 
 ```
 migrate -pid 4728
@@ -68,4 +63,4 @@ When a `pid` is provided, injection proceeds directly into the existing process.
 
 ## MITRE ATT&CK Mapping
 
-- **T1055** - Process Injection
+- **T1055.001** - Process Injection: Dynamic-link Library Injection

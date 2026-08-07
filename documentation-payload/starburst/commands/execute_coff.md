@@ -9,13 +9,22 @@ weight = 103
 Execute a COFF (Common Object File Format) object file, commonly known as a BOF (Beacon Object File). Provides Beacon API compatibility for existing BOF tooling.
 
 - **Needs Admin:** False
-- **Version:** 1
+- **Version:** 2
 - **Author:** @Lavender-exe
 
 ### Arguments
 
-- **file** (File, required) - COFF/BOF object file to execute.
-- **arguments** (String, optional) - Packed arguments for the BOF. Can be hex-encoded or raw string. Default: empty.
+#### Default group
+
+- **coff_name** (ChooseOne, required) - Previously uploaded COFF/BOF to execute. Dynamically populated from uploaded `.o` files.
+
+#### New group
+
+- **bof_file** (File, required) - Upload a new BOF to execute. After uploading, reuse via the Default tab.
+
+#### Both groups
+
+- **arguments** (String, optional) - Packed arguments for the BOF (hex-encoded or raw). Default: empty.
 - **entrypoint** (String, optional) - Entry point function name. Default: `go`.
 
 ### Usage

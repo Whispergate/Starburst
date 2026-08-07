@@ -9,13 +9,22 @@ weight = 103
 Execute a .NET assembly in-process via CLR (Common Language Runtime) hosting.
 
 - **Needs Admin:** False
-- **Version:** 1
+- **Version:** 2
 - **Author:** @Lavender-exe
 
 ### Arguments
 
-- **file** (File, required) - .NET assembly file (.exe) to execute.
-- **arguments** (String, optional) - Command-line arguments to pass to the assembly. Default: empty.
+#### Default group
+
+- **assembly_name** (ChooseOne, required) - Previously uploaded .NET assembly to execute. Dynamically populated from uploaded files.
+
+#### New group
+
+- **assembly_file** (File, required) - Upload a new .NET assembly. After uploading, reuse via the Default tab.
+
+#### Both groups
+
+- **arguments** (String, optional) - Arguments to pass to the assembly. Default: empty.
 
 ### Usage
 

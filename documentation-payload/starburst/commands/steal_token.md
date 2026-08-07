@@ -8,7 +8,7 @@ weight = 211
 
 Steal and impersonate a token from a running process.
 
-- **Needs Admin:** False
+- **Needs Admin:** True
 - **Version:** 1
 - **Author:** @Lavender-exe
 

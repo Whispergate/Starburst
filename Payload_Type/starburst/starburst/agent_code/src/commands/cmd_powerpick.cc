@@ -378,7 +378,7 @@ auto declfn starburst::cmd_powerpick(
     VARIANT v_result;
     memory::zero( &v_result, sizeof( VARIANT ) );
 
-    // Patch AMSI after CLR is loaded — HWBP on AmsiScanBuffer during CLR
+    // Patch AMSI after CLR is loaded - HWBP on AmsiScanBuffer during CLR
     // init corrupts CLR state (CLR calls AmsiScanBuffer internally and
     // the VEH skip breaks its initialization sequence).
     #if defined(INCLUDE_EVASION_AMSI) && defined(_WIN64)

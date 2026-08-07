@@ -9,21 +9,32 @@ weight = 103
 Inject shellcode into a remote process.
 
 - **Needs Admin:** False
-- **Version:** 1
+- **Version:** 2
 - **Author:** @Lavender-exe
 
 ### Arguments
 
-- **pid** (Number, required) - Target process ID to inject into.
-- **file** (File, required) - Shellcode file to inject. Supports raw PIC or Crystal Palace output.
+#### Parameter Group: Default
+
+| Argument | Type | Required | Description |
+|----------|------|----------|-------------|
+| `pid` | Number | Yes | Target process ID to inject into. |
+| `shellcode_name` | ChooseOne | Yes | Previously uploaded shellcode to inject (dynamic list of `.bin`, `.pic`, `.raw` files). |
+
+#### Parameter Group: New
+
+| Argument | Type | Required | Description |
+|----------|------|----------|-------------|
+| `pid` | Number | Yes | Target process ID to inject into. |
+| `shellcode_file` | File | Yes | Upload new shellcode to inject. After uploading, reuse via the Default tab. |
 
 ### Usage
 
 ```
-shinject -pid 1234
+shinject -PID 1234 -Shellcode <shellcode.bin>
 ```
 
-A file dialog will appear to select the shellcode file.
+Select from previously uploaded shellcode files on the Default tab, or upload a new file on the New tab.
 
 ## Detailed Summary
 

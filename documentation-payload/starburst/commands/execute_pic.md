@@ -9,20 +9,26 @@ weight = 103
 Execute PIC (Position-Independent Code) shellcode in the current process via a new thread.
 
 - **Needs Admin:** False
-- **Version:** 1
+- **Version:** 2
 - **Author:** @Lavender-exe
 
 ### Arguments
 
-- **file** (File, required) - PIC shellcode file to execute. Supports raw PIC or Crystal Palace output.
+#### Default Group
+
+- **pic_name** (ChooseOne, required) - Previously uploaded PIC shellcode to execute. Dynamically populated from uploaded files with `.bin`, `.pic`, or `.raw` extensions.
+
+#### New Group
+
+- **pic_file** (File, required) - Upload new PIC shellcode. After uploading, reuse via the Default tab.
 
 ### Usage
 
 ```
-execute_pic
+execute_pic -PIC <shellcode.bin>
 ```
 
-A file dialog will appear to select the shellcode file.
+Select a previously uploaded PIC file from the dropdown (Default group), or upload a new PIC file (New group).
 
 ## Detailed Summary
 

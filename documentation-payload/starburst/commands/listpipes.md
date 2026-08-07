@@ -38,4 +38,4 @@ Results are rendered in the Mythic UI using a browser script that highlights kno
 
 ## MITRE ATT&CK Mapping
 
-- **T1057** - Process Discovery
+- **T1135** - Network Share Discovery

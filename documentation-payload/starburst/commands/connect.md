@@ -54,3 +54,4 @@ Once connected, the child agent's traffic is routed through the parent agent's C
 
 - **T1570** - Lateral Tool Transfer
 - **T1572** - Protocol Tunneling
+- **T1021** - Remote Services

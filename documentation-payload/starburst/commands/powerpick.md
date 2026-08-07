@@ -26,6 +26,17 @@ powerpick -Script "Get-ADUser -Filter * | Select Name,Enabled"
 powerpick -Script "[System.Environment]::OSVersion"
 ```
 
+### Using with powershell_import
+
+If a script has been loaded via [`powershell_import`]({{< ref "powershell_import" >}}), its functions and variables are automatically prepended to the script sent to the agent. This is transparent to the user:
+
+```
+powershell_import PowerView.ps1
+powerpick -Script "Get-DomainUser -Identity admin"
+```
+
+The imported script's definitions are available in the same runspace as the user's command. See the `powershell_import` documentation for details.
+
 ## Detailed Summary
 
 The `powerpick` command executes PowerShell scripts entirely in-process by hosting the .NET CLR runtime within the agent process. It avoids spawning `powershell.exe`, which is a common detection vector.

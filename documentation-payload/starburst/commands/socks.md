@@ -16,8 +16,8 @@ Start or stop a SOCKS5 proxy through the agent, enabling the operator to tunnel 
 
 | Argument | Type | Required | Default | Description |
 |----------|------|----------|---------|-------------|
-| `action` | ChooseOne | Yes | N/A | `start` or `stop` the SOCKS5 proxy. |
-| `port` | Number | Yes | N/A | Port for the SOCKS5 proxy on the Mythic server side. |
+| `action` | ChooseOne | No | `start` | `start` or `stop` the SOCKS5 proxy. |
+| `port` | Number | No | `7000` | Port for the SOCKS5 proxy on the Mythic server side. |
 
 ### Usage
 

@@ -18,7 +18,7 @@ Starburst is a Windows PIC (Position-Independent Code) agent for [Mythic](https:
 - Modular command system - commands compiled in/out at build time
 - Indirect syscall table (HellsGate/HalosGate SSN extraction)
 - Sleep-time sensitive data masking (XOR key material during sleep)
-- 58 built-in commands covering file ops, process management, code execution, lateral movement, token manipulation, and P2P linking
+- 90 commands covering file ops, process management, code execution, lateral movement, token manipulation, persistence, and P2P linking
 - SMB named pipe P2P transport with delegate message relay
 - TCP P2P transport with delegate message relay (connect/disconnect commands)
 - Browser pivoting (WinINet session inheritance)
@@ -33,7 +33,9 @@ Starburst is a Windows PIC (Position-Independent Code) agent for [Mythic](https:
 - Draugr N-frame call stack spoofing with operator-customizable profiles
 - [Arsenal Kit](https://github.com/Whispergate/Starburst.ArsenalKit) - operator customization kit: compile-time injection techniques (CRT/APC/Section/Custom), sleep masks (Default/Full Image/Heap/Custom), call stack spoof profiles (5 pre-built + custom), artifact wrappers (EXE/DLL/SVC with pipe/fiber/APC-self/callback bypass), loader kit (module stomping + DLL sideloading), resource kit (PowerShell/HTA/VBS/Python/C#/MSBuild stagers), and operator utilities
 - Forge compatible - execute_coff, execute_assembly, execute_pic, and shinject support file-at-execution-time via Default/New parameter groups
-- Multiple output formats: raw shellcode, EXE, DLL, Windows service
+- PowerShell import - load PS1 modules into memory for use across powerpick invocations
+- Linux agent support with ELF static binary output, memfd_create fileless execution, and Linux persistence (bashrc, cron, systemd)
+- Multiple output formats: raw shellcode, EXE, DLL, Windows service, ELF (Linux)
 
 ### Authors
 

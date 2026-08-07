@@ -6,7 +6,7 @@ weight = 208
 
 ## Summary
 
-List token privileges for the current process.
+List current token privileges and attempt to enable all disabled privileges.
 
 - **Needs Admin:** False
 - **Version:** 1
@@ -38,4 +38,4 @@ Each privilege is reported with its name and current state (enabled, disabled, o
 
 ## MITRE ATT&CK Mapping
 
-- **T1134** - Access Token Manipulation
+- **T1134.001** - Access Token Manipulation: Token Impersonation/Theft

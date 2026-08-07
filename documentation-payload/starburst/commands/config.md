@@ -6,17 +6,21 @@ weight = 103
 
 ## Summary
 
-View or modify the agent's runtime configuration (sleep interval, jitter, kill date).
+View or modify the agent's runtime configuration (sleep, jitter, killdate, spawnto paths).
 
 - **Needs Admin:** False
-- **Version:** 1
+- **Version:** 2
 - **Author:** @Lavender-exe
 
 ### Arguments
 
-- **sleep** (Number, optional) - New sleep interval in seconds. Use -1 for no change. Default: -1.
-- **jitter** (Number, optional) - New jitter percentage (0-100). Use -1 for no change. Default: -1.
-- **killdate** (Number, optional) - New kill date as Unix timestamp. Use -1 for no change. Default: -1.
+- **sleep** (Number, optional) - New sleep interval in seconds (-1 = no change). Default: -1.
+- **jitter** (Number, optional) - New jitter percentage 0-100 (-1 = no change). Default: -1.
+- **killdate** (Number, optional) - New killdate as unix timestamp (-1 = no change). Default: -1.
+- **spawnto_x64** (String, optional) - x64 sacrifice binary path (empty = no change). Default: empty.
+- **spawnto_x64_args** (String, optional) - x64 sacrifice binary arguments (empty = no change). Default: empty.
+- **spawnto_x86** (String, optional) - x86 sacrifice binary path (empty = no change). Default: empty.
+- **spawnto_x86_args** (String, optional) - x86 sacrifice binary arguments (empty = no change). Default: empty.
 
 ### Usage
 
@@ -42,6 +46,24 @@ Change jitter to 25%:
 
 ```
 config -jitter 25
+```
+
+Set x64 spawnto binary:
+
+```
+config -spawnto_x64 "C:\Windows\System32\svchost.exe" -spawnto_x64_args "-k netsvcs"
+```
+
+Set x86 spawnto binary:
+
+```
+config -spawnto_x86 "C:\Windows\SysWOW64\svchost.exe" -spawnto_x86_args "-k netsvcs"
+```
+
+Change sleep and update both spawnto paths:
+
+```
+config -sleep 10 -spawnto_x64 "C:\Windows\System32\RuntimeBroker.exe" -spawnto_x86 "C:\Windows\SysWOW64\RuntimeBroker.exe"
 ```
 
 ## Detailed Summary

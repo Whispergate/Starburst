@@ -16,15 +16,15 @@ Start or stop a reverse port forward. Opens a listening port on the agent's host
 
 | Argument | Type | Required | Default | Description |
 |----------|------|----------|---------|-------------|
-| `action` | ChooseOne | Yes | N/A | `start` or `stop` the reverse port forward. |
-| `port` | Number | Yes | N/A | Local port to listen on (on the agent's host). |
-| `forward_host` | String | Yes | N/A | Destination host to forward connections to (from the Mythic server's perspective). |
-| `forward_port` | Number | Yes | N/A | Destination port to forward connections to. |
+| `action` | ChooseOne | Yes | `start` | `start` or `stop` the reverse port forward. |
+| `port` | Number | Yes | `8080` | Port for Mythic to listen on (operator-side). |
+| `remote_ip` | String | Yes | `127.0.0.1` | Target IP the agent connects to for each forwarded connection. |
+| `remote_port` | Number | Yes | `80` | Target port the agent connects to for each forwarded connection. |
 
 ### Usage
 
 ```
-rpfwd -action start -port 8443 -forward_host 127.0.0.1 -forward_port 443
+rpfwd -action start -port 8443 -remote_ip 127.0.0.1 -remote_port 443
 ```
 
 ```
@@ -41,7 +41,7 @@ rpfwd -action stop -port 8443
 
 ## Detailed Summary
 
-When started, the agent opens a TCP listening socket on the specified port using `ws2_32` socket functions. When a connection is accepted on the listening port, the connection data is tunneled through the agent's C2 channel back to the Mythic server, which then forwards it to the specified `forward_host:forward_port` destination.
+When started, the agent opens a TCP listening socket on the specified port using `ws2_32` socket functions. When a connection is accepted on the listening port, the connection data is tunneled through the agent's C2 channel back to the Mythic server, which then forwards it to the specified `remote_ip:remote_port` destination.
 
 This enables access to services that are only reachable from the Mythic server's network by routing traffic through the compromised host. For example, an internal web application on the target network can be made accessible to the operator by forwarding its port through the agent.
 
@@ -58,4 +58,4 @@ When stopped, the listening socket is closed and no further connections are acce
 
 ## MITRE ATT&CK Mapping
 
-- **T1090.001** - Proxy: Internal Proxy
+- **T1090** - Proxy
