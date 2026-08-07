@@ -28,7 +28,7 @@ powerpick -Script "[System.Environment]::OSVersion"
 
 ### Using with powershell_import
 
-If a script has been loaded via [`powershell_import`]({{< ref "powershell_import" >}}), its functions and variables are automatically prepended to the script sent to the agent. This is transparent to the user:
+If a script has been loaded via [`powershell_import`](/agents/starburst/commands/powershell_import/), its functions and variables are automatically prepended to the script sent to the agent. This is transparent to the user:
 
 ```
 powershell_import PowerView.ps1
