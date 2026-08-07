@@ -43,3 +43,4 @@ from starburst.agent_functions.jobkill import *
 from starburst.agent_functions.link import *
 from starburst.agent_functions.unlink import *
 from starburst.agent_functions.powerpick import *
+from starburst.agent_functions.powershell_import import *

@@ -3,6 +3,25 @@ from mythic_container.MythicRPC import *
 import base64
 
 
+async def get_imported_script(task_id: int) -> str:
+    file_resp = await SendMythicRPCFileSearch(MythicRPCFileSearchMessage(
+        TaskID=task_id,
+        Filename="psimport_active.ps1",
+        LimitByCallback=False,
+    ))
+    if not file_resp.Success or len(file_resp.Files) == 0:
+        return ""
+    file_content = await SendMythicRPCFileGetContent(MythicRPCFileGetContentMessage(
+        AgentFileId=file_resp.Files[0].AgentFileId,
+    ))
+    if not file_content.Success:
+        return ""
+    try:
+        return file_content.Content.decode("utf-8-sig")
+    except UnicodeDecodeError:
+        return file_content.Content.decode("utf-8", errors="replace")
+
+
 PSRUNNER_BYTES = base64.b64decode(
     "TVqQAAMAAAAEAAAA//8AALgAAAAAAAAAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
     "AAAAgAAAAA4fug4AtAnNIbgBTM0hVGhpcyBwcm9ncmFtIGNhbm5vdCBiZSBydW4gaW4gRE9TIG1v"
@@ -157,6 +176,11 @@ class PowerpickCommand(CommandBase):
         )
 
         script = taskData.args.get_arg("script") or ""
+
+        imported = await get_imported_script(taskData.Task.ID)
+        if imported:
+            script = imported + "\n" + script
+            taskData.args.add_arg("script", script, ParameterType.String)
 
         taskData.args.add_arg(
             "runner_data",
