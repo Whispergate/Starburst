@@ -142,7 +142,11 @@ class ExecuteCoffCommand(CommandBase):
             return response
 
         import base64
-        taskData.args.add_arg("coff_data", base64.b64encode(file_content.Content).decode(), ParameterType.String)
+        taskData.args.add_arg("coff_data", base64.b64encode(file_content.Content).decode(), ParameterType.String,
+                              parameter_group_info=[
+                                  ParameterGroupInfo(group_name="Default"),
+                                  ParameterGroupInfo(group_name="New"),
+                              ])
 
         entry = taskData.args.get_arg("entrypoint") or "go"
         coff_len = len(file_content.Content)

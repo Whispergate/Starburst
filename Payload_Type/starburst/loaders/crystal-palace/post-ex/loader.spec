@@ -1,7 +1,6 @@
 x64:
     load "bin/loader-postex.x64.o"
         make pic +gofirst +optimize
-        dfr "resolve" "ror13"
 
         push $DLL
         preplen
@@ -16,7 +15,6 @@ x64:
 x86:
     load "bin/loader-postex.x86.o"
         make pic +gofirst +optimize
-        dfr "resolve" "ror13"
 
         push $DLL
         preplen

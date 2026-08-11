@@ -457,10 +457,17 @@ class Starburst(PayloadType):
                 linked_sc = await self._link_with_crystal_palace(
                     shellcode, arch, agent_build_path)
                 if linked_sc is None:
-                    logger.warning("CPL link failed for DLL/EXE, falling back to raw shellcode")
-                    linked_sc = shellcode
+                    resp.status = BuildStatus.Error
+                    resp.build_message = "Crystal Palace linking failed for loader build"
+                    await SendMythicRPCPayloadUpdatebuildStep(MythicRPCPayloadUpdateBuildStepMessage(
+                        PayloadUUID=self.uuid,
+                        StepName="Wrapping",
+                        StepStdout="Crystal Palace linking failed. Cannot build exe/dll/svc without it.",
+                        StepSuccess=False,
+                    ))
+                    return resp
 
-                wrapped = await self._wrap_shellcode(linked_sc, output_type, arch, dst_path)
+                wrapped = await self._wrap_shellcode(linked_sc, output_type, arch, dst_path, debug=debug)
                 if wrapped is None:
                     resp.status = BuildStatus.Error
                     resp.build_message = "Failed to wrap shellcode in loader"
@@ -683,7 +690,7 @@ class Starburst(PayloadType):
             s = s.encode("utf-8")
         return struct.pack(">I", len(s)) + s
 
-    async def _wrap_shellcode(self, shellcode, output_type, arch, build_path):
+    async def _wrap_shellcode(self, shellcode, output_type, arch, build_path, debug=False):
         loaders_path = os.path.join(os.path.dirname(str(self.agent_code_path)), "..", "loaders")
 
         if output_type == "exe":
@@ -749,7 +756,7 @@ class Starburst(PayloadType):
             cmd.append("-shared")
         elif output_type == "service_exe":
             cmd.append("-ladvapi32")
-        if output_type in ("exe", "service_exe"):
+        if output_type in ("exe", "service_exe") and not debug:
             cmd.append("-mwindows")
 
         proc = await asyncio.create_subprocess_exec(

