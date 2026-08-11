@@ -35,6 +35,19 @@ class ExecuteCoffArguments(TaskArguments):
                 ],
             ),
             CommandParameter(
+                name="coff_data",
+                display_name="Inline BOF (base64)",
+                type=ParameterType.String,
+                description="Base64-encoded COFF/BOF data for inline execution",
+                parameter_group_info=[
+                    ParameterGroupInfo(
+                        required=True,
+                        group_name="Inline",
+                        ui_position=1,
+                    )
+                ],
+            ),
+            CommandParameter(
                 name="arguments",
                 cli_name="Arguments",
                 display_name="Arguments",
@@ -44,6 +57,7 @@ class ExecuteCoffArguments(TaskArguments):
                 parameter_group_info=[
                     ParameterGroupInfo(required=False, group_name="Default", ui_position=2),
                     ParameterGroupInfo(required=False, group_name="New", ui_position=2),
+                    ParameterGroupInfo(required=False, group_name="Inline", ui_position=2),
                 ],
             ),
             CommandParameter(
@@ -56,6 +70,7 @@ class ExecuteCoffArguments(TaskArguments):
                 parameter_group_info=[
                     ParameterGroupInfo(required=False, group_name="Default", ui_position=3),
                     ParameterGroupInfo(required=False, group_name="New", ui_position=3),
+                    ParameterGroupInfo(required=False, group_name="Inline", ui_position=3),
                 ],
             ),
         ]
@@ -100,12 +115,69 @@ class ExecuteCoffCommand(CommandBase):
         supported_os=[SupportedOS.Windows],
     )
 
+    @staticmethod
+    def _pack_forge_arguments(args_input):
+        """Convert forge argument format to hex-encoded Beacon-packed binary.
+
+        Forge format: [['type', 'value'], ...] where type is z/Z/i/s/b.
+        Returns hex string of packed binary, or None if not forge format.
+        """
+        import ast, struct
+        args_list = args_input
+        if isinstance(args_input, str):
+            try:
+                args_list = ast.literal_eval(args_input)
+            except Exception:
+                return None
+        if not isinstance(args_list, list):
+            return None
+        packed = b""
+        for arg in args_list:
+            if not isinstance(arg, (list, tuple)) or len(arg) != 2:
+                return None
+            atype, aval = str(arg[0]), str(arg[1]) if arg[1] is not None else ""
+            if atype == "z":
+                data = aval.encode("utf-8") + b"\x00"
+                packed += struct.pack("<I", len(data)) + data
+            elif atype == "Z":
+                data = aval.encode("utf-16-le") + b"\x00\x00"
+                packed += struct.pack("<I", len(data)) + data
+            elif atype == "i":
+                packed += struct.pack("<i", int(aval) if aval else 0)
+            elif atype == "s":
+                packed += struct.pack("<h", int(aval) if aval else 0)
+            elif atype == "b":
+                data = bytes.fromhex(aval) if aval else b""
+                packed += struct.pack("<I", len(data)) + data
+            else:
+                return None
+        return packed.hex()
+
     async def create_go_tasking(self, taskData: MythicCommandBase.PTTaskMessageAllData) -> MythicCommandBase.PTTaskCreateTaskingMessageResponse:
         response = MythicCommandBase.PTTaskCreateTaskingMessageResponse(
             TaskID=taskData.Task.ID, Success=True,
         )
 
-        if taskData.args.get_parameter_group_name() == "New":
+        group = taskData.args.get_parameter_group_name()
+
+        if group == "Inline":
+            entry = taskData.args.get_arg("entrypoint") or "go"
+            import base64
+            coff_b64 = taskData.args.get_arg("coff_data")
+            coff_len = len(base64.b64decode(coff_b64)) if coff_b64 else 0
+            response.DisplayParams = f"-Inline ({coff_len} bytes) -Function {entry}"
+
+            args_raw = taskData.args.get_arg("arguments") or ""
+            packed = self._pack_forge_arguments(args_raw)
+            if packed is not None:
+                taskData.args.remove_arg("arguments")
+                taskData.args.add_arg("arguments", packed, ParameterType.String,
+                                      parameter_group_info=[
+                                          ParameterGroupInfo(required=False, group_name="Inline"),
+                                      ])
+            return response
+
+        if group == "New":
             file_search = await SendMythicRPCFileSearch(MythicRPCFileSearchMessage(
                 TaskID=taskData.Task.ID,
                 AgentFileID=taskData.args.get_arg("bof_file"),
@@ -147,6 +219,16 @@ class ExecuteCoffCommand(CommandBase):
                                   ParameterGroupInfo(group_name="Default"),
                                   ParameterGroupInfo(group_name="New"),
                               ])
+
+        args_raw = taskData.args.get_arg("arguments") or ""
+        packed = self._pack_forge_arguments(args_raw)
+        if packed is not None:
+            taskData.args.remove_arg("arguments")
+            taskData.args.add_arg("arguments", packed, ParameterType.String,
+                                  parameter_group_info=[
+                                      ParameterGroupInfo(required=False, group_name="Default"),
+                                      ParameterGroupInfo(required=False, group_name="New"),
+                                  ])
 
         entry = taskData.args.get_arg("entrypoint") or "go"
         coff_len = len(file_content.Content)

@@ -592,6 +592,10 @@ namespace stardust
             char*    output_data;
             uint32_t output_length;
             uint32_t output_capacity;
+            volatile int guard_active;
+            uint32_t crash_code;
+            uint32_t bof_thread_id;
+            uintptr_t exit_thread_addr;
         } coff = {};
 
         struct LoadedCommand {

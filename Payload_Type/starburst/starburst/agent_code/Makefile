@@ -7,7 +7,7 @@ ASMCC  := nasm
 CFLAGS := -Os -nostdlib -fno-asynchronous-unwind-tables -std=c++20
 CFLAGS += -fno-ident -fpack-struct=8 -falign-functions=1 -s -w -mno-sse
 CFLAGS += -ffunction-sections -falign-jumps=1 -falign-labels=1 -fno-jump-tables
-CFLAGS += -Wl,-s,--no-seh,--enable-stdcall-fixup -masm=intel -fno-exceptions
+CFLAGS += -Wl,-s,--enable-stdcall-fixup -masm=intel -fno-exceptions
 CFLAGS += -fms-extensions -Iinclude -Wl,-Tscripts/linker.ld
 
 # Detect mingw-w64 C++ headers for cross-compilation (clang often can't find them)

