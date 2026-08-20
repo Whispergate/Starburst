@@ -295,6 +295,33 @@ def pack_command_params(cmd_name, params):
         link_info = params.get("link_info", {})
         pk.add_string(link_info.get("callback_uuid", ""))
 
+    elif cmd_name == "lldp_connect":
+        connection_info = params.get("connection_info", {})
+        iface = params.get("interface", "eth0")
+        pk.add_string(iface)
+        c2_profile = connection_info.get("c2_profile", {})
+        c2_params = c2_profile.get("parameters", {})
+        oui_presets = {
+            "Cisco (00000C)": "00000C", "Aruba/HPE (000B86)": "000B86",
+            "Juniper (000585)": "000585", "Arista (001C73)": "001C73",
+            "Dell (001422)": "001422", "VMware (005056)": "005056",
+            "Ubiquiti (FCECDA)": "FCECDA", "MikroTik (D4CA6D)": "D4CA6D",
+            "Samsung (001632)": "001632", "IANA/IETF (00005E)": "00005E",
+        }
+        profile = c2_params.get("oui_profile", "Cisco (00000C)")
+        if profile == "Custom":
+            oui_hex = c2_params.get("oui_custom", "00000C")
+        else:
+            oui_hex = oui_presets.get(profile, "00000C")
+        pk.add_string(oui_hex)
+        subtype = int(c2_params.get("subtype", "01"), 16)
+        pk.add_byte(subtype)
+        peer_ip = params.get("peer_ip", "")
+        pk.add_string(peer_ip)
+    elif cmd_name == "lldp_disconnect":
+        link_info = params.get("link_info", {})
+        pk.add_string(link_info.get("callback_uuid", ""))
+
     elif cmd_name == "powerpick":
         import base64
         runner_b64 = params.get("runner_data", "")

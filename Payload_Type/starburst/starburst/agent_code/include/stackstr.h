@@ -15,6 +15,8 @@
 #define STK_NETAPI32(v)     char v[] = {'n','e','t','a','p','i','3','2','.','d','l','l',0}
 #define STK_DBGHELP(v)      char v[] = {'d','b','g','h','e','l','p','.','d','l','l',0}
 #define STK_AMSI(v)         char v[] = {'a','m','s','i','.','d','l','l',0}
+#define STK_WPCAP(v)        char v[] = {'w','p','c','a','p','.','d','l','l',0}
+#define STK_NPCAP_PATH(v)   char v[] = {'C',':','\\','W','i','n','d','o','w','s','\\','S','y','s','t','e','m','3','2','\\','N','p','c','a','p','\\','w','p','c','a','p','.','d','l','l',0}
 
 #define STK_RUNDLL32_X64(v) char v[] = {'C',':','\\','W','i','n','d','o','w','s','\\','S','y','s','t','e','m','3','2','\\','r','u','n','d','l','l','3','2','.','e','x','e',0}
 #define STK_RUNDLL32_X86(v) char v[] = {'C',':','\\','W','i','n','d','o','w','s','\\','S','y','s','W','O','W','6','4','\\','r','u','n','d','l','l','3','2','.','e','x','e',0}

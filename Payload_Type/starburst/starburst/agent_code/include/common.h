@@ -477,6 +477,19 @@ namespace stardust
         void*    tcp_link_state;
 #endif
 
+#if defined( INCLUDE_CMD_LLDP_CONNECT ) || defined( INCLUDE_CMD_LLDP_DISCONNECT ) || defined( LLDP_TRANSPORT )
+        struct LldpLink {
+            char      task_uuid[37];
+            uint32_t  link_id;
+            char*     agent_id;
+            uint8_t   peer_mac[6];
+            bool      connected;
+            LldpLink* next;
+        };
+        LldpLink* lldp_links;
+        void*     lldp_link_state;
+#endif
+
 #ifdef INCLUDE_CMD_SOCKS
         void* socks_state;
 #endif

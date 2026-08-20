@@ -60,6 +60,7 @@ CMD_MAP = {
     "browserpivot": 0x38,
     "connect": 0x39, "disconnect": 0x3A,
     "powerpick": 0x3B,
+    "lldp_connect": 0x70, "lldp_disconnect": 0x71,
 }
 CMD_MAP_REV = {v: k for k, v in CMD_MAP.items()}
 

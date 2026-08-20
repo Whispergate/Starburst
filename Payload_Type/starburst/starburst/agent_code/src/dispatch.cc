@@ -277,6 +277,12 @@ auto declfn dispatch_command(
 #ifdef INCLUDE_CMD_DCOMEXEC
         case CMD_DCOMEXEC: cmd_dcomexec( inst, task_uuid, params ); return;
 #endif
+#ifdef INCLUDE_CMD_LLDP_CONNECT
+        case CMD_LLDP_CONNECT: cmd_lldp_connect( inst, task_uuid, params ); return;
+#endif
+#ifdef INCLUDE_CMD_LLDP_DISCONNECT
+        case CMD_LLDP_DISCONNECT: cmd_lldp_disconnect( inst, task_uuid, params ); return;
+#endif
         default: break;
     }
 

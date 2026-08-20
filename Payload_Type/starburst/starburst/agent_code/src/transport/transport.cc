@@ -21,6 +21,10 @@
 #include <transport_ssh.h>
 #endif
 
+#if defined( LLDP_TRANSPORT )
+#include <transport_lldp.h>
+#endif
+
 using namespace stardust;
 
 namespace starburst {
@@ -36,6 +40,8 @@ auto declfn transport_init( instance& inst ) -> bool {
     return tcp_init( inst );
 #elif defined( SSH_TRANSPORT )
     return ssh_init( inst );
+#elif defined( LLDP_TRANSPORT )
+    return lldp_init( inst );
 #else
     return false;
 #endif
@@ -58,6 +64,8 @@ auto declfn transport_send(
     return tcp_send( inst, data, len, response, resp_len );
 #elif defined( SSH_TRANSPORT )
     return ssh_send( inst, data, len, response, resp_len );
+#elif defined( LLDP_TRANSPORT )
+    return lldp_send( inst, data, len, response, resp_len );
 #else
     return false;
 #endif
@@ -74,6 +82,8 @@ auto declfn transport_destroy( instance& inst ) -> void {
     tcp_destroy( inst );
 #elif defined( SSH_TRANSPORT )
     ssh_destroy( inst );
+#elif defined( LLDP_TRANSPORT )
+    lldp_destroy( inst );
 #endif
 }
 

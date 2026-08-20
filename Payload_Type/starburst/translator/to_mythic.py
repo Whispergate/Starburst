@@ -354,6 +354,7 @@ _link_profiles = {}
 C2_PROFILE_NAMES = {
     C2_PROFILE_SMB: "smb",
     C2_PROFILE_TCP: "tcp",
+    C2_PROFILE_LLDP: "lldp",
 }
 
 
