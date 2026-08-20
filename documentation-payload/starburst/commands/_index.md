@@ -89,6 +89,8 @@ All Starburst commands are compiled conditionally. Only commands selected during
     * [unlink](/agents/starburst/commands/unlink/)
     * [connect](/agents/starburst/commands/connect/)
     * [disconnect](/agents/starburst/commands/disconnect/)
+    * [lldp_connect](/agents/starburst/commands/lldp_connect/)
+    * [lldp_disconnect](/agents/starburst/commands/lldp_disconnect/)
 - Proxying
     * [socks](/agents/starburst/commands/socks/)
     * [rpfwd](/agents/starburst/commands/rpfwd/)

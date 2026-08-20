@@ -21,6 +21,7 @@ Starburst is a Windows PIC (Position-Independent Code) agent for [Mythic](https:
 - 90 commands covering file ops, process management, code execution, lateral movement, token manipulation, persistence, and P2P linking
 - SMB named pipe P2P transport with delegate message relay
 - TCP P2P transport with delegate message relay (connect/disconnect commands)
+- LLDP P2P transport over IEEE 802.1AB Layer 2 frames with vendor OUI spoofing (lldp_connect/lldp_disconnect commands)
 - Browser pivoting (WinINet session inheritance)
 - Process migration with configurable spawn target
 - SOCKS5 proxy integration
