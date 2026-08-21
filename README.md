@@ -78,6 +78,7 @@ python main.py
 | GitHub | WinINet | C2 via GitHub issue comments |
 | SMB | Named Pipes | Peer-to-peer |
 | TCP | Raw TCP Sockets | Peer-to-peer |
+| LLDP | Raw LLDPDU Packets | Peer-to-peer |
 
 ## Call Stack Spoofing (Draugr)
 
@@ -116,7 +117,7 @@ Starburst ships with an [Arsenal Kit](https://github.com/Whispergate/Starburst.A
 | **loader-kit** | Module stomping and DLL sideloading loaders | `stomper/`, `sideload/` |
 | **injection-kit** | Alternative process injection techniques for shinject/migrate | `techniques/*.c` |
 | **resource-kit** | Delivery stagers (PowerShell, HTA, VBS, Python, C#, MSBuild) | Per-language subdirectories |
-1| **utils** | Operator tools (hash generator, offset calculator, encoder) | Per-tool subdirectories |
+| **utils** | Operator tools (hash generator, offset calculator, encoder) | Per-tool subdirectories |
 
 ### Agent-Side Modules
 
