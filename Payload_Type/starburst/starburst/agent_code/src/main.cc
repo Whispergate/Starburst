@@ -106,6 +106,10 @@ declfn instance::instance(
     tcp_links = nullptr;
     tcp_link_state = nullptr;
 #endif
+#if defined( INCLUDE_CMD_LLDP_CONNECT ) || defined( INCLUDE_CMD_LLDP_DISCONNECT ) || defined( LLDP_TRANSPORT )
+    lldp_links = nullptr;
+    lldp_link_state = nullptr;
+#endif
 #if defined( TCP_TRANSPORT )
     tcp_listen_sock = TCP_INVALID_SOCKET;
     tcp_client_sock = TCP_INVALID_SOCKET;

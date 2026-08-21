@@ -62,6 +62,12 @@ OBJ86  := $(SRC:%.cc=%.x86.obj)
 release: x64 x86
 debug: 	 x64-debug x86-debug
 
+local: CFLAGS += -D_MANUAL
+local: x64
+
+local-debug: CFLAGS += -D_MANUAL -DDEBUG
+local-debug: x64
+
 x64-debug: CFLAGS += -D DEBUG
 x64-debug: x64
 

@@ -405,7 +405,7 @@ class Starburst(PayloadType):
                 stderr=asyncio.subprocess.PIPE,
             )
             stdout_bytes, stderr_bytes = await asyncio.wait_for(
-                proc.communicate(), timeout=120)
+                proc.communicate(), timeout=300)
             proc.stdout_text = stdout_bytes.decode(errors="replace")
             proc.stderr_text = stderr_bytes.decode(errors="replace")
 
@@ -789,7 +789,7 @@ class Starburst(PayloadType):
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
-        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=60)
+        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=120)
         if proc.returncode != 0:
             return None
 
@@ -945,12 +945,16 @@ class Starburst(PayloadType):
             if not os.path.exists(os.path.join(loader_path, "loader.spec")):
                 logger.error("Built-in UDRL loader not found at loaders/crystal-palace/udrl/")
                 return None
-            make_proc = subprocess.run(
-                ["make", "clean", "all"],
+            make_proc = await asyncio.create_subprocess_exec(
+                "make", "clean", "all",
                 cwd=loader_path, env=_make_env(),
-                capture_output=True, text=True, timeout=60)
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            make_stdout, make_stderr = await asyncio.wait_for(
+                make_proc.communicate(), timeout=60)
             if make_proc.returncode != 0:
-                logger.error(f"UDRL loader compile failed: {make_proc.stderr}")
+                logger.error(f"UDRL loader compile failed: {make_stderr.decode(errors='replace')}")
                 return None
             logger.info("Built-in UDRL reflective loader compiled successfully")
         else:

