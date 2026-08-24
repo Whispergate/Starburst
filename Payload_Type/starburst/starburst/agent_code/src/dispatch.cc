@@ -277,6 +277,9 @@ auto declfn dispatch_command(
 #ifdef INCLUDE_CMD_DCOMEXEC
         case CMD_DCOMEXEC: cmd_dcomexec( inst, task_uuid, params ); return;
 #endif
+#ifdef INCLUDE_CMD_EXECUTE_BOFPE
+        case CMD_EXECUTE_BOFPE: cmd_execute_bofpe( inst, task_uuid, params ); return;
+#endif
 #ifdef INCLUDE_CMD_LLDP_CONNECT
         case CMD_LLDP_CONNECT: cmd_lldp_connect( inst, task_uuid, params ); return;
 #endif

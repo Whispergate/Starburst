@@ -161,6 +161,20 @@ def pack_command_params(cmd_name, params):
             pk.add_bytes(b"")
         pk.add_string(params.get("entrypoint", "go"))
 
+    elif cmd_name == "execute_bofpe":
+        import base64
+        pe_b64 = params.get("pe_data", "")
+        if pe_b64:
+            pk.add_bytes(base64.b64decode(pe_b64))
+        else:
+            pk.add_bytes(b"")
+        args_str = params.get("arguments", "")
+        if args_str:
+            pk.add_bytes(bytes.fromhex(args_str) if all(c in "0123456789abcdefABCDEF" for c in args_str) and len(args_str) % 2 == 0 else args_str.encode())
+        else:
+            pk.add_bytes(b"")
+        pk.add_string(params.get("entrypoint", "go"))
+
     elif cmd_name == "jump_psexec":
         import base64
         pk.add_string(params.get("hostname", ""))

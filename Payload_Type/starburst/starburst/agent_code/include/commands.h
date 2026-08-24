@@ -357,6 +357,10 @@ namespace starburst {
     auto declfn cmd_dcomexec( instance& inst, char* task_uuid, Parser* params ) -> void;
 #endif
 
+#ifdef INCLUDE_CMD_EXECUTE_BOFPE
+    auto declfn cmd_execute_bofpe( instance& inst, char* task_uuid, Parser* params ) -> void;
+#endif
+
 #ifdef INCLUDE_CMD_LLDP_CONNECT
     auto declfn cmd_lldp_connect( instance& inst, char* task_uuid, Parser* params ) -> void;
 #endif

@@ -21,8 +21,8 @@ from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.primitives import padding as sym_padding
 
 # ── Test constants (must match config.h _MANUAL blob) ──
-PAYLOAD_UUID = "93205a1d-4af1-47d7-8239-8bff8fd9caab"
-AES_KEY = bytes.fromhex("28f33fbe108ab7c4846a1786a38fcc24764b7ccf7fb41eada0efc585c6225afa")
+PAYLOAD_UUID = "11111111-1111-1111-1111-111111111111"
+AES_KEY = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdef"
 CALLBACK_UUID = "22222222-2222-2222-2222-222222222222"
 SERVER_UUID = "33333333-3333-3333-3333-333333333333"
 
@@ -60,6 +60,7 @@ CMD_MAP = {
     "browserpivot": 0x38,
     "connect": 0x39, "disconnect": 0x3A,
     "powerpick": 0x3B,
+    "execute_bofpe": 0x57,
     "lldp_connect": 0x70, "lldp_disconnect": 0x71,
 }
 CMD_MAP_REV = {v: k for k, v in CMD_MAP.items()}
@@ -169,6 +170,7 @@ class TaskManager:
         {"command": "net_localgroup", "params": {"hostname": ""}},
         {"command": "run", "params": {"command": "whoami"}},
         {"command": "cat", "params": {"path": "C:\\Windows\\System32\\drivers\\etc\\hosts"}},
+        {"command": "execute_bofpe", "params": {"pe_file": "__TEST_BOFPE__", "arguments": "", "entrypoint": "go"}},
         {"command": "sleep", "params": {"interval": 1000, "jitter": 0}},
         {"command": "exit", "params": {}},
     ]
@@ -235,6 +237,22 @@ def pack_params(cmd_name, params):
     elif cmd_name == "mv":
         pk.add_string(params.get("source", ""))
         pk.add_string(params.get("destination", ""))
+    elif cmd_name in ("execute_coff", "execute_bofpe"):
+        pe_path = params.get("pe_file", "")
+        if pe_path == "__TEST_BOFPE__":
+            test_dir = os.path.dirname(os.path.abspath(__file__))
+            pe_path = os.path.join(test_dir, "test_bofpe.dll")
+        if pe_path and os.path.isfile(pe_path):
+            with open(pe_path, "rb") as f:
+                pe_data = f.read()
+        else:
+            pe_data = b""
+        pk.add_bytes(pe_data)
+        args_raw = params.get("arguments", "")
+        if isinstance(args_raw, str):
+            args_raw = args_raw.encode("utf-8") if args_raw else b""
+        pk.add_bytes(args_raw)
+        pk.add_string(params.get("entrypoint", "go"))
     # no-param commands: exit, whoami, pwd, ps, env, ifconfig, netstat,
     # getprivs, listpipes, rev2self, screenshot, token_list
     return pk.build()

@@ -110,6 +110,7 @@ CMD_MAP = {
     "load":                  0x54,
     "wmiexec":               0x55,
     "dcomexec":              0x56,
+    "execute_bofpe":         0x57,
     "persist_cron":          0x60,
     "persist_systemd":       0x61,
     "persist_bashrc":        0x62,
