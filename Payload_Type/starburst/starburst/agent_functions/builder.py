@@ -483,6 +483,9 @@ class Starburst(PayloadType):
                 resp.payload = wrapped
                 resp.build_message = f"Starburst {arch} {output_type} (CPL linked): {len(wrapped)} bytes"
 
+            ext_map = {"bin": "bin", "shellcode": "bin", "exe": "exe", "dll": "dll", "service_exe": "exe"}
+            resp.updated_filename = f"starburst.{ext_map.get(output_type, 'bin')}"
+
             # install custom post-ex UDRL if provided
             if self.get_parameter("custom_postex_udrl"):
                 try:
@@ -1245,6 +1248,7 @@ class Starburst(PayloadType):
 
             resp.payload = elf_bytes
             resp.build_message = f"Starburst Linux {arch} ELF: {len(elf_bytes)} bytes"
+            resp.updated_filename = "starburst.elf"
 
             await SendMythicRPCPayloadUpdatebuildStep(MythicRPCPayloadUpdateBuildStepMessage(
                 PayloadUUID=self.uuid,
