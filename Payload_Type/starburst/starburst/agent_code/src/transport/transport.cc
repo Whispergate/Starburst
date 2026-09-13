@@ -9,6 +9,10 @@
 #include <transport_github.h>
 #endif
 
+#if defined( MSTEAMS_TRANSPORT )
+#include <transport_msteams.h>
+#endif
+
 #if defined( SMB_TRANSPORT )
 #include <transport_smb.h>
 #endif
@@ -34,6 +38,8 @@ auto declfn transport_init( instance& inst ) -> bool {
     return http_init( inst );
 #elif defined( GITHUB_TRANSPORT )
     return github_init( inst );
+#elif defined( MSTEAMS_TRANSPORT )
+    return msteams_init( inst );
 #elif defined( SMB_TRANSPORT )
     return smb_init( inst );
 #elif defined( TCP_TRANSPORT )
@@ -58,6 +64,8 @@ auto declfn transport_send(
     return http_send( inst, data, len, response, resp_len );
 #elif defined( GITHUB_TRANSPORT )
     return github_send( inst, data, len, response, resp_len );
+#elif defined( MSTEAMS_TRANSPORT )
+    return msteams_send( inst, data, len, response, resp_len );
 #elif defined( SMB_TRANSPORT )
     return smb_send( inst, data, len, response, resp_len );
 #elif defined( TCP_TRANSPORT )
@@ -76,6 +84,8 @@ auto declfn transport_destroy( instance& inst ) -> void {
     http_destroy( inst );
 #elif defined( GITHUB_TRANSPORT )
     github_destroy( inst );
+#elif defined( MSTEAMS_TRANSPORT )
+    msteams_destroy( inst );
 #elif defined( SMB_TRANSPORT )
     smb_destroy( inst );
 #elif defined( TCP_TRANSPORT )

@@ -13,7 +13,7 @@ Starburst compiles to raw x64/x86 shellcode that runs entirely from memory with 
 - **AES256-CBC + HMAC-SHA256** - encryption via Windows BCrypt APIs
 - **Evasion** - indirect syscall table (HellsGate/HalosGate), sleep-time data masking, Draugr N-frame call stack spoofing with operator-customizable profiles
 - **Arsenal Kit** - modular, operator-swappable injection techniques, sleep masks, and call stack spoof profiles via compile-time selection headers
-- **Multiple transports** - HTTP (WinHTTP), HTTPX (malleable C2), GitHub (issue comments), SMB (named pipes), TCP (raw sockets)
+- **Multiple transports** - HTTP (WinHTTP), HTTPX (malleable C2), GitHub (issue comments), MS Teams (Graph API), SMB (named pipes), TCP (raw sockets)
 - **Multiple output formats** - raw shellcode (.bin), executable (.exe), DLL (.dll), Windows service (.exe)
 
 ## Architecture
@@ -76,6 +76,7 @@ python main.py
 | HTTP | WinHTTP | Standard HTTPS callback |
 | HTTPX | WinHTTP | Malleable C2 with transforms |
 | GitHub | WinINet | C2 via GitHub issue comments |
+| MS Teams | WinHTTP | C2 via Teams channel messages (Graph API) |
 | SMB | Named Pipes | Peer-to-peer |
 | TCP | Raw TCP Sockets | Peer-to-peer |
 | LLDP | Raw LLDPDU Packets | Peer-to-peer |

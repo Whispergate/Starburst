@@ -94,7 +94,7 @@ class Starburst(PayloadType):
     wrapped_payloads = ["erebus_wrapper", "service_wrapper", "scarecrow_wrapper"]
     note = "PIC shellcode agent based on Stardust framework and Crystal Palace."
     supports_dynamic_loading = True
-    c2_profiles = ["http", "httpx", "github", "smb", "tcp", "ssh", "lldp"]
+    c2_profiles = ["http", "httpx", "github", "msteams", "smb", "tcp", "ssh", "lldp"]
     mythic_encrypts = True
     translation_container = "StarburstTranslator"
 
@@ -341,6 +341,8 @@ class Starburst(PayloadType):
                 transport_define = "#define HTTPX_TRANSPORT"
             elif c2_profile_name == "github":
                 transport_define = "#define GITHUB_TRANSPORT"
+            elif c2_profile_name == "msteams":
+                transport_define = "#define MSTEAMS_TRANSPORT"
             elif c2_profile_name == "smb":
                 transport_define = "#define SMB_TRANSPORT"
             elif c2_profile_name == "tcp":
@@ -662,6 +664,13 @@ class Starburst(PayloadType):
             buf += self._pack_string(c2_params.get("github_repo", ""))
             buf += struct.pack(">I", int(c2_params.get("server_issue", 1)))
             buf += struct.pack(">I", int(c2_params.get("client_issue", 2)))
+
+        elif c2_profile == "msteams":
+            buf += self._pack_string(c2_params.get("tenant_id", ""))
+            buf += self._pack_string(c2_params.get("client_id", ""))
+            buf += self._pack_string(c2_params.get("client_secret", ""))
+            buf += self._pack_string(c2_params.get("team_id", ""))
+            buf += self._pack_string(c2_params.get("channel_id", ""))
 
         elif c2_profile == "smb":
             pipename = c2_params.get("pipename", "")

