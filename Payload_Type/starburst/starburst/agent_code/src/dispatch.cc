@@ -286,6 +286,12 @@ auto declfn dispatch_command(
 #ifdef INCLUDE_CMD_LLDP_DISCONNECT
         case CMD_LLDP_DISCONNECT: cmd_lldp_disconnect( inst, task_uuid, params ); return;
 #endif
+#ifdef INCLUDE_CMD_LINK_WEBSHELL
+        case CMD_LINK_WEBSHELL: cmd_link_webshell( inst, task_uuid, params ); return;
+#endif
+#ifdef INCLUDE_CMD_UNLINK_WEBSHELL
+        case CMD_UNLINK_WEBSHELL: cmd_unlink_webshell( inst, task_uuid, params ); return;
+#endif
         default: break;
     }
 

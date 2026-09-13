@@ -336,6 +336,27 @@ def pack_command_params(cmd_name, params):
         link_info = params.get("link_info", {})
         pk.add_string(link_info.get("callback_uuid", ""))
 
+    elif cmd_name == "link_webshell":
+        import base64
+        connection_info = params.get("connection_info", {})
+        c2_profile = connection_info.get("c2_profile", {})
+        c2_params = c2_profile.get("parameters", {})
+        pk.add_string(c2_params.get("url", ""))
+        auth_methods = {"cookie": 0, "header": 1, "parameter": 2}
+        pk.add_byte(auth_methods.get(c2_params.get("auth_method", "cookie"), 0))
+        pk.add_string(c2_params.get("auth_name", ""))
+        pk.add_string(c2_params.get("auth_value", ""))
+        aes_key_b64 = c2_params.get("aes_key", "")
+        if aes_key_b64:
+            pk.add_bytes(base64.b64decode(aes_key_b64))
+        else:
+            pk.add_bytes(b"")
+        pk.add_string(c2_params.get("param_name", "data"))
+
+    elif cmd_name == "unlink_webshell":
+        link_info = params.get("link_info", {})
+        pk.add_string(link_info.get("callback_uuid", ""))
+
     elif cmd_name == "powerpick":
         import base64
         runner_b64 = params.get("runner_data", "")

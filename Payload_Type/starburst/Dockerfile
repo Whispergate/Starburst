@@ -1,5 +1,14 @@
 FROM itsafeaturemythic/mythic_python_go:latest
 
+RUN if grep -q bullseye /etc/apt/sources.list 2>/dev/null; then \
+        sed -i \
+            -e 's|deb.debian.org/debian|archive.debian.org/debian|g' \
+            -e 's|security.debian.org|archive.debian.org|g' \
+            -e '/bullseye-updates/d' -e '/bullseye-backports/d' \
+            /etc/apt/sources.list && \
+        echo 'Acquire::Check-Valid-Until "false";' > /etc/apt/apt.conf.d/99archive; \
+    fi
+
 RUN dpkg --add-architecture i386 && \
     apt-get update && apt-get install -y \
     clang \

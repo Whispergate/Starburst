@@ -27,7 +27,7 @@ def parse_checkin(data):
     return msg
 
 
-def parse_get_tasking(data):
+def parse_get_tasking(data, parent_uuid=""):
     import base64
     p = Parser(data)
     action = p.byte()
@@ -37,11 +37,15 @@ def parse_get_tasking(data):
     responses_len = p.int32()
     if responses_len > 0 and p.remaining() >= responses_len:
         responses_data = p.raw(responses_len)
-        responses, delegates, socks, _interactive = parse_responses_blob(responses_data)
+        responses, delegates, socks, _interactive, edges = parse_responses_blob(responses_data, parent_uuid)
         if responses:
+            if edges and len(responses) > 0:
+                responses[0]["edges"] = edges
             msg["responses"] = responses
         if delegates:
             msg["delegates"] = delegates
+        if edges and not responses:
+            msg["edges"] = edges
         if socks:
             msg["proxies"] = socks
 
@@ -68,12 +72,13 @@ def parse_get_tasking(data):
     return msg
 
 
-def parse_responses_blob(data):
+def parse_responses_blob(data, parent_uuid=""):
     import base64
     responses = []
     delegates = []
     socks = []
     interactive = []
+    edges = []
     offset = 0
     while offset < len(data):
         if offset + 4 > len(data):
@@ -86,8 +91,9 @@ def parse_responses_blob(data):
         offset += rsp_size
 
         if len(rsp_data) > 0 and rsp_data[0] in (ACTION_LINK_ADD, ACTION_LINK_MSG, ACTION_LINK_REMOVE):
-            delegate_msgs = parse_delegate_messages(rsp_data)
+            delegate_msgs, edge_msgs = parse_delegate_messages(rsp_data, parent_uuid)
             delegates.extend(delegate_msgs)
+            edges.extend(edge_msgs)
         elif len(rsp_data) > 0 and rsp_data[0] == ACTION_SOCKS_MSG:
             p = Parser(rsp_data)
             p.byte()  # consume action
@@ -112,7 +118,7 @@ def parse_responses_blob(data):
             })
         else:
             responses.append(parse_single_response(rsp_data))
-    return responses, delegates, socks, interactive
+    return responses, delegates, socks, interactive, edges
 
 
 def parse_single_response(data):
@@ -349,19 +355,44 @@ def try_parse_ps(p, task_id, count):
         return None
 
 
-_link_profiles = {}
+import json as _json
+import os as _os
+
+_LINK_PROFILES_PATH = "/tmp/starburst_link_profiles.json"
+
+def _load_link_profiles():
+    try:
+        if _os.path.exists(_LINK_PROFILES_PATH):
+            with open(_LINK_PROFILES_PATH, "r") as f:
+                return _json.load(f)
+    except Exception:
+        pass
+    return {}
+
+def _save_link_profiles():
+    try:
+        with open(_LINK_PROFILES_PATH, "w") as f:
+            _json.dump(_link_profiles, f)
+    except Exception:
+        pass
+
+_link_profiles = _load_link_profiles()
+_checked_in_uuids = set()
 
 C2_PROFILE_NAMES = {
     C2_PROFILE_SMB: "smb",
     C2_PROFILE_TCP: "tcp",
     C2_PROFILE_LLDP: "lldp",
+    C2_PROFILE_WEBSHELL: "ariadne_webshell",
 }
 
 
-def parse_delegate_messages(data):
+def parse_delegate_messages(data, parent_uuid=""):
+    import base64
     p = Parser(data)
     action = p.byte()
     messages = []
+    edges = []
 
     if action == ACTION_LINK_ADD:
         c2_type = p.byte()
@@ -370,41 +401,69 @@ def parse_delegate_messages(data):
         agent_uuid = p.string()
         msg_data = p.bytes()
         _link_profiles[agent_uuid] = c2_profile
+        _save_link_profiles()
+        _checked_in_uuids.add(agent_uuid)
+        full_msg = agent_uuid.encode() + msg_data
         messages.append({
             "c2_profile": c2_profile,
-            "message": msg_data.decode("utf-8", errors="replace"),
+            "message": base64.b64encode(full_msg).decode(),
             "uuid": agent_uuid,
         })
+        if parent_uuid:
+            edges.append({
+                "source": parent_uuid,
+                "destination": agent_uuid,
+                "action": "add",
+                "c2_profile": c2_profile,
+            })
     elif action == ACTION_LINK_MSG:
         while p.remaining() > 0:
             agent_uuid = p.string()
             msg_data = p.bytes()
-            c2_profile = _link_profiles.get(agent_uuid, "smb")
-            if agent_uuid not in _link_profiles:
-                for old_uuid, prof in _link_profiles.items():
-                    _link_profiles[agent_uuid] = prof
-                    break
+            c2_profile = _link_profiles.get(agent_uuid, "")
+            if not c2_profile:
+                msg_str = msg_data.decode("utf-8", errors="replace")
+                if msg_str.startswith("checkin|") or msg_str.startswith("0|") or msg_str.startswith("1|"):
+                    c2_profile = C2_PROFILE_NAMES.get(C2_PROFILE_WEBSHELL, "ariadne_webshell")
+                else:
+                    c2_profile = "smb"
+                _link_profiles[agent_uuid] = c2_profile
+                _save_link_profiles()
+            msg_str = msg_data.decode("utf-8", errors="replace")
+            if msg_str.startswith("checkin|"):
+                if agent_uuid in _checked_in_uuids:
+                    continue
+                _checked_in_uuids.add(agent_uuid)
+            full_msg = agent_uuid.encode() + msg_data
             messages.append({
                 "c2_profile": c2_profile,
-                "message": msg_data.decode("utf-8", errors="replace"),
+                "message": base64.b64encode(full_msg).decode(),
                 "uuid": agent_uuid,
             })
     elif action == ACTION_LINK_REMOVE:
         link_id = p.int32()
         agent_uuid = p.string()
         c2_profile = _link_profiles.pop(agent_uuid, "smb")
+        _save_link_profiles()
         messages.append({
             "c2_profile": c2_profile,
             "message": "",
             "uuid": agent_uuid,
             "mythic_uuid": agent_uuid,
         })
+        if parent_uuid:
+            edges.append({
+                "source": parent_uuid,
+                "destination": agent_uuid,
+                "action": "remove",
+                "c2_profile": c2_profile,
+            })
 
-    return messages
+    return messages, edges
 
 
-def parse_delegate_remove(data):
-    return parse_delegate_messages(data)
+def parse_delegate_remove(data, parent_uuid=""):
+    return parse_delegate_messages(data, parent_uuid)
 
 
 import struct
