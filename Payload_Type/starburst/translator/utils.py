@@ -14,6 +14,7 @@ ACTION_INTERACTIVE_MSG   = 0x0A
 C2_PROFILE_SMB       = 0x00
 C2_PROFILE_TCP       = 0x01
 C2_PROFILE_LLDP      = 0x02
+C2_PROFILE_WEBSHELL  = 0x03
 
 DOWNLOAD_INIT        = 0x10
 DOWNLOAD_CHUNK       = 0x11
@@ -115,6 +116,8 @@ CMD_MAP = {
     "persist_systemd":       0x61,
     "persist_bashrc":        0x62,
     "memfd_exec":            0x63,
+    "link_webshell":         0x58,
+    "unlink_webshell":       0x59,
     "lldp_connect":          0x70,
     "lldp_disconnect":       0x71,
 }

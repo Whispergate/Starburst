@@ -1,10 +1,14 @@
 import json
 import base64
+import logging
 
 from mythic_container.TranslationBase import *
 from translator.utils import *
 from translator.to_agent import *
 from translator.to_mythic import *
+from translator.to_mythic import _link_profiles
+
+logger = logging.getLogger("translator")
 
 
 class StarburstTranslator(TranslationContainer):
@@ -58,11 +62,31 @@ class StarburstTranslator(TranslationContainer):
                 packed = pack_tasking(msg)
                 delegates = msg.get("delegates", [])
                 if delegates:
-                    for d in delegates:
+                    for di, d in enumerate(delegates):
                         mythic_uuid = d.get("mythic_uuid", "")
                         uuid = d.get("uuid", "")
+                        c2 = d.get("c2_profile", "")
                         if mythic_uuid and uuid and mythic_uuid != uuid:
                             self.delegate_uuid_map[mythic_uuid] = uuid
+                        if uuid and uuid not in _link_profiles:
+                            if uuid in self.delegate_uuid_map:
+                                d["uuid"] = self.delegate_uuid_map[uuid]
+                            else:
+                                c2_name = c2.get("name", "") if isinstance(c2, dict) else str(c2)
+                                for payload_uuid, profile in _link_profiles.items():
+                                    if profile == c2_name:
+                                        self.delegate_uuid_map[uuid] = payload_uuid
+                                        d["uuid"] = payload_uuid
+                                        break
+                        msg_raw = d.get("message", "")
+                        if isinstance(msg_raw, str) and msg_raw:
+                            try:
+                                decoded = base64.b64decode(msg_raw)
+                                if len(decoded) > 36 and chr(decoded[8]) == '-':
+                                    inner = decoded[36:]
+                                    d["message"] = inner
+                            except Exception:
+                                pass
                     packed += pack_delegate_messages(delegates)
 
                 socks = msg.get("socks", [])
@@ -101,23 +125,29 @@ class StarburstTranslator(TranslationContainer):
 
             action = data[0]
 
+            parent_uuid = inputMsg.UUID if hasattr(inputMsg, 'UUID') else ""
+
             if action == ACTION_CHECKIN:
                 response.Message = parse_checkin(data)
             elif action == ACTION_GET_TASKING:
-                msg = parse_get_tasking(data)
+                msg = parse_get_tasking(data, parent_uuid=parent_uuid)
                 response.Message = msg
             elif action == ACTION_POST_RESPONSE:
                 response.Message = parse_single_response(data)
             elif action in (ACTION_LINK_ADD, ACTION_LINK_MSG):
-                delegates = parse_delegate_messages(data)
+                delegates, edges = parse_delegate_messages(data, parent_uuid=parent_uuid)
                 msg = {"action": "get_tasking", "tasking_size": -1}
                 msg["delegates"] = delegates
+                if edges:
+                    msg["edges"] = edges
                 response.Message = msg
             elif action == ACTION_LINK_REMOVE:
-                delegates = parse_delegate_remove(data)
+                delegates, edges = parse_delegate_remove(data, parent_uuid=parent_uuid)
                 msg = {"action": "get_tasking", "tasking_size": -1}
                 if delegates:
                     msg["delegates"] = delegates
+                if edges:
+                    msg["edges"] = edges
                 response.Message = msg
             else:
                 response.Success = False

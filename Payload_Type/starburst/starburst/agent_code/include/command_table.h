@@ -432,6 +432,18 @@ namespace starburst {
   #define CMD_REG_EXECUTE_BOFPE
 #endif
 
+#ifdef INCLUDE_CMD_LINK_WEBSHELL
+  #define CMD_REG_LINK_WEBSHELL { CMD_LINK_WEBSHELL, cmd_link_webshell },
+#else
+  #define CMD_REG_LINK_WEBSHELL
+#endif
+
+#ifdef INCLUDE_CMD_UNLINK_WEBSHELL
+  #define CMD_REG_UNLINK_WEBSHELL { CMD_UNLINK_WEBSHELL, cmd_unlink_webshell },
+#else
+  #define CMD_REG_UNLINK_WEBSHELL
+#endif
+
 #ifdef INCLUDE_CMD_LLDP_CONNECT
   #define CMD_REG_LLDP_CONNECT { CMD_LLDP_CONNECT, cmd_lldp_connect },
 #else
@@ -514,6 +526,8 @@ namespace starburst {
     CMD_REG_WMIEXEC           \
     CMD_REG_DCOMEXEC          \
     CMD_REG_EXECUTE_BOFPE     \
+    CMD_REG_LINK_WEBSHELL     \
+    CMD_REG_UNLINK_WEBSHELL   \
     CMD_REG_LLDP_CONNECT      \
     CMD_REG_LLDP_DISCONNECT
 

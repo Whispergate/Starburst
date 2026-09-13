@@ -92,6 +92,8 @@
 #define INCLUDE_CMD_LLDP_CONNECT
 #define INCLUDE_CMD_LLDP_DISCONNECT
 #define INCLUDE_CMD_EXECUTE_BOFPE
+#define INCLUDE_CMD_LINK_WEBSHELL
+#define INCLUDE_CMD_UNLINK_WEBSHELL
 
 #define INCLUDE_EVASION_SPOOF
 #define INCLUDE_EVASION_AMSI
@@ -217,6 +219,8 @@
 #define CMD_WMIEXEC               0x55
 #define CMD_DCOMEXEC              0x56
 #define CMD_EXECUTE_BOFPE         0x57
+#define CMD_LINK_WEBSHELL         0x58
+#define CMD_UNLINK_WEBSHELL       0x59
 
 #define CMD_LLDP_CONNECT          0x70
 #define CMD_LLDP_DISCONNECT       0x71
@@ -247,9 +251,11 @@
 #define PIPE_BUFFER_MAX       0x10000
 #define MAX_SMB_PKTS_PER_LOOP 30
 #define MAX_TCP_PKTS_PER_LOOP 30
+#define MAX_WS_PKTS_PER_LOOP  10
 
-#define C2_PROFILE_SMB  0x00
-#define C2_PROFILE_TCP  0x01
-#define C2_PROFILE_LLDP 0x02
+#define C2_PROFILE_SMB      0x00
+#define C2_PROFILE_TCP      0x01
+#define C2_PROFILE_LLDP     0x02
+#define C2_PROFILE_WEBSHELL 0x03
 
 #endif

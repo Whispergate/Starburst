@@ -490,6 +490,24 @@ namespace stardust
         void*     lldp_link_state;
 #endif
 
+#if defined( INCLUDE_CMD_LINK_WEBSHELL ) || defined( INCLUDE_CMD_UNLINK_WEBSHELL )
+        struct WebshellLink {
+            char      task_uuid[37];
+            uint32_t  link_id;
+            char*     agent_id;
+            char*     url;
+            uint8_t   auth_method;
+            char*     auth_name;
+            char*     auth_value;
+            uint8_t*  aes_key;
+            char*     param_name;
+            bool      connected;
+            WebshellLink* next;
+        };
+        WebshellLink* webshell_links;
+        void*         webshell_link_state;
+#endif
+
 #ifdef INCLUDE_CMD_SOCKS
         void* socks_state;
 #endif
