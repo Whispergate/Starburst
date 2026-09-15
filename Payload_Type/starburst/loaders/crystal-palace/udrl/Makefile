@@ -13,6 +13,7 @@ endif
 all: bin/loader.x64.o
 
 bin/loader.x64.o: src/loader.c include/pic_defs.h include/user_data.h
+	@mkdir -p bin
 	$(CC) $(CFLAGS) $(INCLUDES) $(DEFINES) -o $@ $<
 
 clean:

@@ -3,9 +3,11 @@ CC86  := i686-w64-mingw32-gcc
 FLAGS := -c -Os -fno-asynchronous-unwind-tables -fpack-struct=8 -fno-ident -w
 
 x64:
+	@mkdir -p bin
 	$(CC64) $(FLAGS) -o bin/loader-postex.x64.o src/loader-postex.c
 
 x86:
+	@mkdir -p bin
 	$(CC86) $(FLAGS) -o bin/loader-postex.x86.o src/loader-postex.c
 
 clean:
