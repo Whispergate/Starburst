@@ -2,6 +2,8 @@ CC64  := x86_64-w64-mingw32-gcc
 CC86  := i686-w64-mingw32-gcc
 FLAGS := -c -Os -fno-asynchronous-unwind-tables -fpack-struct=8 -fno-ident -w
 
+all: x64 x86
+
 x64:
 	@mkdir -p bin
 	$(CC64) $(FLAGS) -o bin/loader.x64.o src/loader.c

