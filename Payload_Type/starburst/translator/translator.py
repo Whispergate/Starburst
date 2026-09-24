@@ -35,8 +35,7 @@ class StarburstTranslator(TranslationContainer):
 
             if action == "checkin":
                 response.Message = pack_checkin_response(msg)
-            elif action == "get_tasking":
-                # check for file_id responses from download inits
+            elif action in ("get_tasking", "post_response"):
                 resp_results = msg.get("responses", [])
                 if isinstance(resp_results, list):
                     for rr in resp_results:
@@ -45,7 +44,6 @@ class StarburstTranslator(TranslationContainer):
                             file_id = rr["file_id"]
                             self.pending_file_ids[task_id] = file_id
 
-                # inject download_resp tasks for pending file_ids
                 tasks = msg.get("tasks", [])
                 consumed = []
                 for tid, fid in list(self.pending_file_ids.items()):

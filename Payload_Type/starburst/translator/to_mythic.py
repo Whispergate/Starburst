@@ -189,20 +189,21 @@ def parse_download_init(p, task_id):
     total_size = p.int32()
     full_path = p.string()
 
-    is_screenshot = full_path.lower().endswith((".bmp", ".png", ".jpg", ".jpeg")) and "screenshot" in full_path.lower()
+    is_screenshot = "screenshot" in full_path.lower() and full_path.lower().endswith((".bmp", ".png", ".jpg", ".jpeg"))
 
-    result = {
-        "task_id": task_id,
-        "completed": False,
-        "download": {
-            "total_chunks": total_chunks,
-            "full_path": full_path,
-        },
-        "user_output": f"Downloading {full_path} ({total_size} bytes, {total_chunks} chunks)",
+    download = {
+        "total_chunks": total_chunks,
+        "full_path": full_path,
     }
     if is_screenshot:
-        result["is_screenshot"] = True
-    return result
+        download["is_screenshot"] = True
+
+    return {
+        "task_id": task_id,
+        "completed": False,
+        "download": download,
+        "user_output": f"Downloading {full_path} ({total_size} bytes, {total_chunks} chunks)",
+    }
 
 
 def parse_download_chunk(p, task_id, status_byte):

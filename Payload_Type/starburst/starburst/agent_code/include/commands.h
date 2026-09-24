@@ -185,7 +185,7 @@ namespace starburst {
     auto declfn cmd_unlink( instance& inst, char* task_uuid, Parser* params ) -> void;
 #endif
 
-#ifdef INCLUDE_CMD_DOWNLOAD
+#if defined(INCLUDE_CMD_DOWNLOAD) || defined(INCLUDE_CMD_SCREENSHOT)
     auto declfn cmd_download_resp( instance& inst, char* task_uuid, Parser* params ) -> void;
 #endif
 

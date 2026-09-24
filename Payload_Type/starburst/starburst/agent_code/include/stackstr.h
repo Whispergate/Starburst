@@ -9,7 +9,9 @@
 #define STK_WS2_32(v)       char v[] = {'w','s','2','_','3','2','.','d','l','l',0}
 #define STK_USER32(v)       char v[] = {'u','s','e','r','3','2','.','d','l','l',0}
 #define STK_GDI32(v)        char v[] = {'g','d','i','3','2','.','d','l','l',0}
+#define STK_GDIPLUS(v)      char v[] = {'g','d','i','p','l','u','s','.','d','l','l',0}
 #define STK_OLE32(v)        char v[] = {'o','l','e','3','2','.','d','l','l',0}
+#define STK_COMBASE(v)      char v[] = {'c','o','m','b','a','s','e','.','d','l','l',0}
 #define STK_OLEAUT32(v)     char v[] = {'o','l','e','a','u','t','3','2','.','d','l','l',0}
 #define STK_MSCOREE(v)      char v[] = {'m','s','c','o','r','e','e','.','d','l','l',0}
 #define STK_NETAPI32(v)     char v[] = {'n','e','t','a','p','i','3','2','.','d','l','l',0}

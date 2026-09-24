@@ -120,6 +120,17 @@ auto declfn starburst::cmd_download(
         path_buf, total_size, total_chunks, slot );
 }
 
+#endif /* INCLUDE_CMD_DOWNLOAD */
+
+/* cmd_download_resp handles the chunked upload for both file-backed
+ * (cmd_download) and memory-backed (cmd_screenshot) transfers, so it
+ * must be compiled whenever either producer is enabled. */
+#if defined(INCLUDE_CMD_DOWNLOAD) || defined(INCLUDE_CMD_SCREENSHOT)
+
+#ifndef INCLUDE_CMD_DOWNLOAD
+using namespace stardust;
+using namespace starburst;
+#endif
 
 auto declfn starburst::cmd_download_resp(
     _Inout_ instance& inst,
