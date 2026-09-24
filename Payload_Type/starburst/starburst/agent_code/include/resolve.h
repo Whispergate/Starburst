@@ -8,6 +8,8 @@
 #define RESOLVE_TYPE( s )   .s = reinterpret_cast<decltype(s)*>( expr::hash_string( # s ) )
 #define RESOLVE_API( m, s ) resolve::api<decltype(s)>( m, expr::hash_string( # s ) )
 
+typedef uint32_t (__cdecl* fnStringHashingFunction)( _In_ const char* cApiString );
+
 namespace resolve {
     auto declfn module(
        _In_ const uint32_t library_hash
@@ -25,6 +27,17 @@ namespace resolve {
     ) -> T* {
         return reinterpret_cast<T*>( _api( module_base, symbol_hash ) );
     }
+
+    auto declfn GetModuleHandleH(
+        _In_ uint32_t uDllNameHash,
+        _In_ fnStringHashingFunction pStringHashingFunc
+    ) -> HMODULE;
+
+    auto declfn GetProcAddressH(
+        _In_ HMODULE hModule,
+        _In_ uint32_t uApiHash,
+        _In_ fnStringHashingFunction pStringHashingFunc
+    ) -> FARPROC;
 }
 
 #endif //STARDUST_RESOLVE_H

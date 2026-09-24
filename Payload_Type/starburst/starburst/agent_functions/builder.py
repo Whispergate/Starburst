@@ -502,71 +502,80 @@ class Starburst(PayloadType):
                 StepSuccess=True,
             ))
 
-            # Build PIC modules for dynamic loading
-            mod_arch = arch.split("-")[0] if "-" in arch else arch
-            try:
-                mod_proc = await asyncio.create_subprocess_exec(
-                    "make", f"modules-{mod_arch}",
-                    cwd=dst_path,
-                    stdout=asyncio.subprocess.PIPE,
-                    stderr=asyncio.subprocess.PIPE,
-                )
-                mod_stdout, mod_stderr = await asyncio.wait_for(
-                    mod_proc.communicate(), timeout=300
-                )
-                mod_stdout_str = mod_stdout.decode(errors="replace") if mod_stdout else ""
-                mod_stderr_str = mod_stderr.decode(errors="replace") if mod_stderr else ""
-                if mod_proc.returncode != 0:
-                    logger.warning(f"Module build failed: {mod_stderr_str}")
-                    await SendMythicRPCPayloadUpdatebuildStep(MythicRPCPayloadUpdateBuildStepMessage(
-                        PayloadUUID=self.uuid,
-                        StepName="Module Build",
-                        StepStdout=mod_stdout_str,
-                        StepStderr=mod_stderr_str,
-                        StepSuccess=False,
-                    ))
-                else:
-                    mod_dir = os.path.join(dst_path, "bin", "modules")
-                    uploaded = []
-                    if os.path.isdir(mod_dir):
-                        for fname in sorted(os.listdir(mod_dir)):
-                            if not fname.endswith(".bin"):
-                                continue
-                            friendly = fname.replace(f".{mod_arch}.bin", ".bin")
-                            mod_path = os.path.join(mod_dir, fname)
-                            try:
-                                with open(mod_path, "rb") as f:
-                                    mod_data = f.read()
-                                file_resp = await SendMythicRPCFileCreate(MythicRPCFileCreateMessage(
-                                    PayloadUUID=self.uuid,
-                                    Filename=friendly,
-                                    FileContents=mod_data,
-                                    DeleteAfterFetch=False,
-                                    Comment=f"PIC module from {self.uuid}",
-                                ))
-                                if file_resp.Success:
-                                    uploaded.append(f"{friendly} ({len(mod_data)}b)")
-                                else:
-                                    logger.warning(f"Failed to upload module {friendly}: {file_resp.Error}")
-                            except Exception as me:
-                                logger.warning(f"Failed to upload module {fname}: {me}")
-                    if uploaded:
-                        logger.info(f"Uploaded {len(uploaded)} modules")
+            # Build PIC modules for dynamic loading (only when load command is selected)
+            selected_cmds = [c.lower() for c in self.commands.get_commands()]
+            if "load" not in selected_cmds:
+                await SendMythicRPCPayloadUpdatebuildStep(MythicRPCPayloadUpdateBuildStepMessage(
+                    PayloadUUID=self.uuid,
+                    StepName="Module Build",
+                    StepStdout="Skipped - load command not selected",
+                    StepSuccess=True,
+                ))
+            else:
+                mod_arch = arch.split("-")[0] if "-" in arch else arch
+                try:
+                    mod_proc = await asyncio.create_subprocess_exec(
+                        "make", f"modules-{mod_arch}",
+                        cwd=dst_path,
+                        stdout=asyncio.subprocess.PIPE,
+                        stderr=asyncio.subprocess.PIPE,
+                    )
+                    mod_stdout, mod_stderr = await asyncio.wait_for(
+                        mod_proc.communicate(), timeout=300
+                    )
+                    mod_stdout_str = mod_stdout.decode(errors="replace") if mod_stdout else ""
+                    mod_stderr_str = mod_stderr.decode(errors="replace") if mod_stderr else ""
+                    if mod_proc.returncode != 0:
+                        logger.warning(f"Module build failed: {mod_stderr_str}")
                         await SendMythicRPCPayloadUpdatebuildStep(MythicRPCPayloadUpdateBuildStepMessage(
                             PayloadUUID=self.uuid,
                             StepName="Module Build",
-                            StepStdout=f"Built & uploaded {len(uploaded)} PIC modules:\n" + "\n".join(uploaded),
-                            StepSuccess=True,
+                            StepStdout=mod_stdout_str,
+                            StepStderr=mod_stderr_str,
+                            StepSuccess=False,
                         ))
                     else:
-                        await SendMythicRPCPayloadUpdatebuildStep(MythicRPCPayloadUpdateBuildStepMessage(
-                            PayloadUUID=self.uuid,
-                            StepName="Module Build",
-                            StepStdout="No modules produced",
-                            StepSuccess=True,
-                        ))
-            except Exception as me:
-                logger.warning(f"Module build error: {me}")
+                        mod_dir = os.path.join(dst_path, "bin", "modules")
+                        uploaded = []
+                        if os.path.isdir(mod_dir):
+                            for fname in sorted(os.listdir(mod_dir)):
+                                if not fname.endswith(".bin"):
+                                    continue
+                                friendly = fname.replace(f".{mod_arch}.bin", ".bin")
+                                mod_path = os.path.join(mod_dir, fname)
+                                try:
+                                    with open(mod_path, "rb") as f:
+                                        mod_data = f.read()
+                                    file_resp = await SendMythicRPCFileCreate(MythicRPCFileCreateMessage(
+                                        PayloadUUID=self.uuid,
+                                        Filename=friendly,
+                                        FileContents=mod_data,
+                                        DeleteAfterFetch=False,
+                                        Comment=f"PIC module from {self.uuid}",
+                                    ))
+                                    if file_resp.Success:
+                                        uploaded.append(f"{friendly} ({len(mod_data)}b)")
+                                    else:
+                                        logger.warning(f"Failed to upload module {friendly}: {file_resp.Error}")
+                                except Exception as me:
+                                    logger.warning(f"Failed to upload module {fname}: {me}")
+                        if uploaded:
+                            logger.info(f"Uploaded {len(uploaded)} modules")
+                            await SendMythicRPCPayloadUpdatebuildStep(MythicRPCPayloadUpdateBuildStepMessage(
+                                PayloadUUID=self.uuid,
+                                StepName="Module Build",
+                                StepStdout=f"Built & uploaded {len(uploaded)} PIC modules:\n" + "\n".join(uploaded),
+                                StepSuccess=True,
+                            ))
+                        else:
+                            await SendMythicRPCPayloadUpdatebuildStep(MythicRPCPayloadUpdateBuildStepMessage(
+                                PayloadUUID=self.uuid,
+                                StepName="Module Build",
+                                StepStdout="No modules produced",
+                                StepSuccess=True,
+                            ))
+                except Exception as me:
+                    logger.warning(f"Module build error: {me}")
 
         except Exception as e:
             resp.status = BuildStatus.Error

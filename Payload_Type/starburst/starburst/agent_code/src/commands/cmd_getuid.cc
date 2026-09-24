@@ -74,11 +74,11 @@ auto declfn starburst::cmd_getuid(
             auto h_advapi = inst.advapi32.handle;
 
             auto pConvertSidToStringSidA = reinterpret_cast<fn_ConvertSidToStringSidA>(
-                inst.kernel32.GetProcAddress( (HMODULE)h_advapi,
-                    symbol<LPCSTR>( "ConvertSidToStringSidA" ) ) );
+                resolve::_api( reinterpret_cast<uintptr_t>( (HMODULE)h_advapi ),
+                    expr::hash_string( "ConvertSidToStringSidA" ) ) );
             auto pLocalFree = reinterpret_cast<fn_LocalFree>(
-                inst.kernel32.GetProcAddress( (HMODULE)k32,
-                    symbol<LPCSTR>( "LocalFree" ) ) );
+                resolve::_api( reinterpret_cast<uintptr_t>( (HMODULE)k32 ),
+                    expr::hash_string( "LocalFree" ) ) );
 
             if ( pConvertSidToStringSidA && pLocalFree ) {
                 LPSTR sid_str = nullptr;
@@ -101,11 +101,11 @@ auto declfn starburst::cmd_getuid(
     // --- Get integrity level ---
     auto h_advapi2 = inst.advapi32.handle;
     auto pGetSidSubAuthority = reinterpret_cast<fn_GetSidSubAuthority>(
-        inst.kernel32.GetProcAddress( (HMODULE)h_advapi2,
-            symbol<LPCSTR>( "GetSidSubAuthority" ) ) );
+        resolve::_api( reinterpret_cast<uintptr_t>( (HMODULE)h_advapi2 ),
+            expr::hash_string( "GetSidSubAuthority" ) ) );
     auto pGetSidSubAuthorityCount = reinterpret_cast<fn_GetSidSubAuthorityCount>(
-        inst.kernel32.GetProcAddress( (HMODULE)h_advapi2,
-            symbol<LPCSTR>( "GetSidSubAuthorityCount" ) ) );
+        resolve::_api( reinterpret_cast<uintptr_t>( (HMODULE)h_advapi2 ),
+            expr::hash_string( "GetSidSubAuthorityCount" ) ) );
 
     needed = 0;
     inst.advapi32.GetTokenInformation( h_token, TokenIntegrityLevel, nullptr, 0, &needed );

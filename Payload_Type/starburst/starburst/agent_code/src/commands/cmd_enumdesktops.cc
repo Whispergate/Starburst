@@ -90,17 +90,17 @@ auto declfn starburst::cmd_enumdesktops(
     }
 
     auto pEnumWindowStationsA = reinterpret_cast<fn_EnumWindowStationsA>(
-        inst.kernel32.GetProcAddress( h_user32,
-            symbol<LPCSTR>( "EnumWindowStationsA" ) ) );
+        resolve::_api( reinterpret_cast<uintptr_t>( h_user32 ),
+            expr::hash_string( "EnumWindowStationsA" ) ) );
     auto pEnumDesktopsA = reinterpret_cast<fn_EnumDesktopsA>(
-        inst.kernel32.GetProcAddress( h_user32,
-            symbol<LPCSTR>( "EnumDesktopsA" ) ) );
+        resolve::_api( reinterpret_cast<uintptr_t>( h_user32 ),
+            expr::hash_string( "EnumDesktopsA" ) ) );
     auto pOpenWindowStationA = reinterpret_cast<fn_OpenWindowStationA>(
-        inst.kernel32.GetProcAddress( h_user32,
-            symbol<LPCSTR>( "OpenWindowStationA" ) ) );
+        resolve::_api( reinterpret_cast<uintptr_t>( h_user32 ),
+            expr::hash_string( "OpenWindowStationA" ) ) );
     auto pCloseWindowStation = reinterpret_cast<fn_CloseWindowStation>(
-        inst.kernel32.GetProcAddress( h_user32,
-            symbol<LPCSTR>( "CloseWindowStation" ) ) );
+        resolve::_api( reinterpret_cast<uintptr_t>( h_user32 ),
+            expr::hash_string( "CloseWindowStation" ) ) );
 
     if ( !pEnumWindowStationsA || !pEnumDesktopsA ||
          !pOpenWindowStationA || !pCloseWindowStation ) {

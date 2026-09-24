@@ -59,6 +59,6 @@ agent not found in webshell links
 
 ## OPSEC Considerations
 
-- The unlink operation is silent from a network perspective — no HTTP requests are made to the webshell during disconnection
+- The unlink operation is silent from a network perspective - no HTTP requests are made to the webshell during disconnection
 - The webshell itself is not notified of the disconnect; it continues running and will respond to future link attempts
 - Memory for auth credentials and AES keys is freed but not zeroed; sensitive material may persist in the process heap until overwritten

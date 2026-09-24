@@ -17,24 +17,23 @@ static auto declfn resolve_ws2_rpfwd(
     state->h_ws2 = reinterpret_cast<HMODULE>( inst.kernel32.LoadLibraryA( _n ) );
     if ( !state->h_ws2 ) return false;
 
-    auto gpa = inst.kernel32.GetProcAddress;
     auto h = state->h_ws2;
 
-    state->ws.pWSAStartup     = reinterpret_cast<fn_WSAStartup>( gpa( h, symbol<LPCSTR>( "WSAStartup" ) ) );
-    state->ws.psocket          = reinterpret_cast<fn_socket>( gpa( h, symbol<LPCSTR>( "socket" ) ) );
-    state->ws.pconnect         = reinterpret_cast<fn_connect>( gpa( h, symbol<LPCSTR>( "connect" ) ) );
-    state->ws.psend            = reinterpret_cast<fn_send>( gpa( h, symbol<LPCSTR>( "send" ) ) );
-    state->ws.precv            = reinterpret_cast<fn_recv>( gpa( h, symbol<LPCSTR>( "recv" ) ) );
-    state->ws.pclosesocket     = reinterpret_cast<fn_closesocket>( gpa( h, symbol<LPCSTR>( "closesocket" ) ) );
-    state->ws.pselect          = reinterpret_cast<fn_select>( gpa( h, symbol<LPCSTR>( "select" ) ) );
-    state->ws.pioctlsocket     = reinterpret_cast<fn_ioctlsocket>( gpa( h, symbol<LPCSTR>( "ioctlsocket" ) ) );
-    state->ws.pgetaddrinfo     = reinterpret_cast<fn_getaddrinfo>( gpa( h, symbol<LPCSTR>( "getaddrinfo" ) ) );
-    state->ws.pfreeaddrinfo    = reinterpret_cast<fn_freeaddrinfo>( gpa( h, symbol<LPCSTR>( "freeaddrinfo" ) ) );
-    state->ws.pWSAGetLastError = reinterpret_cast<fn_WSAGetLastError>( gpa( h, symbol<LPCSTR>( "WSAGetLastError" ) ) );
-    state->ws.pWSACleanup      = reinterpret_cast<fn_WSACleanup>( gpa( h, symbol<LPCSTR>( "WSACleanup" ) ) );
-    state->ws.phtons           = reinterpret_cast<fn_htons>( gpa( h, symbol<LPCSTR>( "htons" ) ) );
-    state->ws.pntohs           = reinterpret_cast<fn_ntohs>( gpa( h, symbol<LPCSTR>( "ntohs" ) ) );
-    state->ws.pinet_addr       = reinterpret_cast<fn_inet_addr>( gpa( h, symbol<LPCSTR>( "inet_addr" ) ) );
+    state->ws.pWSAStartup     = reinterpret_cast<fn_WSAStartup>( resolve::_api( reinterpret_cast<uintptr_t>( h ), expr::hash_string( "WSAStartup" ) ) );
+    state->ws.psocket          = reinterpret_cast<fn_socket>( resolve::_api( reinterpret_cast<uintptr_t>( h ), expr::hash_string( "socket" ) ) );
+    state->ws.pconnect         = reinterpret_cast<fn_connect>( resolve::_api( reinterpret_cast<uintptr_t>( h ), expr::hash_string( "connect" ) ) );
+    state->ws.psend            = reinterpret_cast<fn_send>( resolve::_api( reinterpret_cast<uintptr_t>( h ), expr::hash_string( "send" ) ) );
+    state->ws.precv            = reinterpret_cast<fn_recv>( resolve::_api( reinterpret_cast<uintptr_t>( h ), expr::hash_string( "recv" ) ) );
+    state->ws.pclosesocket     = reinterpret_cast<fn_closesocket>( resolve::_api( reinterpret_cast<uintptr_t>( h ), expr::hash_string( "closesocket" ) ) );
+    state->ws.pselect          = reinterpret_cast<fn_select>( resolve::_api( reinterpret_cast<uintptr_t>( h ), expr::hash_string( "select" ) ) );
+    state->ws.pioctlsocket     = reinterpret_cast<fn_ioctlsocket>( resolve::_api( reinterpret_cast<uintptr_t>( h ), expr::hash_string( "ioctlsocket" ) ) );
+    state->ws.pgetaddrinfo     = reinterpret_cast<fn_getaddrinfo>( resolve::_api( reinterpret_cast<uintptr_t>( h ), expr::hash_string( "getaddrinfo" ) ) );
+    state->ws.pfreeaddrinfo    = reinterpret_cast<fn_freeaddrinfo>( resolve::_api( reinterpret_cast<uintptr_t>( h ), expr::hash_string( "freeaddrinfo" ) ) );
+    state->ws.pWSAGetLastError = reinterpret_cast<fn_WSAGetLastError>( resolve::_api( reinterpret_cast<uintptr_t>( h ), expr::hash_string( "WSAGetLastError" ) ) );
+    state->ws.pWSACleanup      = reinterpret_cast<fn_WSACleanup>( resolve::_api( reinterpret_cast<uintptr_t>( h ), expr::hash_string( "WSACleanup" ) ) );
+    state->ws.phtons           = reinterpret_cast<fn_htons>( resolve::_api( reinterpret_cast<uintptr_t>( h ), expr::hash_string( "htons" ) ) );
+    state->ws.pntohs           = reinterpret_cast<fn_ntohs>( resolve::_api( reinterpret_cast<uintptr_t>( h ), expr::hash_string( "ntohs" ) ) );
+    state->ws.pinet_addr       = reinterpret_cast<fn_inet_addr>( resolve::_api( reinterpret_cast<uintptr_t>( h ), expr::hash_string( "inet_addr" ) ) );
 
     if ( !state->ws.pWSAStartup || !state->ws.psocket || !state->ws.pconnect ||
          !state->ws.psend || !state->ws.precv || !state->ws.pclosesocket ||

