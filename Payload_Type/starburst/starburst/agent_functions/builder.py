@@ -15,6 +15,14 @@ from ..crystal_utilities import _wrap_shellcode_in_dll
 logger = logging.getLogger("starburst.builder")
 
 
+async def _run_with_timeout(proc, timeout, label):
+    try:
+        return await asyncio.wait_for(proc.communicate(), timeout=timeout)
+    except asyncio.TimeoutError:
+        proc.kill()
+        raise RuntimeError(f"{label} timed out after {timeout}s")
+
+
 def _make_env():
     env = os.environ.copy()
     extra = [d for d in [r"C:\msys64\mingw64\bin", r"C:\msys64\mingw32\bin",
@@ -406,8 +414,8 @@ class Starburst(PayloadType):
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
-            stdout_bytes, stderr_bytes = await asyncio.wait_for(
-                proc.communicate(), timeout=300)
+            stdout_bytes, stderr_bytes = await _run_with_timeout(
+                proc, 300, "make compile")
             proc.stdout_text = stdout_bytes.decode(errors="replace")
             proc.stderr_text = stderr_bytes.decode(errors="replace")
 
@@ -520,8 +528,8 @@ class Starburst(PayloadType):
                         stdout=asyncio.subprocess.PIPE,
                         stderr=asyncio.subprocess.PIPE,
                     )
-                    mod_stdout, mod_stderr = await asyncio.wait_for(
-                        mod_proc.communicate(), timeout=300
+                    mod_stdout, mod_stderr = await _run_with_timeout(
+                        mod_proc, 300, "module build"
                     )
                     mod_stdout_str = mod_stdout.decode(errors="replace") if mod_stdout else ""
                     mod_stderr_str = mod_stderr.decode(errors="replace") if mod_stderr else ""
@@ -810,7 +818,7 @@ class Starburst(PayloadType):
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
-        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=120)
+        stdout, stderr = await _run_with_timeout(proc, 120, "loader compile")
         if proc.returncode != 0:
             return None
 
@@ -955,8 +963,8 @@ class Starburst(PayloadType):
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
-            make_stdout, make_stderr = await asyncio.wait_for(
-                make_proc.communicate(), timeout=60)
+            make_stdout, make_stderr = await _run_with_timeout(
+                make_proc, 60, "custom UDRL compile")
             if make_proc.returncode != 0:
                 logger.error(f"Custom UDRL compile failed: {make_stderr.decode()}")
                 return None
@@ -976,8 +984,8 @@ class Starburst(PayloadType):
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
-            make_stdout, make_stderr = await asyncio.wait_for(
-                make_proc.communicate(), timeout=60)
+            make_stdout, make_stderr = await _run_with_timeout(
+                make_proc, 60, "UDRL loader compile")
             if make_proc.returncode != 0:
                 logger.error(f"UDRL loader compile failed: {make_stderr.decode(errors='replace')}")
                 return None
@@ -990,8 +998,8 @@ class Starburst(PayloadType):
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
-            make_stdout, make_stderr = await asyncio.wait_for(
-                make_proc.communicate(), timeout=60)
+            make_stdout, make_stderr = await _run_with_timeout(
+                make_proc, 60, "default loader compile")
             if make_proc.returncode != 0:
                 logger.error(f"Default loader compile failed: {make_stderr.decode(errors='replace')}")
                 return None
@@ -1032,8 +1040,8 @@ class Starburst(PayloadType):
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
-        cp_stdout, cp_stderr = await asyncio.wait_for(
-            proc.communicate(), timeout=120)
+        cp_stdout, cp_stderr = await _run_with_timeout(
+            proc, 120, "Crystal Palace link")
         cp_stdout_text = cp_stdout.decode(errors="replace")
         cp_stderr_text = cp_stderr.decode(errors="replace")
 
@@ -1083,8 +1091,8 @@ class Starburst(PayloadType):
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
-        make_stdout, make_stderr = await asyncio.wait_for(
-            make_proc.communicate(), timeout=60)
+        make_stdout, make_stderr = await _run_with_timeout(
+            make_proc, 60, "custom post-ex compile")
         if make_proc.returncode != 0:
             raise RuntimeError(f"Custom post-ex compile failed: {make_stderr.decode()}")
 
@@ -1253,8 +1261,8 @@ class Starburst(PayloadType):
                 stderr=asyncio.subprocess.PIPE,
                 env=env,
             )
-            stdout_bytes, stderr_bytes = await asyncio.wait_for(
-                proc.communicate(), timeout=120)
+            stdout_bytes, stderr_bytes = await _run_with_timeout(
+                proc, 120, "Linux gcc compile")
             stdout_text = stdout_bytes.decode(errors="replace")
             stderr_text = stderr_bytes.decode(errors="replace")
             if proc.returncode != 0:

@@ -8,6 +8,14 @@ from mythic_container.MythicRPC import *
 
 logger = logging.getLogger("starburst.crystal_utilities")
 
+
+async def _run_with_timeout(proc, timeout, label):
+    try:
+        return await asyncio.wait_for(proc.communicate(), timeout=timeout)
+    except asyncio.TimeoutError:
+        proc.kill()
+        raise RuntimeError(f"{label} timed out after {timeout}s")
+
 AGENT_CODE_PATH = os.path.join(os.path.dirname(__file__), "agent_code")
 LOADERS_PATH = os.path.join(os.path.dirname(__file__), "..", "loaders", "crystal-palace")
 STUB_SRC = os.path.join(os.path.dirname(__file__), "..", "loaders", "sc_stub.c")
@@ -79,7 +87,7 @@ async def _wrap_shellcode_in_dll(shellcode_bytes, arch, tmpdir):
         cwd=tmpdir, stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE, env=env,
     )
-    stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=30)
+    stdout, stderr = await _run_with_timeout(proc, 30, "ld binary embed")
     if proc.returncode != 0:
         raise RuntimeError(f"ld binary embed failed: {stderr.decode()}")
 
@@ -89,7 +97,7 @@ async def _wrap_shellcode_in_dll(shellcode_bytes, arch, tmpdir):
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE, env=env,
     )
-    stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=30)
+    stdout, stderr = await _run_with_timeout(proc, 30, "stub compile")
     if proc.returncode != 0:
         raise RuntimeError(f"stub compile failed: {stderr.decode()}")
 
@@ -105,7 +113,7 @@ async def _wrap_shellcode_in_dll(shellcode_bytes, arch, tmpdir):
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE, env=env,
         )
-        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=30)
+        stdout, stderr = await _run_with_timeout(proc, 30, "objcopy redefine")
         if proc.returncode != 0:
             raise RuntimeError(f"objcopy redefine failed: {stderr.decode()}")
 
@@ -120,7 +128,7 @@ async def _wrap_shellcode_in_dll(shellcode_bytes, arch, tmpdir):
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE, env=env,
     )
-    stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=30)
+    stdout, stderr = await _run_with_timeout(proc, 30, "DLL link")
     if proc.returncode != 0:
         raise RuntimeError(f"DLL link failed: {stderr.decode()}")
 
