@@ -415,7 +415,7 @@ class Starburst(PayloadType):
                 stderr=asyncio.subprocess.PIPE,
             )
             stdout_bytes, stderr_bytes = await _run_with_timeout(
-                proc, 300, "make compile")
+                proc, 600, "make compile")
             proc.stdout_text = stdout_bytes.decode(errors="replace")
             proc.stderr_text = stderr_bytes.decode(errors="replace")
 
