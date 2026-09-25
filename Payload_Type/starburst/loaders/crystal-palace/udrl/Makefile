@@ -1,4 +1,5 @@
-CC       = x86_64-w64-mingw32-gcc
+CCACHE   = $(shell command -v ccache 2>/dev/null)
+CC       = $(CCACHE) x86_64-w64-mingw32-gcc
 CFLAGS   = -c -Os -fno-asynchronous-unwind-tables -fpack-struct=8 -pipe -w
 INCLUDES = -Iinclude
 

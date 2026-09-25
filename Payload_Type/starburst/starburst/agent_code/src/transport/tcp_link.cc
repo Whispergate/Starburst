@@ -24,39 +24,39 @@ auto declfn starburst::tcp_resolve_ws2(
     if ( !state->h_ws2 ) return false;
 
     state->ws.pWSAStartup = reinterpret_cast<tcp_fn_WSAStartup>(
-        inst.kernel32.GetProcAddress( state->h_ws2, symbol<char*>( const_cast<char*>( "WSAStartup" ) ) ) );
+        resolve::_api( reinterpret_cast<uintptr_t>( state->h_ws2 ), expr::hash_string( "WSAStartup" ) ) );
     state->ws.psocket = reinterpret_cast<tcp_fn_socket>(
-        inst.kernel32.GetProcAddress( state->h_ws2, symbol<char*>( const_cast<char*>( "socket" ) ) ) );
+        resolve::_api( reinterpret_cast<uintptr_t>( state->h_ws2 ), expr::hash_string( "socket" ) ) );
     state->ws.pconnect = reinterpret_cast<tcp_fn_connect>(
-        inst.kernel32.GetProcAddress( state->h_ws2, symbol<char*>( const_cast<char*>( "connect" ) ) ) );
+        resolve::_api( reinterpret_cast<uintptr_t>( state->h_ws2 ), expr::hash_string( "connect" ) ) );
     state->ws.psend = reinterpret_cast<tcp_fn_send>(
-        inst.kernel32.GetProcAddress( state->h_ws2, symbol<char*>( const_cast<char*>( "send" ) ) ) );
+        resolve::_api( reinterpret_cast<uintptr_t>( state->h_ws2 ), expr::hash_string( "send" ) ) );
     state->ws.precv = reinterpret_cast<tcp_fn_recv>(
-        inst.kernel32.GetProcAddress( state->h_ws2, symbol<char*>( const_cast<char*>( "recv" ) ) ) );
+        resolve::_api( reinterpret_cast<uintptr_t>( state->h_ws2 ), expr::hash_string( "recv" ) ) );
     state->ws.pclosesocket = reinterpret_cast<tcp_fn_closesocket>(
-        inst.kernel32.GetProcAddress( state->h_ws2, symbol<char*>( const_cast<char*>( "closesocket" ) ) ) );
+        resolve::_api( reinterpret_cast<uintptr_t>( state->h_ws2 ), expr::hash_string( "closesocket" ) ) );
     state->ws.pselect = reinterpret_cast<tcp_fn_select>(
-        inst.kernel32.GetProcAddress( state->h_ws2, symbol<char*>( const_cast<char*>( "select" ) ) ) );
+        resolve::_api( reinterpret_cast<uintptr_t>( state->h_ws2 ), expr::hash_string( "select" ) ) );
     state->ws.pioctlsocket = reinterpret_cast<tcp_fn_ioctlsocket>(
-        inst.kernel32.GetProcAddress( state->h_ws2, symbol<char*>( const_cast<char*>( "ioctlsocket" ) ) ) );
+        resolve::_api( reinterpret_cast<uintptr_t>( state->h_ws2 ), expr::hash_string( "ioctlsocket" ) ) );
     state->ws.pWSAGetLastError = reinterpret_cast<tcp_fn_WSAGetLastError>(
-        inst.kernel32.GetProcAddress( state->h_ws2, symbol<char*>( const_cast<char*>( "WSAGetLastError" ) ) ) );
+        resolve::_api( reinterpret_cast<uintptr_t>( state->h_ws2 ), expr::hash_string( "WSAGetLastError" ) ) );
     state->ws.pWSACleanup = reinterpret_cast<tcp_fn_WSACleanup>(
-        inst.kernel32.GetProcAddress( state->h_ws2, symbol<char*>( const_cast<char*>( "WSACleanup" ) ) ) );
+        resolve::_api( reinterpret_cast<uintptr_t>( state->h_ws2 ), expr::hash_string( "WSACleanup" ) ) );
     state->ws.phtons = reinterpret_cast<tcp_fn_htons>(
-        inst.kernel32.GetProcAddress( state->h_ws2, symbol<char*>( const_cast<char*>( "htons" ) ) ) );
+        resolve::_api( reinterpret_cast<uintptr_t>( state->h_ws2 ), expr::hash_string( "htons" ) ) );
     state->ws.pntohs = reinterpret_cast<tcp_fn_ntohs>(
-        inst.kernel32.GetProcAddress( state->h_ws2, symbol<char*>( const_cast<char*>( "ntohs" ) ) ) );
+        resolve::_api( reinterpret_cast<uintptr_t>( state->h_ws2 ), expr::hash_string( "ntohs" ) ) );
     state->ws.pinet_addr = reinterpret_cast<tcp_fn_inet_addr>(
-        inst.kernel32.GetProcAddress( state->h_ws2, symbol<char*>( const_cast<char*>( "inet_addr" ) ) ) );
+        resolve::_api( reinterpret_cast<uintptr_t>( state->h_ws2 ), expr::hash_string( "inet_addr" ) ) );
     state->ws.pbind = reinterpret_cast<tcp_fn_bind>(
-        inst.kernel32.GetProcAddress( state->h_ws2, symbol<char*>( const_cast<char*>( "bind" ) ) ) );
+        resolve::_api( reinterpret_cast<uintptr_t>( state->h_ws2 ), expr::hash_string( "bind" ) ) );
     state->ws.plisten = reinterpret_cast<tcp_fn_listen>(
-        inst.kernel32.GetProcAddress( state->h_ws2, symbol<char*>( const_cast<char*>( "listen" ) ) ) );
+        resolve::_api( reinterpret_cast<uintptr_t>( state->h_ws2 ), expr::hash_string( "listen" ) ) );
     state->ws.paccept = reinterpret_cast<tcp_fn_accept>(
-        inst.kernel32.GetProcAddress( state->h_ws2, symbol<char*>( const_cast<char*>( "accept" ) ) ) );
+        resolve::_api( reinterpret_cast<uintptr_t>( state->h_ws2 ), expr::hash_string( "accept" ) ) );
     state->ws.psetsockopt = reinterpret_cast<tcp_fn_setsockopt>(
-        inst.kernel32.GetProcAddress( state->h_ws2, symbol<char*>( const_cast<char*>( "setsockopt" ) ) ) );
+        resolve::_api( reinterpret_cast<uintptr_t>( state->h_ws2 ), expr::hash_string( "setsockopt" ) ) );
 
     if ( !state->ws.pWSAStartup || !state->ws.psocket || !state->ws.pconnect ||
          !state->ws.psend || !state->ws.precv || !state->ws.pclosesocket ||

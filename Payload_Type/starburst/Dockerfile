@@ -21,7 +21,7 @@ RUN printf 'Package: libc6* libc-bin libc-dev-bin libssl* lib32gcc-s1 lib32stdc+
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends --allow-downgrades \
-        clang gcc gcc-multilib nasm \
+        ccache clang gcc gcc-multilib nasm \
         mingw-w64 g++-mingw-w64-x86-64 g++-mingw-w64-i686 \
         binutils-mingw-w64 make \
         libssl-dev libssl-dev:i386 \
@@ -36,6 +36,9 @@ RUN apt-get update \
 
 COPY requirements.txt /tmp/requirements.txt
 RUN pip3 install -r /tmp/requirements.txt
+
+ENV CCACHE_DIR=/Mythic/.ccache
+ENV CCACHE_MAXSIZE=500M
 
 COPY [".", "/Mythic"]
 

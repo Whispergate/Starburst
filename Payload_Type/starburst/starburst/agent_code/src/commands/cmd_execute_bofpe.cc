@@ -153,7 +153,7 @@ struct PE_TLS_DIRECTORY64 {
 #define IMAGE_SCN_MEM_READ       0x40000000
 #define IMAGE_SCN_MEM_WRITE      0x80000000
 
-// TEB access for instance pointer — same mechanism as COFF loader
+// TEB access for instance pointer - same mechanism as COFF loader
 static inline auto declfn bofpe_set_inst( instance* p ) -> void {
 #ifdef _WIN64
     register void* val __asm__("rcx") = reinterpret_cast<void*>(p);
@@ -635,7 +635,7 @@ auto declfn starburst::cmd_execute_bofpe(
         }
     }
 
-    // Resolve imports — intercept beacon.dll
+    // Resolve imports - intercept beacon.dll
     bool import_ok = true;
     if ( nt->OptionalHeader.NumberOfRvaAndSizes > IMAGE_DIRECTORY_ENTRY_IMPORT &&
          nt->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_IMPORT].Size > 0 ) {
@@ -678,7 +678,7 @@ auto declfn starburst::cmd_execute_bofpe(
                             h_mod, (LPCSTR)(uintptr_t)ordinal );
                     }
                 } else {
-                    // Import by name — skip 2-byte hint
+                    // Import by name - skip 2-byte hint
                     auto func_name = reinterpret_cast<char*>(
                         image_base + (uint32_t)*thunk_ref + 2 );
 

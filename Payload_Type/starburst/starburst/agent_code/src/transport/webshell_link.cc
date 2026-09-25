@@ -26,35 +26,35 @@ auto declfn starburst::ws_resolve_winhttp(
     if ( !state->h_winhttp ) return false;
 
     state->http.pWinHttpOpen = reinterpret_cast<ws_fn_WinHttpOpen>(
-        inst.kernel32.GetProcAddress( state->h_winhttp,
-            symbol<char*>( const_cast<char*>( "WinHttpOpen" ) ) ) );
+        resolve::_api( reinterpret_cast<uintptr_t>( state->h_winhttp ),
+            expr::hash_string( "WinHttpOpen" ) ) );
     state->http.pWinHttpConnect = reinterpret_cast<ws_fn_WinHttpConnect>(
-        inst.kernel32.GetProcAddress( state->h_winhttp,
-            symbol<char*>( const_cast<char*>( "WinHttpConnect" ) ) ) );
+        resolve::_api( reinterpret_cast<uintptr_t>( state->h_winhttp ),
+            expr::hash_string( "WinHttpConnect" ) ) );
     state->http.pWinHttpOpenRequest = reinterpret_cast<ws_fn_WinHttpOpenRequest>(
-        inst.kernel32.GetProcAddress( state->h_winhttp,
-            symbol<char*>( const_cast<char*>( "WinHttpOpenRequest" ) ) ) );
+        resolve::_api( reinterpret_cast<uintptr_t>( state->h_winhttp ),
+            expr::hash_string( "WinHttpOpenRequest" ) ) );
     state->http.pWinHttpSendRequest = reinterpret_cast<ws_fn_WinHttpSendRequest>(
-        inst.kernel32.GetProcAddress( state->h_winhttp,
-            symbol<char*>( const_cast<char*>( "WinHttpSendRequest" ) ) ) );
+        resolve::_api( reinterpret_cast<uintptr_t>( state->h_winhttp ),
+            expr::hash_string( "WinHttpSendRequest" ) ) );
     state->http.pWinHttpReceiveResponse = reinterpret_cast<ws_fn_WinHttpReceiveResponse>(
-        inst.kernel32.GetProcAddress( state->h_winhttp,
-            symbol<char*>( const_cast<char*>( "WinHttpReceiveResponse" ) ) ) );
+        resolve::_api( reinterpret_cast<uintptr_t>( state->h_winhttp ),
+            expr::hash_string( "WinHttpReceiveResponse" ) ) );
     state->http.pWinHttpQueryDataAvailable = reinterpret_cast<ws_fn_WinHttpQueryDataAvailable>(
-        inst.kernel32.GetProcAddress( state->h_winhttp,
-            symbol<char*>( const_cast<char*>( "WinHttpQueryDataAvailable" ) ) ) );
+        resolve::_api( reinterpret_cast<uintptr_t>( state->h_winhttp ),
+            expr::hash_string( "WinHttpQueryDataAvailable" ) ) );
     state->http.pWinHttpReadData = reinterpret_cast<ws_fn_WinHttpReadData>(
-        inst.kernel32.GetProcAddress( state->h_winhttp,
-            symbol<char*>( const_cast<char*>( "WinHttpReadData" ) ) ) );
+        resolve::_api( reinterpret_cast<uintptr_t>( state->h_winhttp ),
+            expr::hash_string( "WinHttpReadData" ) ) );
     state->http.pWinHttpCloseHandle = reinterpret_cast<ws_fn_WinHttpCloseHandle>(
-        inst.kernel32.GetProcAddress( state->h_winhttp,
-            symbol<char*>( const_cast<char*>( "WinHttpCloseHandle" ) ) ) );
+        resolve::_api( reinterpret_cast<uintptr_t>( state->h_winhttp ),
+            expr::hash_string( "WinHttpCloseHandle" ) ) );
     state->http.pWinHttpSetOption = reinterpret_cast<ws_fn_WinHttpSetOption>(
-        inst.kernel32.GetProcAddress( state->h_winhttp,
-            symbol<char*>( const_cast<char*>( "WinHttpSetOption" ) ) ) );
+        resolve::_api( reinterpret_cast<uintptr_t>( state->h_winhttp ),
+            expr::hash_string( "WinHttpSetOption" ) ) );
     state->http.pWinHttpAddRequestHeaders = reinterpret_cast<ws_fn_WinHttpAddRequestHeaders>(
-        inst.kernel32.GetProcAddress( state->h_winhttp,
-            symbol<char*>( const_cast<char*>( "WinHttpAddRequestHeaders" ) ) ) );
+        resolve::_api( reinterpret_cast<uintptr_t>( state->h_winhttp ),
+            expr::hash_string( "WinHttpAddRequestHeaders" ) ) );
 
     if ( !state->http.pWinHttpOpen || !state->http.pWinHttpConnect ||
          !state->http.pWinHttpOpenRequest || !state->http.pWinHttpSendRequest ||

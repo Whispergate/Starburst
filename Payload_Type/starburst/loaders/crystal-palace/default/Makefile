@@ -1,5 +1,6 @@
-CC64  := x86_64-w64-mingw32-gcc
-CC86  := i686-w64-mingw32-gcc
+CCACHE := $(shell command -v ccache 2>/dev/null)
+CC64  := $(CCACHE) x86_64-w64-mingw32-gcc
+CC86  := $(CCACHE) i686-w64-mingw32-gcc
 FLAGS := -c -Os -fno-asynchronous-unwind-tables -fpack-struct=8 -fno-ident -w
 
 all: x64 x86

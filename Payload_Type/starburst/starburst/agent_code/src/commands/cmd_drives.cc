@@ -23,11 +23,11 @@ auto declfn starburst::cmd_drives(
     auto k32 = (HMODULE)inst.kernel32.handle;
 
     auto pGetLogicalDriveStringsW = reinterpret_cast<fn_GetLogicalDriveStringsW>(
-        inst.kernel32.GetProcAddress( k32,
-            symbol<LPCSTR>( "GetLogicalDriveStringsW" ) ) );
+        resolve::_api( reinterpret_cast<uintptr_t>( k32 ),
+            expr::hash_string( "GetLogicalDriveStringsW" ) ) );
     auto pGetDriveTypeW = reinterpret_cast<fn_GetDriveTypeW>(
-        inst.kernel32.GetProcAddress( k32,
-            symbol<LPCSTR>( "GetDriveTypeW" ) ) );
+        resolve::_api( reinterpret_cast<uintptr_t>( k32 ),
+            expr::hash_string( "GetDriveTypeW" ) ) );
 
     if ( !pGetLogicalDriveStringsW || !pGetDriveTypeW ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
