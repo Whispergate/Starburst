@@ -406,6 +406,10 @@ namespace stardust
             char     domain_front[256];
             char     custom_headers[1024];
             uint32_t custom_headers_len;
+            bool     client_transform_b64;
+            bool     server_transform_b64;
+            uint32_t server_strip_prefix;
+            uint32_t server_strip_suffix;
 #endif
 #if defined( GITHUB_TRANSPORT )
             char     github_pat[256];

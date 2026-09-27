@@ -236,6 +236,11 @@ auto declfn instance::parse_config() -> bool {
         } else {
             transport.custom_headers_len = 0;
         }
+
+        transport.client_transform_b64 = parser_byte( &p ) != 0;
+        transport.server_transform_b64 = parser_byte( &p ) != 0;
+        transport.server_strip_prefix  = parser_int32( &p );
+        transport.server_strip_suffix  = parser_int32( &p );
     }
 #endif
 #endif

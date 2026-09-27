@@ -7,6 +7,7 @@ import tempfile
 import asyncio
 import zipfile
 import logging
+import json
 
 from mythic_container.PayloadBuilder import *
 from mythic_container.MythicCommandBase import *
@@ -371,6 +372,20 @@ class Starburst(PayloadType):
             else:
                 logger.info(f"AESPSK type={type(aes_psk_param).__name__}, value={repr(aes_psk_param)[:100]}")
 
+            if c2_profile_name == "httpx":
+                raw_file_id = c2_params.get("raw_c2_config", "")
+                if raw_file_id:
+                    file_resp = await SendMythicRPCFileGetContent(
+                        MythicRPCFileGetContentMessage(raw_file_id))
+                    if file_resp.Success:
+                        try:
+                            c2_params["_parsed_raw_c2"] = json.loads(
+                                file_resp.Content.decode("utf-8"))
+                        except json.JSONDecodeError:
+                            logger.warning("raw_c2_config is not valid JSON")
+                    else:
+                        logger.warning(f"Failed to fetch raw_c2_config: {file_resp.Error}")
+
             config_bytes = self._serialize_config(c2_profile_name, c2_params)
             config_hex = ", ".join(f"0x{b:02x}" for b in config_bytes)
 
@@ -380,7 +395,7 @@ class Starburst(PayloadType):
                 config_content = f.read()
 
             # Always emit a line for every possible command so config.h
-            # has a fixed line count — changing selected commands only
+            # has a fixed line count - changing selected commands only
             # invalidates ccache entries for files that check the changed ifdef.
             selected_cmds = {c.lower() for c in self.commands.get_commands()}
             all_cmd_macros = re.findall(r'#define (INCLUDE_CMD_\w+)', config_content)
@@ -630,7 +645,7 @@ class Starburst(PayloadType):
         # killdate (0 = none)
         buf += struct.pack(">I", 0)
 
-        if c2_profile in ("http", "httpx"):
+        if c2_profile == "http":
             host = c2_params.get("callback_host", "")
             if "://" in host:
                 host = host.split("://", 1)[1]
@@ -664,25 +679,118 @@ class Starburst(PayloadType):
             else:
                 buf += struct.pack("B", 0)
 
-            if c2_profile == "httpx":
-                domain_front = c2_params.get("domain_front", "")
-                buf += self._pack_string(domain_front)
+        elif c2_profile == "httpx":
+            raw_cfg = c2_params.get("_parsed_raw_c2", {})
 
-                # build custom headers string from HTTPX profile headers list
-                headers_list = c2_params.get("headers", {})
-                header_lines = []
-                if isinstance(headers_list, dict):
-                    for k, v in headers_list.items():
-                        header_lines.append(f"{k}: {v}")
-                elif isinstance(headers_list, list):
-                    for h in headers_list:
-                        if isinstance(h, dict):
-                            for k, v in h.items():
-                                header_lines.append(f"{k}: {v}")
-                        elif isinstance(h, str):
-                            header_lines.append(h)
-                custom_headers = "\r\n".join(header_lines)
-                buf += self._pack_string(custom_headers)
+            domains = c2_params.get("callback_domains", [])
+            if isinstance(domains, str):
+                try:
+                    domains = json.loads(domains)
+                except (json.JSONDecodeError, TypeError):
+                    domains = [domains]
+
+            host = ""
+            port = 443
+            use_ssl = 1
+            if domains:
+                url = domains[0]
+                if url.startswith("https://"):
+                    use_ssl = 1
+                    url_body = url[len("https://"):]
+                elif url.startswith("http://"):
+                    use_ssl = 0
+                    url_body = url[len("http://"):]
+                else:
+                    use_ssl = 0
+                    url_body = url
+
+                url_body = url_body.rstrip("/")
+                if ":" in url_body:
+                    host, port_str = url_body.split(":", 1)
+                    port = int(port_str)
+                else:
+                    host = url_body
+                    port = 443 if use_ssl else 80
+
+            buf += self._pack_string(host)
+            buf += struct.pack(">I", port)
+            buf += struct.pack("B", use_ssl)
+
+            user_agent = "Mozilla/5.0"
+            if raw_cfg:
+                for verb in ("get", "post"):
+                    ua = raw_cfg.get(verb, {}).get("client", {}).get(
+                        "headers", {}).get("User-Agent", "")
+                    if ua:
+                        user_agent = ua
+                        break
+            buf += self._pack_string(user_agent)
+
+            get_uri = "index"
+            post_uri = "data"
+            if raw_cfg:
+                get_uris = raw_cfg.get("get", {}).get("uris", [])
+                if get_uris:
+                    get_uri = get_uris[0].lstrip("/")
+                post_uris = raw_cfg.get("post", {}).get("uris", [])
+                if post_uris:
+                    post_uri = post_uris[0].lstrip("/")
+            buf += self._pack_string(get_uri)
+            buf += self._pack_string(post_uri)
+
+            query_param = "q"
+            if raw_cfg:
+                get_client = raw_cfg.get("get", {}).get("client", {})
+                msg = get_client.get("message", {})
+                if msg.get("location") == "query" and msg.get("name"):
+                    query_param = msg["name"]
+            buf += self._pack_string(query_param)
+
+            buf += struct.pack("B", 0)
+
+            domain_front = ""
+            header_lines = []
+            if raw_cfg:
+                for verb in ("get", "post"):
+                    hdrs = raw_cfg.get(verb, {}).get("client", {}).get("headers", {})
+                    for k, v in hdrs.items():
+                        if k.lower() == "host":
+                            domain_front = v
+                        else:
+                            header_lines.append(f"{k}: {v}")
+                    if header_lines or domain_front:
+                        break
+
+            buf += self._pack_string(domain_front)
+            buf += self._pack_string("\r\n".join(header_lines))
+
+            # HTTPX transform metadata for the agent's transform engine
+            post_client_transforms = []
+            post_server_transforms = []
+            if raw_cfg:
+                post_client_transforms = raw_cfg.get("post", {}).get(
+                    "client", {}).get("transforms", [])
+                post_server_transforms = raw_cfg.get("post", {}).get(
+                    "server", {}).get("transforms", [])
+
+            client_has_b64 = any(
+                t.get("action") == "base64" for t in post_client_transforms)
+            server_has_b64 = any(
+                t.get("action") == "base64" for t in post_server_transforms)
+
+            server_prepend_total = sum(
+                len(t.get("value", ""))
+                for t in post_server_transforms
+                if t.get("action") == "prepend")
+            server_append_total = sum(
+                len(t.get("value", ""))
+                for t in post_server_transforms
+                if t.get("action") == "append")
+
+            buf += struct.pack("B", 1 if client_has_b64 else 0)
+            buf += struct.pack("B", 1 if server_has_b64 else 0)
+            buf += struct.pack(">I", server_prepend_total)
+            buf += struct.pack(">I", server_append_total)
 
         elif c2_profile == "github":
             buf += self._pack_string(c2_params.get("personal_access_token", ""))
