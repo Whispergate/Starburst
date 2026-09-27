@@ -652,6 +652,17 @@ static auto declfn mask_post_sleep( instance& inst ) -> void {
 
 #endif /* _WIN64 */
 
+#elif SLEEP_MASK_TYPE == MASK_SLEEPMASK_VS
+
+/* ── Sleepmask-VS: BOF-VS compiled sleep mask loaded at init ──
+ * The entire sleep cycle is handled by evasion_sleepmask_vs_sleep()
+ * which calls the loaded COFF's sleep_mask(PBEACON_INFO, PFUNCTION_CALL).
+ * Pre/post hooks are no-ops. */
+
+static auto declfn mask_pre_sleep( instance& inst ) -> void { (void)inst; }
+static auto declfn mask_post_sleep( instance& inst ) -> void { (void)inst; }
+
+
 #elif SLEEP_MASK_TYPE == MASK_UDRL
 
 /*
