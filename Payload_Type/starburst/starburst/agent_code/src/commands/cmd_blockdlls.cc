@@ -33,7 +33,7 @@ auto declfn starburst::cmd_blockdlls(
 
     if ( !pSetProcessMitigationPolicy ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "failed to resolve SetProcessMitigationPolicy" ) ) );
+            XSTR( "failed to resolve SetProcessMitigationPolicy" ) );
         return;
     }
 
@@ -50,14 +50,14 @@ auto declfn starburst::cmd_blockdlls(
     if ( ok ) {
         if ( enable ) {
             queue_response( inst, task_uuid, RESPONSE_SUCCESS,
-                symbol<char*>( const_cast<char*>( "block non-Microsoft DLLs enabled" ) ) );
+                XSTR( "block non-Microsoft DLLs enabled" ) );
         } else {
             queue_response( inst, task_uuid, RESPONSE_SUCCESS,
-                symbol<char*>( const_cast<char*>( "block non-Microsoft DLLs disabled" ) ) );
+                XSTR( "block non-Microsoft DLLs disabled" ) );
         }
     } else {
         char msg[96] = { 0 };
-        str_copy( msg, symbol<char*>( const_cast<char*>( "SetProcessMitigationPolicy failed, error " ) ) );
+        str_copy( msg, XSTR( "SetProcessMitigationPolicy failed, error " ) );
         char num[16];
         int_to_str( num, inst.kernel32.GetLastError(), 10 );
         str_concat( msg, num );

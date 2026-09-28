@@ -19,7 +19,7 @@ auto declfn starburst::cmd_cd(
     auto path = parser_string( params, &path_len );
     if ( !path || path_len == 0 ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "no path provided" ) ) );
+            XSTR( "no path provided" ) );
         return;
     }
 
@@ -33,7 +33,7 @@ auto declfn starburst::cmd_cd(
 
     if ( !inst.kernel32.SetCurrentDirectoryW( wpath ) ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "SetCurrentDirectoryW failed" ) ) );
+            XSTR( "SetCurrentDirectoryW failed" ) );
         return;
     }
 

@@ -11,15 +11,15 @@ using namespace stardust;
 using namespace starburst;
 
 static auto declfn parse_hive_ck( instance& inst, char* hive_str ) -> HKEY {
-    if ( str_cmp( hive_str, symbol<char*>( const_cast<char*>( "HKLM" ) ) ) == 0 ||
-         str_cmp( hive_str, symbol<char*>( const_cast<char*>( "HKEY_LOCAL_MACHINE" ) ) ) == 0 )
+    if ( str_cmp( hive_str, XSTR( "HKLM" ) ) == 0 ||
+         str_cmp( hive_str, XSTR( "HKEY_LOCAL_MACHINE" ) ) == 0 )
         return HKEY_LOCAL_MACHINE;
-    if ( str_cmp( hive_str, symbol<char*>( const_cast<char*>( "HKCU" ) ) ) == 0 ||
-         str_cmp( hive_str, symbol<char*>( const_cast<char*>( "HKEY_CURRENT_USER" ) ) ) == 0 )
+    if ( str_cmp( hive_str, XSTR( "HKCU" ) ) == 0 ||
+         str_cmp( hive_str, XSTR( "HKEY_CURRENT_USER" ) ) == 0 )
         return HKEY_CURRENT_USER;
-    if ( str_cmp( hive_str, symbol<char*>( const_cast<char*>( "HKCR" ) ) ) == 0 )
+    if ( str_cmp( hive_str, XSTR( "HKCR" ) ) == 0 )
         return HKEY_CLASSES_ROOT;
-    if ( str_cmp( hive_str, symbol<char*>( const_cast<char*>( "HKU" ) ) ) == 0 )
+    if ( str_cmp( hive_str, XSTR( "HKU" ) ) == 0 )
         return HKEY_USERS;
     return nullptr;
 }
@@ -36,7 +36,7 @@ auto declfn starburst::cmd_reg_create_key(
 
     if ( !hive_str || hive_len == 0 || !key_str || key_len == 0 ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "need hive and key" ) ) );
+            XSTR( "need hive and key" ) );
         return;
     }
 
@@ -48,7 +48,7 @@ auto declfn starburst::cmd_reg_create_key(
     HKEY hive = parse_hive_ck( inst, hive_buf );
     if ( !hive ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "invalid hive" ) ) );
+            XSTR( "invalid hive" ) );
         return;
     }
 
@@ -60,7 +60,7 @@ auto declfn starburst::cmd_reg_create_key(
 
     if ( status != ERROR_SUCCESS ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "RegCreateKeyExA failed" ) ) );
+            XSTR( "RegCreateKeyExA failed" ) );
         return;
     }
 
@@ -69,7 +69,7 @@ auto declfn starburst::cmd_reg_create_key(
     // build output: "Created key: HIVE\key"
     char output[640] = { 0 };
     uint32_t off = 0;
-    str_copy( output + off, symbol<char*>( const_cast<char*>( "Created key: " ) ) );
+    str_copy( output + off, XSTR( "Created key: " ) );
     off = str_len( output );
     memory::copy( output + off, hive_buf, str_len( hive_buf ) );
     off += str_len( hive_buf );

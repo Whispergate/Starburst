@@ -80,7 +80,7 @@ auto declfn starburst::cmd_netstat(
     auto h_iphlpapi = reinterpret_cast<HMODULE>( inst.kernel32.LoadLibraryA( _n ) );
     if ( !h_iphlpapi ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "LoadLibrary iphlpapi failed" ) ) );
+            XSTR( "LoadLibrary iphlpapi failed" ) );
         return;
     }
 
@@ -89,7 +89,7 @@ auto declfn starburst::cmd_netstat(
             expr::hash_string( "GetExtendedTcpTable" ) ) );
     if ( !pGetExtendedTcpTable ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "GetExtendedTcpTable not found" ) ) );
+            XSTR( "GetExtendedTcpTable not found" ) );
         return;
     }
 
@@ -99,14 +99,14 @@ auto declfn starburst::cmd_netstat(
     auto table = static_cast<MIB_TCPTABLE_OWNER_PID*>( inst.heap_alloc( buf_size ) );
     if ( !table ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "alloc failed" ) ) );
+            XSTR( "alloc failed" ) );
         return;
     }
 
     if ( pGetExtendedTcpTable( table, &buf_size, TRUE, AF_INET, 5, 0 ) != 0 ) {
         inst.heap_free( table );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "GetExtendedTcpTable failed" ) ) );
+            XSTR( "GetExtendedTcpTable failed" ) );
         return;
     }
 
@@ -115,19 +115,18 @@ auto declfn starburst::cmd_netstat(
     if ( !output ) {
         inst.heap_free( table );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "alloc failed" ) ) );
+            XSTR( "alloc failed" ) );
         return;
     }
 
     uint32_t off = 0;
-    str_copy( output + off, symbol<char*>( const_cast<char*>(
-        "Proto  Local Address          Foreign Address        State           PID\n" ) ) );
+    str_copy( output + off, XSTR("Proto  Local Address          Foreign Address        State           PID\n") );
     off = str_len( output );
 
     for ( DWORD i = 0; i < table->dwNumEntries && off + 128 < out_cap; i++ ) {
         auto& row = table->table[i];
 
-        str_copy( output + off, symbol<char*>( const_cast<char*>( "TCP    " ) ) );
+        str_copy( output + off, XSTR( "TCP    " ) );
         off += 7;
 
         // local addr:port

@@ -22,7 +22,7 @@ auto declfn starburst::cmd_cp(
 
     if ( !src || src_len == 0 || !dst || dst_len == 0 ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "need source and destination" ) ) );
+            XSTR( "need source and destination" ) );
         return;
     }
 
@@ -41,10 +41,10 @@ auto declfn starburst::cmd_cp(
 
     if ( inst.kernel32.CopyFileW( wsrc, wdst, FALSE ) ) {
         queue_response( inst, task_uuid, RESPONSE_SUCCESS,
-            symbol<char*>( const_cast<char*>( "copied" ) ) );
+            XSTR( "copied" ) );
     } else {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "CopyFileW failed" ) ) );
+            XSTR( "CopyFileW failed" ) );
     }
 }
 

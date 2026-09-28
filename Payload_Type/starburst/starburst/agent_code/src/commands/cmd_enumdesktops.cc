@@ -85,7 +85,7 @@ auto declfn starburst::cmd_enumdesktops(
     auto h_user32 = inst.kernel32.LoadLibraryA( _n );
     if ( !h_user32 ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "failed to load user32.dll" ) ) );
+            XSTR( "failed to load user32.dll" ) );
         return;
     }
 
@@ -105,7 +105,7 @@ auto declfn starburst::cmd_enumdesktops(
     if ( !pEnumWindowStationsA || !pEnumDesktopsA ||
          !pOpenWindowStationA || !pCloseWindowStation ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "failed to resolve desktop APIs" ) ) );
+            XSTR( "failed to resolve desktop APIs" ) );
         return;
     }
 
@@ -113,7 +113,7 @@ auto declfn starburst::cmd_enumdesktops(
     auto output = static_cast<char*>( inst.heap_alloc( buf_cap ) );
     if ( !output ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "alloc failed" ) ) );
+            XSTR( "alloc failed" ) );
         return;
     }
 
@@ -126,7 +126,7 @@ auto declfn starburst::cmd_enumdesktops(
     ctx.pCloseWindowStation = pCloseWindowStation;
 
     // add header
-    auto hdr = symbol<char*>( const_cast<char*>( "Window Stations and Desktops:\n" ) );
+    auto hdr = XSTR( "Window Stations and Desktops:\n" );
     uint32_t hdr_len = str_len( hdr );
     memory::copy( output, hdr, hdr_len );
     ctx.off = hdr_len;

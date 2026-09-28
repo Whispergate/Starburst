@@ -50,7 +50,7 @@ auto declfn starburst::cmd_ifconfig(
     auto h_iphlpapi = reinterpret_cast<HMODULE>( inst.kernel32.LoadLibraryA( _n ) );
     if ( !h_iphlpapi ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "LoadLibrary iphlpapi failed" ) ) );
+            XSTR( "LoadLibrary iphlpapi failed" ) );
         return;
     }
 
@@ -59,7 +59,7 @@ auto declfn starburst::cmd_ifconfig(
             expr::hash_string( "GetAdaptersInfo" ) ) );
     if ( !pGetAdaptersInfo ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "GetAdaptersInfo not found" ) ) );
+            XSTR( "GetAdaptersInfo not found" ) );
         return;
     }
 
@@ -67,21 +67,21 @@ auto declfn starburst::cmd_ifconfig(
     pGetAdaptersInfo( nullptr, &buf_size );
     if ( buf_size == 0 ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "no adapters" ) ) );
+            XSTR( "no adapters" ) );
         return;
     }
 
     auto adapter_info = static_cast<PIP_ADAPTER_INFO>( inst.heap_alloc( buf_size ) );
     if ( !adapter_info ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "alloc failed" ) ) );
+            XSTR( "alloc failed" ) );
         return;
     }
 
     if ( pGetAdaptersInfo( adapter_info, &buf_size ) != 0 ) {
         inst.heap_free( adapter_info );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "GetAdaptersInfo failed" ) ) );
+            XSTR( "GetAdaptersInfo failed" ) );
         return;
     }
 
@@ -89,7 +89,7 @@ auto declfn starburst::cmd_ifconfig(
     if ( !output ) {
         inst.heap_free( adapter_info );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "alloc failed" ) ) );
+            XSTR( "alloc failed" ) );
         return;
     }
     uint32_t off = 0;
@@ -107,7 +107,7 @@ auto declfn starburst::cmd_ifconfig(
 
         // MAC address
         if ( off + 40 < cap ) {
-            str_copy( output + off, symbol<char*>( const_cast<char*>( "  MAC: " ) ) );
+            str_copy( output + off, XSTR( "  MAC: " ) );
             off += 7;
             for ( UINT i = 0; i < adapter->AddressLength; i++ ) {
                 char hex[4];
@@ -130,11 +130,11 @@ auto declfn starburst::cmd_ifconfig(
             uint32_t ip_len = str_len( ip_entry->IpAddress );
             uint32_t mask_len = str_len( ip_entry->IpMask );
             if ( ip_len > 1 && off + ip_len + mask_len + 20 < cap ) {
-                str_copy( output + off, symbol<char*>( const_cast<char*>( "  IP:  " ) ) );
+                str_copy( output + off, XSTR( "  IP:  " ) );
                 off += 7;
                 memory::copy( output + off, ip_entry->IpAddress, ip_len );
                 off += ip_len;
-                str_copy( output + off, symbol<char*>( const_cast<char*>( " / " ) ) );
+                str_copy( output + off, XSTR( " / " ) );
                 off += 3;
                 memory::copy( output + off, ip_entry->IpMask, mask_len );
                 off += mask_len;
@@ -146,7 +146,7 @@ auto declfn starburst::cmd_ifconfig(
         // gateway
         uint32_t gw_len = str_len( adapter->GatewayList.IpAddress );
         if ( gw_len > 1 && off + gw_len + 12 < cap ) {
-            str_copy( output + off, symbol<char*>( const_cast<char*>( "  GW:  " ) ) );
+            str_copy( output + off, XSTR( "  GW:  " ) );
             off += 7;
             memory::copy( output + off, adapter->GatewayList.IpAddress, gw_len );
             off += gw_len;
@@ -156,10 +156,10 @@ auto declfn starburst::cmd_ifconfig(
         // DHCP
         if ( off + 20 < cap ) {
             if ( adapter->DhcpEnabled ) {
-                str_copy( output + off, symbol<char*>( const_cast<char*>( "  DHCP: enabled\n" ) ) );
+                str_copy( output + off, XSTR( "  DHCP: enabled\n" ) );
                 off += 16;
             } else {
-                str_copy( output + off, symbol<char*>( const_cast<char*>( "  DHCP: disabled\n" ) ) );
+                str_copy( output + off, XSTR( "  DHCP: disabled\n" ) );
                 off += 17;
             }
         }

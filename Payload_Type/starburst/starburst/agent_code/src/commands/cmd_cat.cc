@@ -19,7 +19,7 @@ auto declfn starburst::cmd_cat(
     auto path = parser_string( params, &path_len );
     if ( !path || path_len == 0 ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "no file path" ) ) );
+            XSTR( "no file path" ) );
         return;
     }
 
@@ -36,7 +36,7 @@ auto declfn starburst::cmd_cat(
 
     if ( h_file == INVALID_HANDLE_VALUE ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "CreateFileW failed" ) ) );
+            XSTR( "CreateFileW failed" ) );
         return;
     }
 
@@ -44,7 +44,7 @@ auto declfn starburst::cmd_cat(
     if ( !inst.kernel32.GetFileSizeEx( h_file, &file_size ) ) {
         inst.kernel32.CloseHandle( h_file );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "GetFileSizeEx failed" ) ) );
+            XSTR( "GetFileSizeEx failed" ) );
         return;
     }
 
@@ -54,7 +54,7 @@ auto declfn starburst::cmd_cat(
     if ( size > 1048576 ) {
         inst.kernel32.CloseHandle( h_file );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "file too large (>1MB)" ) ) );
+            XSTR( "file too large (>1MB)" ) );
         return;
     }
 
@@ -62,7 +62,7 @@ auto declfn starburst::cmd_cat(
     if ( !buf ) {
         inst.kernel32.CloseHandle( h_file );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "alloc failed" ) ) );
+            XSTR( "alloc failed" ) );
         return;
     }
 

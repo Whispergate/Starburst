@@ -30,7 +30,7 @@ auto declfn starburst::cmd_upload(
     auto file_id = parser_string( params, &file_id_len );
     if ( !file_id || file_id_len == 0 ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "no file_id" ) ) );
+            XSTR( "no file_id" ) );
         return;
     }
 
@@ -42,7 +42,7 @@ auto declfn starburst::cmd_upload(
     auto remote_path = parser_string( params, &path_len );
     if ( !remote_path || path_len == 0 ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "no remote_path" ) ) );
+            XSTR( "no remote_path" ) );
         return;
     }
 
@@ -74,7 +74,7 @@ auto declfn starburst::cmd_upload(
 
     if ( h_file == INVALID_HANDLE_VALUE ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "CreateFileW failed" ) ) );
+            XSTR( "CreateFileW failed" ) );
         return;
     }
 
@@ -128,7 +128,7 @@ auto declfn starburst::cmd_upload(
     } else {
         // all chunks received
         char msg[128] = { 0 };
-        str_copy( msg, symbol<char*>( const_cast<char*>( "uploaded to " ) ) );
+        str_copy( msg, XSTR( "uploaded to " ) );
         str_concat( msg, path_buf );
         queue_response( inst, task_uuid, RESPONSE_SUCCESS, msg );
     }

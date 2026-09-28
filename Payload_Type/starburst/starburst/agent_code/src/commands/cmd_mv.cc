@@ -22,7 +22,7 @@ auto declfn starburst::cmd_mv(
 
     if ( !src || src_len == 0 || !dst || dst_len == 0 ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "need source and destination" ) ) );
+            XSTR( "need source and destination" ) );
         return;
     }
 
@@ -41,10 +41,10 @@ auto declfn starburst::cmd_mv(
 
     if ( inst.kernel32.MoveFileW( wsrc, wdst ) ) {
         queue_response( inst, task_uuid, RESPONSE_SUCCESS,
-            symbol<char*>( const_cast<char*>( "moved" ) ) );
+            XSTR( "moved" ) );
     } else {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "MoveFileW failed" ) ) );
+            XSTR( "MoveFileW failed" ) );
     }
 }
 

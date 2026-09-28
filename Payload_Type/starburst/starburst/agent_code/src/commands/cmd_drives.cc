@@ -31,7 +31,7 @@ auto declfn starburst::cmd_drives(
 
     if ( !pGetLogicalDriveStringsW || !pGetDriveTypeW ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "API resolution failed" ) ) );
+            XSTR( "API resolution failed" ) );
         return;
     }
 
@@ -39,7 +39,7 @@ auto declfn starburst::cmd_drives(
     DWORD len = pGetLogicalDriveStringsW( 511, drive_buf );
     if ( len == 0 ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "GetLogicalDriveStringsW failed" ) ) );
+            XSTR( "GetLogicalDriveStringsW failed" ) );
         return;
     }
 
@@ -47,12 +47,12 @@ auto declfn starburst::cmd_drives(
     auto output = static_cast<char*>( inst.heap_alloc( out_cap ) );
     if ( !output ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "alloc failed" ) ) );
+            XSTR( "alloc failed" ) );
         return;
     }
 
     uint32_t off = 0;
-    str_copy( output + off, symbol<char*>( const_cast<char*>( "Drive\tType\n" ) ) );
+    str_copy( output + off, XSTR( "Drive\tType\n" ) );
     off = str_len( output );
 
     wchar_t* p = drive_buf;
@@ -68,27 +68,27 @@ auto declfn starburst::cmd_drives(
         UINT dtype = pGetDriveTypeW( p );
         switch ( dtype ) {
             case 2:
-                str_copy( output + off, symbol<char*>( const_cast<char*>( "Removable" ) ) );
+                str_copy( output + off, XSTR( "Removable" ) );
                 off += 9;
                 break;
             case 3:
-                str_copy( output + off, symbol<char*>( const_cast<char*>( "Fixed" ) ) );
+                str_copy( output + off, XSTR( "Fixed" ) );
                 off += 5;
                 break;
             case 4:
-                str_copy( output + off, symbol<char*>( const_cast<char*>( "Remote" ) ) );
+                str_copy( output + off, XSTR( "Remote" ) );
                 off += 6;
                 break;
             case 5:
-                str_copy( output + off, symbol<char*>( const_cast<char*>( "CDROM" ) ) );
+                str_copy( output + off, XSTR( "CDROM" ) );
                 off += 5;
                 break;
             case 6:
-                str_copy( output + off, symbol<char*>( const_cast<char*>( "RAMDisk" ) ) );
+                str_copy( output + off, XSTR( "RAMDisk" ) );
                 off += 7;
                 break;
             default:
-                str_copy( output + off, symbol<char*>( const_cast<char*>( "Unknown" ) ) );
+                str_copy( output + off, XSTR( "Unknown" ) );
                 off += 7;
                 break;
         }

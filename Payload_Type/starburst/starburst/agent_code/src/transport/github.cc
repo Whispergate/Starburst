@@ -25,18 +25,18 @@ static auto declfn github_build_path(
     bool      comments_only
 ) -> void {
     // /repos/{owner}/{repo}/issues/{num}/comments
-    str_copy( out, symbol<char*>( const_cast<char*>( "/repos/" ) ) );
+    str_copy( out, XSTR( "/repos/" ) );
     str_concat( out, inst.transport.github_owner );
-    str_concat( out, symbol<char*>( const_cast<char*>( "/" ) ) );
+    str_concat( out, XSTR( "/" ) );
     str_concat( out, inst.transport.github_repo );
-    str_concat( out, symbol<char*>( const_cast<char*>( "/issues/" ) ) );
+    str_concat( out, XSTR( "/issues/" ) );
 
     char num_buf[16] = { 0 };
     int_to_str( issue_num, num_buf, 10 );
     str_concat( out, num_buf );
 
     if ( comments_only ) {
-        str_concat( out, symbol<char*>( const_cast<char*>( "/comments" ) ) );
+        str_concat( out, XSTR( "/comments" ) );
     }
 }
 
@@ -44,9 +44,9 @@ static auto declfn github_build_auth_header(
     instance& inst,
     char*     out
 ) -> void {
-    str_copy( out, symbol<char*>( const_cast<char*>( "Authorization: token " ) ) );
+    str_copy( out, XSTR( "Authorization: token " ) );
     str_concat( out, inst.transport.github_pat );
-    str_concat( out, symbol<char*>( const_cast<char*>( "\r\nAccept: application/vnd.github.v3+json\r\nContent-Type: application/json\r\nUser-Agent: Starburst/1.0\r\n" ) ) );
+    str_concat( out, XSTR( "\r\nAccept: application/vnd.github.v3+json\r\nContent-Type: application/json\r\nUser-Agent: Starburst/1.0\r\n" ) );
 }
 
 // extract "body" field value from GitHub JSON response
@@ -59,7 +59,7 @@ static auto declfn github_extract_body(
     uint32_t  out_max
 ) -> uint32_t {
     // find "body":" pattern
-    auto needle = symbol<char*>( const_cast<char*>( "\"body\":\"" ) );
+    auto needle = XSTR( "\"body\":\"" );
     uint32_t needle_len = str_len( needle );
     uint32_t out_pos = 0;
 
@@ -109,7 +109,7 @@ static auto declfn github_extract_comment_id(
     uint32_t json_len
 ) -> uint32_t {
     // find first "id": after start of object
-    auto needle = symbol<char*>( const_cast<char*>( "\"id\":" ) );
+    auto needle = XSTR( "\"id\":" );
     uint32_t needle_len = str_len( needle );
 
     for ( uint32_t i = 0; i + needle_len < json_len; i++ ) {
@@ -145,7 +145,7 @@ auto declfn starburst::github_init(
 ) -> bool {
     // WinINet init
     auto h_inet = inst.wininet.InternetOpenA(
-        symbol<const char*>( "Starburst/1.0" ),
+        XSTR( "Starburst/1.0" ),
         INTERNET_OPEN_TYPE_PRECONFIG,
         nullptr,
         nullptr,
@@ -212,12 +212,12 @@ auto declfn starburst::github_send(
         return false;
     }
 
-    str_copy( json_body, symbol<char*>( const_cast<char*>( "{\"body\":\"" ) ) );
+    str_copy( json_body, XSTR( "{\"body\":\"" ) );
     // append b64 data manually (it's uint8_t*, need char copy)
     uint32_t pos = str_len( json_body );
     memory::copy( json_body + pos, b64, b64_len );
     pos += b64_len;
-    str_copy( json_body + pos, symbol<char*>( const_cast<char*>( "\"}" ) ) );
+    str_copy( json_body + pos, XSTR( "\"}" ) );
     pos += 2;
 
     inst.heap_free( b64 );
@@ -231,7 +231,7 @@ auto declfn starburst::github_send(
 
     auto h_connect = inst.wininet.InternetConnectA(
         reinterpret_cast<HINTERNET>( inst.wininet.handle ),
-        symbol<const char*>( GITHUB_API_HOST ),
+        XSTR( GITHUB_API_HOST ),
         GITHUB_API_PORT,
         nullptr,
         nullptr,
@@ -248,7 +248,7 @@ auto declfn starburst::github_send(
     DWORD flags = INTERNET_FLAG_SECURE | INTERNET_FLAG_NO_CACHE_WRITE | INTERNET_FLAG_RELOAD;
     auto h_request = inst.wininet.HttpOpenRequestA(
         h_connect,
-        symbol<const char*>( "POST" ),
+        XSTR( "POST" ),
         path,
         nullptr,
         nullptr,
@@ -325,7 +325,7 @@ auto declfn starburst::github_send(
 
         auto h_conn2 = inst.wininet.InternetConnectA(
             reinterpret_cast<HINTERNET>( inst.wininet.handle ),
-            symbol<const char*>( GITHUB_API_HOST ),
+            XSTR( GITHUB_API_HOST ),
             GITHUB_API_PORT,
             nullptr, nullptr,
             INTERNET_SERVICE_HTTP, 0, 0
@@ -334,7 +334,7 @@ auto declfn starburst::github_send(
 
         auto h_req2 = inst.wininet.HttpOpenRequestA(
             h_conn2,
-            symbol<const char*>( "GET" ),
+            XSTR( "GET" ),
             server_path,
             nullptr, nullptr, nullptr,
             INTERNET_FLAG_SECURE | INTERNET_FLAG_NO_CACHE_WRITE | INTERNET_FLAG_RELOAD,
@@ -382,7 +382,7 @@ auto declfn starburst::github_send(
 
             // scan backwards for last "body" field
             auto json_str = reinterpret_cast<char*>( get_buf );
-            auto needle = symbol<char*>( const_cast<char*>( "\"body\":\"" ) );
+            auto needle = XSTR( "\"body\":\"" );
             uint32_t needle_len = str_len( needle );
             int32_t last_pos = -1;
 
@@ -408,7 +408,7 @@ auto declfn starburst::github_send(
             uint32_t server_comment_id = 0;
             if ( last_pos >= 0 ) {
                 // find "id": before the last "body" - scan backwards from last_pos
-                auto id_needle = symbol<char*>( const_cast<char*>( "\"id\":" ) );
+                auto id_needle = XSTR( "\"id\":" );
                 uint32_t id_needle_len = str_len( id_needle );
                 for ( int32_t i = last_pos; i >= 0; i-- ) {
                     bool match = true;
@@ -453,25 +453,25 @@ auto declfn starburst::github_send(
                 // delete server comment (cleanup)
                 if ( server_comment_id > 0 ) {
                     char del_path[512] = { 0 };
-                    str_copy( del_path, symbol<char*>( const_cast<char*>( "/repos/" ) ) );
+                    str_copy( del_path, XSTR( "/repos/" ) );
                     str_concat( del_path, inst.transport.github_owner );
-                    str_concat( del_path, symbol<char*>( const_cast<char*>( "/" ) ) );
+                    str_concat( del_path, XSTR( "/" ) );
                     str_concat( del_path, inst.transport.github_repo );
-                    str_concat( del_path, symbol<char*>( const_cast<char*>( "/issues/comments/" ) ) );
+                    str_concat( del_path, XSTR( "/issues/comments/" ) );
                     char id_str[16] = { 0 };
                     int_to_str( server_comment_id, id_str, 10 );
                     str_concat( del_path, id_str );
 
                     auto h_conn3 = inst.wininet.InternetConnectA(
                         reinterpret_cast<HINTERNET>( inst.wininet.handle ),
-                        symbol<const char*>( GITHUB_API_HOST ),
+                        XSTR( GITHUB_API_HOST ),
                         GITHUB_API_PORT,
                         nullptr, nullptr, INTERNET_SERVICE_HTTP, 0, 0
                     );
                     if ( h_conn3 ) {
                         auto h_req3 = inst.wininet.HttpOpenRequestA(
                             h_conn3,
-                            symbol<const char*>( "DELETE" ),
+                            XSTR( "DELETE" ),
                             del_path, nullptr, nullptr, nullptr,
                             INTERNET_FLAG_SECURE | INTERNET_FLAG_NO_CACHE_WRITE,
                             0
@@ -488,25 +488,25 @@ auto declfn starburst::github_send(
                 // also delete our comment on client_issue
                 if ( our_comment_id > 0 ) {
                     char del_path2[512] = { 0 };
-                    str_copy( del_path2, symbol<char*>( const_cast<char*>( "/repos/" ) ) );
+                    str_copy( del_path2, XSTR( "/repos/" ) );
                     str_concat( del_path2, inst.transport.github_owner );
-                    str_concat( del_path2, symbol<char*>( const_cast<char*>( "/" ) ) );
+                    str_concat( del_path2, XSTR( "/" ) );
                     str_concat( del_path2, inst.transport.github_repo );
-                    str_concat( del_path2, symbol<char*>( const_cast<char*>( "/issues/comments/" ) ) );
+                    str_concat( del_path2, XSTR( "/issues/comments/" ) );
                     char id_str2[16] = { 0 };
                     int_to_str( our_comment_id, id_str2, 10 );
                     str_concat( del_path2, id_str2 );
 
                     auto h_conn4 = inst.wininet.InternetConnectA(
                         reinterpret_cast<HINTERNET>( inst.wininet.handle ),
-                        symbol<const char*>( GITHUB_API_HOST ),
+                        XSTR( GITHUB_API_HOST ),
                         GITHUB_API_PORT,
                         nullptr, nullptr, INTERNET_SERVICE_HTTP, 0, 0
                     );
                     if ( h_conn4 ) {
                         auto h_req4 = inst.wininet.HttpOpenRequestA(
                             h_conn4,
-                            symbol<const char*>( "DELETE" ),
+                            XSTR( "DELETE" ),
                             del_path2, nullptr, nullptr, nullptr,
                             INTERNET_FLAG_SECURE | INTERNET_FLAG_NO_CACHE_WRITE,
                             0

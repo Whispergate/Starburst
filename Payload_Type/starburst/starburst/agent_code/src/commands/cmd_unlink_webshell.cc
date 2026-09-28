@@ -20,7 +20,7 @@ auto declfn starburst::cmd_unlink_webshell(
 
     if ( !agent_uuid || agent_uuid_len == 0 ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "missing agent id" ) ) );
+            XSTR( "missing agent id" ) );
         return;
     }
 
@@ -89,10 +89,10 @@ auto declfn starburst::cmd_unlink_webshell(
 
     if ( found ) {
         queue_response( inst, task_uuid, RESPONSE_SUCCESS,
-            symbol<char*>( const_cast<char*>( "webshell unlinked" ) ) );
+            XSTR( "webshell unlinked" ) );
     } else {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "agent not found in webshell links" ) ) );
+            XSTR( "agent not found in webshell links" ) );
     }
 }
 

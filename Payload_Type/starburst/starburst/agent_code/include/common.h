@@ -8,6 +8,7 @@
 #include <concepts>
 
 #include <constexpr.h>
+#include <obfstr.h>
 #include <macros.h>
 #include <memory.h>
 #include <native.h>
@@ -616,6 +617,7 @@ namespace stardust
 #if defined(INCLUDE_EVASION_AMSI) && defined(_WIN64)
             bool amsi_patched = false;
             void* amsi_veh    = nullptr;
+            void* amsi_veh_fn = nullptr;
 #endif
 #ifdef INCLUDE_EVASION_ETW
             bool etw_patched  = false;

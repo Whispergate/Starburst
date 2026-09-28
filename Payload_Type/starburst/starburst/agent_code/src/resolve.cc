@@ -111,19 +111,19 @@ auto declfn resolve::_api(
             auto fwd_base = resolve::module( stardust::hash_string( fwd_dll ) );
 
             if ( !fwd_base && fwd_dll[0] == 'a' && fwd_dll[1] == 'p' && fwd_dll[2] == 'i' && fwd_dll[3] == '-' ) {
-                char kb[] = { 'k','e','r','n','e','l','b','a','s','e','.','d','l','l',0 };
+                xstr(kb, "kernelbase.dll");
                 fwd_base = resolve::module( stardust::hash_string( kb ) );
                 if ( !fwd_base ) {
-                    char nt[] = { 'n','t','d','l','l','.','d','l','l',0 };
+                    xstr(nt, "ntdll.dll");
                     fwd_base = resolve::module( stardust::hash_string( nt ) );
                 }
             }
 
             if ( !fwd_base ) {
-                char k32[] = { 'k','e','r','n','e','l','3','2','.','d','l','l',0 };
+                xstr(k32, "kernel32.dll");
                 auto k32_base = resolve::module( stardust::hash_string( k32 ) );
                 if ( k32_base ) {
-                    char lla[] = { 'L','o','a','d','L','i','b','r','a','r','y','A',0 };
+                    xstr(lla, "LoadLibraryA");
                     auto pLLA = reinterpret_cast<HMODULE(WINAPI*)(LPCSTR)>(
                         _api( k32_base, stardust::hash_string( lla ) ) );
                     if ( pLLA ) {

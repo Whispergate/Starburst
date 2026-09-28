@@ -19,7 +19,7 @@ auto declfn starburst::cmd_mkdir(
     auto path = parser_string( params, &path_len );
     if ( !path || path_len == 0 ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "no path" ) ) );
+            XSTR( "no path" ) );
         return;
     }
 
@@ -32,10 +32,10 @@ auto declfn starburst::cmd_mkdir(
 
     if ( inst.kernel32.CreateDirectoryW( wpath, nullptr ) ) {
         queue_response( inst, task_uuid, RESPONSE_SUCCESS,
-            symbol<char*>( const_cast<char*>( "directory created" ) ) );
+            XSTR( "directory created" ) );
     } else {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "CreateDirectoryW failed" ) ) );
+            XSTR( "CreateDirectoryW failed" ) );
     }
 }
 

