@@ -120,6 +120,9 @@ MOD_EXCLUDE := cmd_load.cc cmd_exit.cc cmd_sleep.cc cmd_config.cc \
 MOD_CMD_SRC := $(filter-out $(addprefix src/commands/,$(MOD_EXCLUDE)), \
                $(wildcard src/commands/cmd_*.cc))
 
+modules-x64-debug: CFLAGS += -D DEBUG
+modules-x64-debug: modules-x64
+
 modules-x64:
 	@ mkdir -p $(MODULE_DIR)
 	@ echo "[modules] assembling entry + utils"

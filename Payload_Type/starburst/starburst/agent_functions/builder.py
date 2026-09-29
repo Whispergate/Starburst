@@ -618,9 +618,10 @@ class Starburst(PayloadType):
                 ))
             else:
                 mod_arch = arch.split("-")[0] if "-" in arch else arch
+                mod_target = f"modules-{mod_arch}-debug" if debug else f"modules-{mod_arch}"
                 try:
                     mod_proc = await asyncio.create_subprocess_exec(
-                        "make", f"modules-{mod_arch}",
+                        "make", mod_target,
                         cwd=dst_path,
                         stdout=asyncio.subprocess.PIPE,
                         stderr=asyncio.subprocess.PIPE,
