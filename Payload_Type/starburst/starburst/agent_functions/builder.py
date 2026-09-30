@@ -98,7 +98,7 @@ class Starburst(PayloadType):
     name = "starburst"
     file_extension = "bin"
     author = "@Lavender-exe"
-    semver = "1.3.5"
+    semver = "1.4.5"
     supported_os = [ SupportedOS.Windows, SupportedOS.Linux ]
     wrapper = False
     wrapped_payloads = ["erebus_wrapper", "service_wrapper", "scarecrow_wrapper"]
