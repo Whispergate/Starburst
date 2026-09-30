@@ -631,6 +631,18 @@ namespace stardust
             char     x86_args[260];
         } spawnto = {};
 
+        static constexpr uint32_t HEAP_TRACKER_CAPACITY = 256;
+
+        struct HeapRecord {
+            void*    ptr;
+            uint32_t size;
+        };
+
+        struct {
+            HeapRecord entries[HEAP_TRACKER_CAPACITY];
+            uint32_t   count;
+        } heap_tracker = {};
+
         struct {
             char*    output_data;
             uint32_t output_length;

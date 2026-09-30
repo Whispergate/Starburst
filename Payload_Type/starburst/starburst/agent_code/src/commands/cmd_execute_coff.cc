@@ -12,116 +12,154 @@
 using namespace stardust;
 using namespace starburst;
 
-// ── BOF-VS Beacon API compatibility types ──
-// These mirror beacon.h struct layouts for BeaconInformation / BeaconGetSyscallInformation
+// CS beacon.h 4.12 compatible types
 
-#define BOF_CALLBACK_OUTPUT      0x0
-#define BOF_CALLBACK_ERROR       0x0d
-#define BOF_MASK_SIZE            13
+#define CALLBACK_OUTPUT      0x0
+#define CALLBACK_OUTPUT_OEM  0x1e
+#define CALLBACK_OUTPUT_UTF8 0x20
+#define CALLBACK_ERROR       0x0d
+#define MASK_SIZE            13
 
-struct bof_heap_record {
+#define DLL_BEACON_USER_DATA 0x0d
+#define BEACON_USER_DATA_CUSTOM_SIZE 32
+
+struct HEAP_RECORD {
     char*  ptr;
     size_t size;
 };
 
-struct bof_alloc_section {
-    int     Label;
-    PVOID   BaseAddress;
-    SIZE_T  VirtualSize;
-    DWORD   CurrentProtect;
-    DWORD   PreviousProtect;
-    BOOL    MaskSection;
-    DWORD   DripLoadPageSize;
+enum ALLOCATED_MEMORY_PURPOSE {
+    PURPOSE_EMPTY, PURPOSE_GENERIC_BUFFER, PURPOSE_BEACON_MEMORY,
+    PURPOSE_SLEEPMASK_MEMORY, PURPOSE_BOF_MEMORY, PURPOSE_UDC2_MEMORY,
+    PURPOSE_USER_DEFINED_MEMORY = 1000
 };
 
-struct bof_alloc_cleanup {
-    BOOL      Cleanup;
-    int       AllocationMethod;
-    uint8_t   AdditionalInfo[16];
+enum ALLOCATED_MEMORY_LABEL {
+    LABEL_EMPTY, LABEL_BUFFER, LABEL_PEHEADER, LABEL_TEXT,
+    LABEL_RDATA, LABEL_DATA, LABEL_PDATA, LABEL_RELOC,
+    LABEL_USER_DEFINED = 1000
 };
 
-struct bof_alloc_region {
-    int                Purpose;
-    PVOID              AllocationBase;
-    SIZE_T             RegionSize;
-    DWORD              Type;
-    DWORD              DripLoadAllocationGranularity;
-    bof_alloc_section  Sections[8];
-    bof_alloc_cleanup  CleanupInformation;
+enum ALLOCATED_MEMORY_ALLOCATION_METHOD {
+    METHOD_UNKNOWN, METHOD_VIRTUALALLOC, METHOD_HEAPALLOC,
+    METHOD_MODULESTOMP, METHOD_NTMAPVIEW, METHOD_USER_DEFINED = 1000
 };
 
-struct bof_alloc_memory {
-    bof_alloc_region AllocatedMemoryRegions[6];
+struct HEAPALLOC_INFO    { PVOID HeapHandle; BOOL DestroyHeap; };
+struct MODULESTOMP_INFO  { HMODULE ModuleHandle; };
+
+union ALLOCATED_MEMORY_ADDITIONAL_CLEANUP_INFORMATION {
+    HEAPALLOC_INFO   HeapAllocInfo;
+    MODULESTOMP_INFO ModuleStompInfo;
+    PVOID            Custom;
 };
 
-struct bof_beacon_info {
-    unsigned int       version;
-    char*              sleep_mask_ptr;
-    DWORD              sleep_mask_text_size;
-    DWORD              sleep_mask_total_size;
-    char*              beacon_ptr;
-    bof_heap_record*   heap_records;
-    char               mask[BOF_MASK_SIZE];
-    bof_alloc_memory   allocatedMemory;
+struct ALLOCATED_MEMORY_CLEANUP_INFORMATION {
+    BOOL Cleanup;
+    ALLOCATED_MEMORY_ALLOCATION_METHOD AllocationMethod;
+    ALLOCATED_MEMORY_ADDITIONAL_CLEANUP_INFORMATION AdditionalCleanupInformation;
 };
 
-struct bof_syscall_entry {
+struct ALLOCATED_MEMORY_SECTION {
+    ALLOCATED_MEMORY_LABEL Label;
+    PVOID  BaseAddress;
+    SIZE_T VirtualSize;
+    DWORD  CurrentProtect;
+    DWORD  PreviousProtect;
+    BOOL   MaskSection;
+    DWORD  DripLoadPageSize;
+};
+
+struct ALLOCATED_MEMORY_REGION {
+    ALLOCATED_MEMORY_PURPOSE Purpose;
+    PVOID  AllocationBase;
+    SIZE_T RegionSize;
+    DWORD  Type;
+    DWORD  DripLoadAllocationGranularity;
+    ALLOCATED_MEMORY_SECTION Sections[8];
+    ALLOCATED_MEMORY_CLEANUP_INFORMATION CleanupInformation;
+};
+
+struct ALLOCATED_MEMORY {
+    ALLOCATED_MEMORY_REGION AllocatedMemoryRegions[6];
+};
+
+struct BEACON_INFO {
+    unsigned int   version;
+    char*          sleep_mask_ptr;
+    DWORD          sleep_mask_text_size;
+    DWORD          sleep_mask_total_size;
+    char*          beacon_ptr;
+    HEAP_RECORD*   heap_records;
+    char           mask[MASK_SIZE];
+    ALLOCATED_MEMORY allocatedMemory;
+};
+
+struct SYSCALL_API_ENTRY {
     PVOID fnAddr;
     PVOID jmpAddr;
     DWORD sysnum;
 };
 
-struct bof_syscall_api {
-    bof_syscall_entry ntAllocateVirtualMemory;
-    bof_syscall_entry ntProtectVirtualMemory;
-    bof_syscall_entry ntFreeVirtualMemory;
-    bof_syscall_entry ntGetContextThread;
-    bof_syscall_entry ntSetContextThread;
-    bof_syscall_entry ntResumeThread;
-    bof_syscall_entry ntCreateThreadEx;
-    bof_syscall_entry ntOpenProcess;
-    bof_syscall_entry ntOpenThread;
-    bof_syscall_entry ntClose;
-    bof_syscall_entry ntCreateSection;
-    bof_syscall_entry ntMapViewOfSection;
-    bof_syscall_entry ntUnmapViewOfSection;
-    bof_syscall_entry ntQueryVirtualMemory;
-    bof_syscall_entry ntDuplicateObject;
-    bof_syscall_entry ntReadVirtualMemory;
-    bof_syscall_entry ntWriteVirtualMemory;
-    bof_syscall_entry ntReadFile;
-    bof_syscall_entry ntWriteFile;
-    bof_syscall_entry ntCreateFile;
-    bof_syscall_entry ntQueueApcThread;
-    bof_syscall_entry ntCreateProcess;
-    bof_syscall_entry ntOpenProcessToken;
-    bof_syscall_entry ntTestAlert;
-    bof_syscall_entry ntSuspendProcess;
-    bof_syscall_entry ntResumeProcess;
-    bof_syscall_entry ntQuerySystemInformation;
-    bof_syscall_entry ntQueryDirectoryFile;
-    bof_syscall_entry ntSetInformationProcess;
-    bof_syscall_entry ntSetInformationThread;
-    bof_syscall_entry ntQueryInformationProcess;
-    bof_syscall_entry ntQueryInformationThread;
-    bof_syscall_entry ntOpenSection;
-    bof_syscall_entry ntAdjustPrivilegesToken;
-    bof_syscall_entry ntDeviceIoControlFile;
-    bof_syscall_entry ntWaitForMultipleObjects;
+struct SYSCALL_API {
+    SYSCALL_API_ENTRY ntAllocateVirtualMemory;
+    SYSCALL_API_ENTRY ntProtectVirtualMemory;
+    SYSCALL_API_ENTRY ntFreeVirtualMemory;
+    SYSCALL_API_ENTRY ntGetContextThread;
+    SYSCALL_API_ENTRY ntSetContextThread;
+    SYSCALL_API_ENTRY ntResumeThread;
+    SYSCALL_API_ENTRY ntCreateThreadEx;
+    SYSCALL_API_ENTRY ntOpenProcess;
+    SYSCALL_API_ENTRY ntOpenThread;
+    SYSCALL_API_ENTRY ntClose;
+    SYSCALL_API_ENTRY ntCreateSection;
+    SYSCALL_API_ENTRY ntMapViewOfSection;
+    SYSCALL_API_ENTRY ntUnmapViewOfSection;
+    SYSCALL_API_ENTRY ntQueryVirtualMemory;
+    SYSCALL_API_ENTRY ntDuplicateObject;
+    SYSCALL_API_ENTRY ntReadVirtualMemory;
+    SYSCALL_API_ENTRY ntWriteVirtualMemory;
+    SYSCALL_API_ENTRY ntReadFile;
+    SYSCALL_API_ENTRY ntWriteFile;
+    SYSCALL_API_ENTRY ntCreateFile;
+    SYSCALL_API_ENTRY ntQueueApcThread;
+    SYSCALL_API_ENTRY ntCreateProcess;
+    SYSCALL_API_ENTRY ntOpenProcessToken;
+    SYSCALL_API_ENTRY ntTestAlert;
+    SYSCALL_API_ENTRY ntSuspendProcess;
+    SYSCALL_API_ENTRY ntResumeProcess;
+    SYSCALL_API_ENTRY ntQuerySystemInformation;
+    SYSCALL_API_ENTRY ntQueryDirectoryFile;
+    SYSCALL_API_ENTRY ntSetInformationProcess;
+    SYSCALL_API_ENTRY ntSetInformationThread;
+    SYSCALL_API_ENTRY ntQueryInformationProcess;
+    SYSCALL_API_ENTRY ntQueryInformationThread;
+    SYSCALL_API_ENTRY ntOpenSection;
+    SYSCALL_API_ENTRY ntAdjustPrivilegesToken;
+    SYSCALL_API_ENTRY ntDeviceIoControlFile;
+    SYSCALL_API_ENTRY ntWaitForMultipleObjects;
 };
 
-struct bof_rtl_api {
+struct RTL_API {
     PVOID rtlDosPathNameToNtPathNameUWithStatusAddr;
     PVOID rtlFreeHeapAddr;
     PVOID rtlGetProcessHeapAddr;
 };
 
-struct bof_beacon_syscalls {
-    bof_syscall_api syscalls;
-    bof_rtl_api     rtls;
+struct BEACON_SYSCALLS {
+    SYSCALL_API syscalls;
+    RTL_API     rtls;
 };
 
-struct bof_data_store_object {
+struct USER_DATA {
+    unsigned int      version;
+    SYSCALL_API*      syscalls;
+    char              custom[BEACON_USER_DATA_CUSTOM_SIZE];
+    RTL_API*          rtls;
+    ALLOCATED_MEMORY* allocatedMemory;
+};
+
+struct DATA_STORE_OBJECT {
     int     type;
     DWORD64 hash;
     BOOL    masked;
@@ -422,11 +460,11 @@ static BOOL __cdecl declfn beacon_to_wide_char( char* src, wchar_t* dst, int max
 
 // ── Beacon Information ──
 
-static BOOL __cdecl declfn beacon_information( bof_beacon_info* info ) {
+static BOOL __cdecl declfn beacon_information( BEACON_INFO* info ) {
     auto inst = coff_get_inst();
     if ( !inst || !info ) return FALSE;
 
-    memory::zero( info, sizeof( bof_beacon_info ) );
+    memory::zero( info, sizeof( BEACON_INFO ) );
 
     info->version = 0x041200;
     info->sleep_mask_ptr = nullptr;
@@ -435,26 +473,40 @@ static BOOL __cdecl declfn beacon_information( bof_beacon_info* info ) {
 
     if ( inst->evasion.ekko.initialized ) {
         info->beacon_ptr = reinterpret_cast<char*>( inst->evasion.ekko.img_base );
-        for ( int i = 0; i < BOF_MASK_SIZE && i < 16; i++ )
+        for ( int i = 0; i < MASK_SIZE && i < 16; i++ )
             info->mask[i] = static_cast<char>( inst->evasion.ekko.rc4_key[i] );
     } else {
         info->beacon_ptr = reinterpret_cast<char*>( inst->base.address );
         ULONG seed = inst->kernel32.GetTickCount();
-        for ( int i = 0; i < BOF_MASK_SIZE; i++ ) {
+        for ( int i = 0; i < MASK_SIZE; i++ ) {
             seed = inst->ntdll.RtlRandomEx( &seed );
             info->mask[i] = static_cast<char>( seed & 0xFF );
         }
     }
 
-    if ( !inst->coff.info_heap_buf ) {
-        inst->coff.info_heap_buf = inst->heap_alloc( sizeof( bof_heap_record ) );
-        if ( inst->coff.info_heap_buf )
-            memory::zero( inst->coff.info_heap_buf, sizeof( bof_heap_record ) );
+    if ( inst->coff.info_heap_buf ) {
+        inst->ntdll.RtlFreeHeap( NtCurrentPeb()->ProcessHeap, 0, inst->coff.info_heap_buf );
+        inst->coff.info_heap_buf = nullptr;
     }
-    info->heap_records = reinterpret_cast<bof_heap_record*>( inst->coff.info_heap_buf );
+
+    uint32_t n = inst->heap_tracker.count;
+    size_t buf_size = ( n + 1 ) * sizeof( HEAP_RECORD );
+    inst->coff.info_heap_buf = inst->ntdll.RtlAllocateHeap(
+        NtCurrentPeb()->ProcessHeap, HEAP_ZERO_MEMORY, buf_size );
+
+    if ( inst->coff.info_heap_buf ) {
+        auto records = reinterpret_cast<HEAP_RECORD*>( inst->coff.info_heap_buf );
+        for ( uint32_t i = 0; i < n; i++ ) {
+            records[i].ptr  = reinterpret_cast<char*>( inst->heap_tracker.entries[i].ptr );
+            records[i].size = inst->heap_tracker.entries[i].size;
+        }
+        records[n].ptr  = nullptr;
+        records[n].size = 0;
+        info->heap_records = records;
+    }
 
     auto& region = info->allocatedMemory.AllocatedMemoryRegions[0];
-    region.Purpose = 2; /* PURPOSE_BEACON_MEMORY */
+    region.Purpose = PURPOSE_BEACON_MEMORY;
     if ( inst->evasion.ekko.initialized ) {
         region.AllocationBase = reinterpret_cast<PVOID>( inst->evasion.ekko.img_base );
         region.RegionSize = inst->evasion.ekko.img_size;
@@ -466,7 +518,7 @@ static BOOL __cdecl declfn beacon_information( bof_beacon_info* info ) {
 
     if ( region.AllocationBase && region.RegionSize > 0 ) {
         auto& sec = region.Sections[0];
-        sec.Label = 3; /* LABEL_TEXT */
+        sec.Label = LABEL_TEXT;
         sec.BaseAddress = region.AllocationBase;
         sec.VirtualSize = region.RegionSize;
         sec.CurrentProtect = PAGE_EXECUTE_READ;
@@ -531,7 +583,7 @@ static BOOL __cdecl declfn beacon_remove_value( const char* key ) {
 
 // ── Data Store (stubs - Starburst doesn't have a data store yet) ──
 
-static bof_data_store_object* __cdecl declfn beacon_data_store_get_item( size_t ) {
+static DATA_STORE_OBJECT* __cdecl declfn beacon_data_store_get_item( size_t ) {
     return nullptr;
 }
 
@@ -546,22 +598,23 @@ static size_t __cdecl declfn beacon_data_store_max_entries() {
 
 static char* __cdecl declfn beacon_get_custom_user_data() {
     auto inst = coff_get_inst();
-    if ( !inst ) return nullptr;
-    return reinterpret_cast<char*>( inst->evasion.udrl_user_data );
+    if ( !inst || !inst->evasion.udrl_user_data ) return nullptr;
+    auto ud = reinterpret_cast<USER_DATA*>( inst->evasion.udrl_user_data );
+    return ud->custom;
 }
 
 // ── Syscall Information ──
 
 static BOOL __cdecl declfn beacon_get_syscall_info(
-    bof_beacon_syscalls* info, SIZE_T infoSize, BOOL
+    BEACON_SYSCALLS* info, SIZE_T infoSize, BOOL
 ) {
     auto inst = coff_get_inst();
-    if ( !inst || !info || infoSize < sizeof( bof_beacon_syscalls ) ) return FALSE;
+    if ( !inst || !info || infoSize < sizeof( BEACON_SYSCALLS ) ) return FALSE;
 
-    memory::zero( info, sizeof( bof_beacon_syscalls ) );
+    memory::zero( info, sizeof( BEACON_SYSCALLS ) );
 
     auto& st = inst->evasion;
-    auto fill_entry = [&]( bof_syscall_entry& dst, uint32_t api_hash ) {
+    auto fill_entry = [&]( SYSCALL_API_ENTRY& dst, uint32_t api_hash ) {
         for ( uint32_t i = 0; i < st.syscall_count; i++ ) {
             if ( st.syscall_table[i].hash == api_hash ) {
                 dst.sysnum  = st.syscall_table[i].ssn;

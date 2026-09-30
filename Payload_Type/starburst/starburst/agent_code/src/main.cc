@@ -926,8 +926,8 @@ auto declfn instance::start(
     _In_ void* arg
 ) -> void {
     /* Store UDRL user data if the loader passed one.
-     * The UDRL reflective loader passes the UDRL_USER_DATA pointer
-     * as lpvReserved → shellcode arg → entry(args) → start(arg). */
+     * The UDRL passes a CS USER_DATA* via DLL_BEACON_USER_DATA → sc_stub
+     * → shellcode arg → entry(args) → start(arg). */
     evasion.udrl_user_data = arg;
 
     DBG_PRINTF( "Starburst starting...\n" );

