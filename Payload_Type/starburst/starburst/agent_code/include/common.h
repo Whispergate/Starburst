@@ -198,9 +198,7 @@ namespace stardust
                 D_API( NtQuerySystemInformation )
                 D_API( NtDelayExecution )
                 D_API( RtlRandomEx )
-#ifdef DEBUG
                 D_API( DbgPrint )
-#endif
             };
         } ntdll = {
             RESOLVE_TYPE( RtlAllocateHeap ),
@@ -209,9 +207,7 @@ namespace stardust
             RESOLVE_TYPE( NtQuerySystemInformation ),
             RESOLVE_TYPE( NtDelayExecution ),
             RESOLVE_TYPE( RtlRandomEx ),
-#ifdef DEBUG
             RESOLVE_TYPE( DbgPrint )
-#endif
         };
 
         struct {

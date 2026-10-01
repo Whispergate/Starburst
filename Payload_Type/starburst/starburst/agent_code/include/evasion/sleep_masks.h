@@ -681,6 +681,11 @@ static auto declfn mask_post_sleep( instance& inst ) -> void {
     xor_sensitive_data( inst );
 }
 
+#elif SLEEP_MASK_TYPE == MASK_NONE
+
+static auto declfn mask_pre_sleep( instance& inst ) -> void { (void)inst; }
+static auto declfn mask_post_sleep( instance& inst ) -> void { (void)inst; }
+
 #endif
 
 #endif

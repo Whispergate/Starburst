@@ -21,6 +21,8 @@ GLOBAL __chkstk_ms
         cmp     rax, 0x1000
         ja      .cs_loop
     .cs_done:
+        sub     rcx, rax
+        test    dword [rcx], eax
         pop     rax
         pop     rcx
         ret

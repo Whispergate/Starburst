@@ -292,12 +292,11 @@ class Starburst(PayloadType):
             name="sleep_mask",
             group_name="Evasion",
             parameter_type=BuildParameterType.ChooseOne,
-            choices=["default", "full_image", "heap", "ekko", "udrl", "sleepmask_vs", "custom"],
+            choices=["none", "default", "full_image", "heap", "ekko", "udrl", "sleepmask_vs", "custom"],
             default_value="default",
-            description="Sleep mask type: XOR sensitive fields, full image XOR, heap masking, Ekko timer-queue ROP (x64), UDRL, Sleepmask-VS, or custom",
+            description="Sleep mask type: none (plain sleep), default (XOR sensitive fields), full image XOR, heap masking, Ekko timer-queue ROP (x64), UDRL, Sleepmask-VS, or custom. Use 'none' or 'default' with UDRL-VS to avoid conflicts with the kit's own mask.",
             hide_conditions=[
                 HideCondition(name="output_type", operand=HideConditionOperand.EQ, value="elf"),
-                HideCondition(name="loader_type", operand=HideConditionOperand.EQ, value="udrl-vs"),
             ],
         ),
         BuildParameter(
@@ -468,8 +467,6 @@ class Starburst(PayloadType):
                 lt = self.get_parameter("loader_type")
             except Exception:
                 lt = "default"
-            if lt == "udrl-vs":
-                mask = "sleepmask_vs"
             if mask == "sleepmask_vs":
                 sm_data_path = os.path.join(dst_path, "include", "evasion", "sleepmask_vs_data.h")
                 if lt == "udrl-vs":
@@ -1120,9 +1117,8 @@ class Starburst(PayloadType):
             mask = self.get_parameter("sleep_mask")
         except Exception:
             mask = "default"
-        if loader_type == "udrl-vs":
-            mask = "sleepmask_vs"
         mask_map = {
+            "none": "MASK_NONE",
             "default": "MASK_DEFAULT",
             "full_image": "MASK_FULL_IMAGE",
             "heap": "MASK_HEAP",
@@ -1545,7 +1541,7 @@ class Starburst(PayloadType):
             with open(dll_path, "rb") as f:
                 dll_bytes = f.read()
 
-            result = loader_sc + struct.pack("<I", len(dll_bytes)) + dll_bytes
+            result = loader_sc + dll_bytes
             logger.info(f"UDRL-VS linked: {len(loader_sc)} loader + {len(dll_bytes)} DLL = {len(result)} bytes")
             return result
 

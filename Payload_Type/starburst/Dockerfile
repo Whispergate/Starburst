@@ -3,22 +3,6 @@ FROM itsafeaturemythic/mythic_python_base:latest
 RUN apt-get clean
 RUN dpkg --add-architecture i386
 
-RUN if grep -q bullseye /etc/apt/sources.list 2>/dev/null; then \
-        sed -i \
-            -e '/debian-security\|security\.debian/d' \
-            -e 's|deb.debian.org/debian|archive.debian.org/debian|g' \
-            -e '/bullseye-updates/d' -e '/bullseye-backports/d' \
-            /etc/apt/sources.list && \
-        echo 'deb http://snapshot.debian.org/archive/debian/20250101T000000Z/ bullseye main' \
-            >> /etc/apt/sources.list && \
-        echo 'Acquire::Check-Valid-Until "false";' > /etc/apt/apt.conf.d/99archive && \
-        echo 'Acquire::Retries "3";' >> /etc/apt/apt.conf.d/99archive; \
-    fi
-RUN rm -f /etc/apt/sources.list.d/*.list 2>/dev/null || true
-
-RUN printf 'Package: libc6* libc-bin libc-dev-bin libssl* lib32gcc-s1 lib32stdc++6\nPin: origin snapshot.debian.org\nPin-Priority: 1001\n' \
-    > /etc/apt/preferences.d/99snapshot-compat
-
 RUN apt-get update \
     && apt-get install -y --no-install-recommends --allow-downgrades \
         ccache clang gcc gcc-multilib nasm \
