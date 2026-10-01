@@ -603,6 +603,8 @@ namespace stardust
                 bool     loaded    = false;
             } sleepmask_vs = {};
 
+            uint32_t sleepmask_vs_text_size = 0;
+
             bool beacon_gate_enabled = false;
             bool beacon_gate_masking = true;
 

