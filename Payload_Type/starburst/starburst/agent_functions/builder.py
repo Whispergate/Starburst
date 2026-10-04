@@ -10,6 +10,7 @@ import logging
 import json
 
 from mythic_container.PayloadBuilder import *
+from mythic_container.PayloadBuilder import PayloadBuildMetadata, PayloadBuildMetadataArchitecture, PayloadBuildMetadataFormat
 from mythic_container.MythicCommandBase import *
 from mythic_container.MythicRPC import *
 from ..crystal_utilities import _wrap_shellcode_in_dll
@@ -519,6 +520,18 @@ class Starburst(PayloadType):
 
             ext_map = {"bin": "bin", "shellcode": "bin", "exe": "exe", "dll": "dll", "service_exe": "exe"}
             resp.updated_filename = f"starburst.{ext_map.get(output_type, 'bin')}"
+
+            format_map = {
+                "bin": PayloadBuildMetadataFormat.Shellcode,
+                "shellcode": PayloadBuildMetadataFormat.Shellcode,
+                "exe": PayloadBuildMetadataFormat.Exe,
+                "service_exe": PayloadBuildMetadataFormat.Exe,
+                "dll": PayloadBuildMetadataFormat.Dll,
+            }
+            resp.build_metadata = PayloadBuildMetadata(
+                architecture=PayloadBuildMetadataArchitecture.X64 if arch == "x64" else PayloadBuildMetadataArchitecture.X86,
+                format=format_map.get(output_type, PayloadBuildMetadataFormat.Shellcode),
+            )
 
             # install custom post-ex UDRL if provided
             if self.get_parameter("custom_postex_udrl"):
@@ -1417,6 +1430,10 @@ class Starburst(PayloadType):
             resp.payload = elf_bytes
             resp.build_message = f"Starburst Linux {arch} ELF: {len(elf_bytes)} bytes"
             resp.updated_filename = "starburst.elf"
+            resp.build_metadata = PayloadBuildMetadata(
+                architecture=PayloadBuildMetadataArchitecture.X64,
+                format=PayloadBuildMetadataFormat.Elf,
+            )
 
             await SendMythicRPCPayloadUpdatebuildStep(MythicRPCPayloadUpdateBuildStepMessage(
                 PayloadUUID=self.uuid,

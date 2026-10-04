@@ -36,6 +36,7 @@ RUN apt-get update \
 
 COPY requirements.txt /tmp/requirements.txt
 RUN pip3 install -r /tmp/requirements.txt
+RUN pip3 install --upgrade --force-reinstall "grpcio>=1.78.0"
 
 ENV CCACHE_DIR=/var/cache/ccache
 ENV CCACHE_MAXSIZE=500M

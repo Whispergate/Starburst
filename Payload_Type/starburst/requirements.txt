@@ -1,1 +1,1 @@
-mythic_container
+mythic-container==0.7.0rc10

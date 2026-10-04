@@ -9,10 +9,9 @@ function(task, responses){
             try{
                 let data = JSON.parse(responses[0]);
                 if(data["agent_file_id"]){
-                    return {"download":[{
+                    return {"media":[{
                         "agent_file_id": data["agent_file_id"],
-                        "variant": "contained",
-                        "name": task.display_params || "Download",
+                        "filename": task.display_params || "Download",
                     }]};
                 }
             }catch(error){}

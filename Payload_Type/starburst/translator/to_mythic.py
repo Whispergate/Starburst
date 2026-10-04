@@ -348,7 +348,11 @@ def try_parse_ps(p, task_id, count):
         return {
             "task_id": task_id,
             "completed": True,
-            "processes": processes,
+            "processes": {
+                "os": "windows",
+                "update_deleted": True,
+                "processes": processes,
+            },
             "user_output": json.dumps(processes, indent=2),
         }
     except Exception:
