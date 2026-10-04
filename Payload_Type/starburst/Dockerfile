@@ -35,7 +35,7 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt /tmp/requirements.txt
-RUN pip3 install -r /tmp/requirements.txt
+RUN pip3 install --upgrade -r /tmp/requirements.txt
 RUN pip3 install --upgrade --force-reinstall "grpcio>=1.78.0"
 
 ENV CCACHE_DIR=/var/cache/ccache
