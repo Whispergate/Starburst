@@ -81,6 +81,7 @@ typedef struct {
     } resolved_frames[SPOOF_MAX_FRAMES];
 
     bool   initialized;
+    PVOID  call_fn;
 } SPOOF_STATE;
 
 /* ─── x64 UNWIND_INFO parsing types ─── */

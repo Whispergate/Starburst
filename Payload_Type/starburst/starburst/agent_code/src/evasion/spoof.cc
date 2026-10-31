@@ -176,6 +176,7 @@ static auto declfn resolve_frame(
 
 auto declfn spoof_init( instance& inst ) -> void {
     auto& ss = inst.evasion.spoof;
+    ss.call_fn = reinterpret_cast<PVOID>( spoof_call );
     if ( ss.initialized ) return;
 
 #if SPOOF_PROFILE == SPOOF_PROFILE_OFF

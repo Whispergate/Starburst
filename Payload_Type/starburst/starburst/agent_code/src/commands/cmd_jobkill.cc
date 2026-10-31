@@ -4,6 +4,7 @@
 #include <parser.h>
 #include <config.h>
 #include <strings.h>
+#include <evasion/spoof_dispatch.h>
 #ifdef INCLUDE_CMD_SSH
 #include <ssh_client.h>
 #endif
@@ -36,8 +37,8 @@ auto declfn starburst::cmd_jobkill(
 
         if ( str_ncmp( job.task_uuid, target_uuid, target_len ) == 0 ) {
             if ( job.h_thread ) {
-                inst.kernel32.TerminateThread( job.h_thread, 0 );
-                inst.kernel32.CloseHandle( job.h_thread );
+                SCALL( inst, kernel32.TerminateThread, job.h_thread, 0 );
+                SCALL( inst, kernel32.CloseHandle, job.h_thread );
             }
             job.active = false;
             job.h_thread = nullptr;

