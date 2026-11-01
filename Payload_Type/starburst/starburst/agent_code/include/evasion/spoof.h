@@ -81,6 +81,10 @@ typedef struct {
     } resolved_frames[SPOOF_MAX_FRAMES];
 
     bool   initialized;
+    /* degradation tracking: spoof silently falling back to direct calls is
+     * an OPSEC change the operator must see - surfaced via the config cmd */
+    bool   degraded;                    /* init failed partway */
+    uint32_t fallback_count;            /* direct-call fallbacks at runtime */
     PVOID  call_fn;
 } SPOOF_STATE;
 

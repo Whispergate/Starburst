@@ -1,0 +1,109 @@
+.TH CPL 1 "2026" "Crystal Palace" "User Commands"
+.SH NAME
+cpl \- linker for post-exploitation and evasion tradecraft security research
+.SH SYNOPSIS
+.B cpl
+\fIcommand\fR [\fIargs\fR]
+.SH DESCRIPTION
+Crystal Palace is a linker and linker script language specialized to the needs of writing post-exploitation capability and evasion tradecraft.
+.PP
+The name is inspired by The Crystal Palace, a former cast-iron and glass structure built in London for the Great Exhibition of 1851. At the time, it was the world's largest building. The Crystal Palace adopted a standard size and thread for screws and demonstrated the efficiency gains from building with a standard.
+.PP
+Like The Crystal Palace, this project aims to demonstrate the efficiency of publishing security research as separate, use-agnostic, and interoperable ground truths.
+.PP
+The documentation is available at:
+.UR https://tradecraftgarden.org/docs.html
+.UE
+.SH COMMANDS
+.TP
+.BI build " build.spec " "[label.]architecture out.bin " "[A=hex] [%B=val] [@config.spec]"
+Run the specified \fI.spec\fR file to assemble a PIC program.
+.RS
+.TP
+.BI @ config.spec
+Run a specification file to configure variables.
+.TP
+.BI \-r " %key=val"
+Resolve paths in \fI%key\fR relative to \fB$CWD\fR.
+.TP
+.BI \-g " out.yar"
+Generate Yara rules for this program.
+.PP
+\fBData Variables ($VARS):\fR
+.RS
+.TP
+.B A=04030201
+Places { 0x04, 0x03, 0x02, 0x01 } into \fB$A\fR.
+.PP
+\fBNote:\fR The '$' prefix is optional to avoid shell escaping.
+.PP
+\fBWarning:\fR Bytes are written left-to-right. Account for little endian when writing ints, longs, pointers, etc.
+.RE
+.PP
+\fBString Variables (%VARS):\fR
+.RS
+.TP
+.BI %key= value
+Sets \fI%key\fR to the literal string "value".
+.RE
+.RE
+.TP
+.BI coffparse " file"
+Parse COFF and print out how Crystal Palace sees it.
+.TP
+.BI disassemble " [" \-o " " \fI+opt1,+opt2,...\fR "] [" \-f "] " /path/to/file.o
+Disassemble object code from specified COFF file.
+.RS
+.TP
+.BI \-o " +opt1,+opt2,..."
+Apply BTF +options to program.
+.TP
+.B \-f
+Show Iced instruction forms (e.g., PUSH r64) with instructions.
+.PP
+\fBBTF Options (for use with -o):\fR
+.RS
+.TP
+.B +blockparty
+Randomize basic blocks within functions.
+.TP
+.B +disco
+Randomize function order.
+.TP
+.B +gofirst
+Make sure \fBgo()\fR is the first function.
+.TP
+.B +mutate
+Break-up some instructions with constants based on a fixed seed.
+.TP
+.B +optimize
+Trace calls from \fBgo()\fR; remove unused functions.
+.TP
+.B +regdance
+Randomize non-volatile registers in some functions.
+.TP
+.B +shatter
+Randomize basic blocks program wide.
+.RE
+.RE
+.TP
+.BI help " [" command "]"
+Prints help information for a command.
+.TP
+.BI info " file.spec"
+Print \fI.spec\fR meta-information.
+.TP
+.BI link " loader.spec " "file.dll|file.o out.bin " "[A=hex] [%B=val] [@config.spec]"
+Apply the specified \fI.spec\fR file to build a PIC DLL or COFF loader for file. Arguments are identical to \fBbuild\fR.
+.TP
+.BI server " [" \-p " " \fIport\fR "]"
+Start the Crystal Palace JSON-over-HTTP sidecar service.
+.RS
+.TP
+.BI \-p " port"
+Set the listening port.
+.RE
+.SH LICENSE
+\(co 2025-2026 Adversary Fan Fiction Writers Guild. All rights reserved.
+.PP
+Crystal Palace is released under the 3-clause BSD license.

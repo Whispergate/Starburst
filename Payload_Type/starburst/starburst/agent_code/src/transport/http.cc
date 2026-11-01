@@ -181,12 +181,14 @@ auto declfn starburst::http_send(
 
     if ( !sent ) {
         DBG_PRINT( inst, "WinHttpSendRequest failed: %d\n", (DWORD)SCALL( inst, kernel32.GetLastError ) );
+        DBG_PRINT( inst, "http:send_request_fail\n" );
         SCALL( inst, winhttp.WinHttpCloseHandle, h_request );
         return false;
     }
 
     if ( !SCALL( inst, winhttp.WinHttpReceiveResponse, h_request, nullptr ) ) {
         DBG_PRINT( inst, "WinHttpReceiveResponse failed: %d\n", (DWORD)SCALL( inst, kernel32.GetLastError ) );
+        DBG_PRINT( inst, "http:receive_response_fail\n" );
         SCALL( inst, winhttp.WinHttpCloseHandle, h_request );
         return false;
     }

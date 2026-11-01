@@ -136,9 +136,9 @@ auto declfn evasion_on_cleanup( instance& inst ) -> void {
     spoof_cleanup( inst );
 #endif
 
-    for ( uint32_t i = 0; i < inst.evasion.syscall_count; i++ ) {
-        inst.evasion.ekko.rc4_key[i] = 0;
-    }
+    /* wipe the 16-byte RC4 key - do NOT index it with syscall_count (up to
+     * 64); that wrote past the key into ekko.img_base/size/initialized */
+    memory::zero( inst.evasion.ekko.rc4_key, sizeof( inst.evasion.ekko.rc4_key ) );
     inst.evasion.ekko.initialized = false;
 }
 

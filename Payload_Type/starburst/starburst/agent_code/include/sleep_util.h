@@ -19,12 +19,10 @@ static inline void SleepMs( _In_ SIZE_T Ms )
     volatile SIZE_T x = 0;
     SIZE_T end_time   = GetTimestamp() + Ms;
     while ( GetTimestamp() < end_time ) x += 1;
-
-    if ( GetTimestamp() > end_time + 5000 )
-    {
-        volatile SIZE_T crash = 0;
-        x = *( SIZE_T* )crash;
-    }
+    /* overrun check removed: SharedUserData keeps ticking through VM
+     * pause/hibernate/snapshot, so a resumed VM always "overran" and the
+     * old code nulled itself here - killing the agent on legitimate
+     * host suspend, not on tampering */
 }
 
 #endif

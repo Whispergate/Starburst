@@ -28,11 +28,21 @@ __attribute__((always_inline)) inline auto declfn _scall_dispatch(
 #define SCALL_PTR(inst, fn_ptr, ...) \
     starburst::_scall_dispatch( (inst), (PVOID)( fn_ptr ), ##__VA_ARGS__ )
 
+#define SCALL_VOID(inst, fn, ...) \
+    (void)starburst::_scall_dispatch( (inst), (PVOID)( (inst).fn ), ##__VA_ARGS__ )
+
+#define SCALL_PTR_VOID(inst, fn_ptr, ...) \
+    (void)starburst::_scall_dispatch( (inst), (PVOID)( fn_ptr ), ##__VA_ARGS__ )
+
 #else
 
 #define SCALL(inst, fn, ...) ((ULONG_PTR)( (inst).fn( __VA_ARGS__ ) ))
 
 #define SCALL_PTR(inst, fn_ptr, ...) ((ULONG_PTR)( (fn_ptr)( __VA_ARGS__ ) ))
+
+#define SCALL_VOID(inst, fn, ...) do { (inst).fn( __VA_ARGS__ ); } while(0)
+
+#define SCALL_PTR_VOID(inst, fn_ptr, ...) do { (fn_ptr)( __VA_ARGS__ ); } while(0)
 
 #endif
 

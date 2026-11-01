@@ -66,7 +66,7 @@ auto declfn starburst::cmd_spawn(
         }
 
         wchar_t cmdline_w[300] = { 0 };
-        inst.kernel32.MultiByteToWideChar( 0, 0, cmdline_a, -1, cmdline_w, 300 );
+        SCALL( inst, kernel32.MultiByteToWideChar, 0, 0, cmdline_a, -1, cmdline_w, 300 );
 
         STARTUPINFOW si      = {};
         si.cb                = sizeof( STARTUPINFOW );

@@ -1,6 +1,7 @@
 import json
 import base64
 import logging
+import os
 
 from mythic_container.TranslationBase import *
 from translator.utils import *
@@ -9,6 +10,32 @@ from translator.to_mythic import *
 from translator.to_mythic import _link_profiles
 
 logger = logging.getLogger("translator")
+
+# task_id -> agent-registered file_id, shared between the translator (which sees
+# the file_id Mythic returns for a download registration) and the payload
+# container code (screenshot.py process_response), which run in the same container.
+FILE_ID_MAP_PATH = "/Mythic/file_id_map.json"
+
+
+def _save_file_id_map(mapping):
+    try:
+        if not mapping:
+            return
+        merged = {}
+        if os.path.exists(FILE_ID_MAP_PATH):
+            try:
+                with open(FILE_ID_MAP_PATH) as f:
+                    merged = json.load(f)
+            except Exception:
+                merged = {}
+        merged.update(mapping)
+        # keep it bounded
+        if len(merged) > 200:
+            merged = dict(sorted(merged.items())[-100:])
+        with open(FILE_ID_MAP_PATH, "w") as f:
+            json.dump(merged, f)
+    except Exception as e:
+        logger.error(f"_save_file_id_map error: {e}")
 
 
 class StarburstTranslator(TranslationContainer):
@@ -38,11 +65,14 @@ class StarburstTranslator(TranslationContainer):
             elif action in ("get_tasking", "post_response"):
                 resp_results = msg.get("responses", [])
                 if isinstance(resp_results, list):
+                    _file_map = {}
                     for rr in resp_results:
                         if isinstance(rr, dict) and rr.get("file_id"):
                             task_id = rr.get("task_id", "")
                             file_id = rr["file_id"]
                             self.pending_file_ids[task_id] = file_id
+                            _file_map[str(task_id)] = file_id
+                    _save_file_id_map(_file_map)
 
                 tasks = msg.get("tasks", [])
                 consumed = []

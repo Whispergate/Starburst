@@ -8,3 +8,15 @@ x64:
         link "shellcode"
 
         export
+
+x86:
+    load "bin/loader.x86.o"
+        make pic +gofirst +optimize
+        fixptrs "_getretaddr"
+        dfr "_resolve" "ror13"
+
+        push $DLL
+        preplen
+        link "shellcode"
+
+        export

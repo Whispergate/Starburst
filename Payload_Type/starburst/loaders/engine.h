@@ -150,15 +150,21 @@ static void* _find_module(unsigned int mod_hash) {
     char *peb;
 #ifdef _WIN64
     peb = (char*)__readgsqword(0x60);
-#else
-    peb = (char*)__readfsdword(0x30);
-#endif
     char *ldr  = *(char**)(peb + 0x18);
     char *head = ldr + 0x20;
+#else
+    peb = (char*)__readfsdword(0x30);
+    char *ldr  = *(char**)(peb + 0x0C);
+    char *head = ldr + 0x14;
+#endif
     char *curr = *(char**)head;
 
     while (curr != head) {
+#ifdef _WIN64
         WCHAR *name = *(WCHAR**)(curr + 0x40);
+#else
+        WCHAR *name = *(WCHAR**)(curr + 0x20);
+#endif
         if (name) {
             WCHAR *base_name = name;
             WCHAR *p = name;
@@ -167,7 +173,11 @@ static void* _find_module(unsigned int mod_hash) {
                 p++;
             }
             if (_fnv1a_ci(base_name) == mod_hash)
+#ifdef _WIN64
                 return *(void**)(curr + 0x20);
+#else
+                return *(void**)(curr + 0x10);
+#endif
         }
         curr = *(char**)curr;
     }
@@ -463,9 +473,24 @@ static LONG WINAPI _gp_veh_handler(EXCEPTION_POINTERS *ep) {
         (pFlushInstructionCache)_resolve(H_MOD_KERNEL32, H_FlushInstructionCache);
     DWORD old;
 
-    /* evict the oldest visible page */
-    char *oldest = _gp_state.pages[_gp_state.index % GP_MAXVISIBLE];
-    if (oldest) {
+    /* evict the oldest visible page - but NEVER the page holding the
+     * faulting RIP: zeroing it re-guards the memory the CPU resumes
+     * executing after CONTINUE_EXECUTION, which ran the agent through
+     * zeroed pages and crashed. Walk the ring oldest-first and skip
+     * the live page. */
+    ULONG_PTR rip = ep->ContextRecord->Rip;
+    ULONG_PTR rip_page = rip - (rip % GP_PAGE_SIZE);
+    int victim = -1;
+    for (int k = 0; k < GP_MAXVISIBLE; k++) {
+        int idx = (_gp_state.index + k) % GP_MAXVISIBLE;   /* oldest first */
+        char *pg = _gp_state.pages[idx];
+        if (pg && (ULONG_PTR)pg != rip_page && (ULONG_PTR)pg != page_addr) {
+            victim = idx;
+            break;
+        }
+    }
+    if (victim >= 0) {
+        char *oldest = _gp_state.pages[victim];
         pVP(oldest, GP_PAGE_SIZE, PAGE_READWRITE, &old);
         _gp_memset(oldest, 0, GP_PAGE_SIZE);
         pVP(oldest, GP_PAGE_SIZE, PAGE_EXECUTE_READ | PAGE_GUARD, &old);
@@ -479,12 +504,18 @@ static LONG WINAPI _gp_veh_handler(EXCEPTION_POINTERS *ep) {
     _gp_memcpy((void*)page_addr, rgn->source + src_offset, GP_PAGE_SIZE);
     _gp_xor((char*)page_addr, GP_PAGE_SIZE);
 
-    /* set final permissions */
-    pVP((void*)page_addr, GP_PAGE_SIZE, rgn->perms, &old);
+    /* final permissions: the stream source is one flat code+data blob, and
+     * the agent writes to its own image globals (instance state in .bss) -
+     * an EXECUTE_READ page turns any such write into an unguarded access
+     * violation. RWX on streamed pages; the guard re-protects on eviction,
+     * so at most GP_MAXVISIBLE pages are ever exposed. */
+    pVP((void*)page_addr, GP_PAGE_SIZE, PAGE_EXECUTE_READWRITE, &old);
     if (pFIC) pFIC((HANDLE)-1, (void*)page_addr, GP_PAGE_SIZE);
 
-    /* track this page */
-    _gp_state.pages[_gp_state.index % GP_MAXVISIBLE] = (char*)page_addr;
+    /* track this page (only if a victim slot was freed, else overwrite
+     * the oldest slot without wiping it - the ring simply skips eviction
+     * and the same slot gets reused on the next fault) */
+    _gp_state.pages[victim >= 0 ? victim : (_gp_state.index % GP_MAXVISIBLE)] = (char*)page_addr;
     _gp_state.index = (_gp_state.index + 1) % GP_MAXVISIBLE;
 
     return EXCEPTION_CONTINUE_EXECUTION;

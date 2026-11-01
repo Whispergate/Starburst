@@ -1,5 +1,6 @@
 CCACHE   = $(shell command -v ccache 2>/dev/null)
-CC       = $(CCACHE) x86_64-w64-mingw32-gcc
+CC64     = $(CCACHE) x86_64-w64-mingw32-gcc
+CC86     = $(CCACHE) i686-w64-mingw32-gcc
 CFLAGS   = -c -Os -fno-asynchronous-unwind-tables -fpack-struct=8 -pipe -w
 INCLUDES = -Iinclude
 
@@ -11,11 +12,16 @@ ifdef STOMP_DLL
 DEFINES += -DSTOMP_DLL=\"$(STOMP_DLL)\"
 endif
 
-all: bin/loader.x64.o
+x64: bin/loader.x64.o
+x86: bin/loader.x86.o
 
 bin/loader.x64.o: src/loader.c include/pic_defs.h include/user_data.h
 	@mkdir -p bin
-	$(CC) $(CFLAGS) $(INCLUDES) $(DEFINES) -o $@ $<
+	$(CC64) $(CFLAGS) $(INCLUDES) $(DEFINES) -o $@ $<
+
+bin/loader.x86.o: src/loader.c include/pic_defs.h include/user_data.h
+	@mkdir -p bin
+	$(CC86) $(CFLAGS) $(INCLUDES) $(DEFINES) -o $@ $<
 
 clean:
-	rm -f bin/loader.x64.o
+	rm -f bin/loader.x64.o bin/loader.x86.o

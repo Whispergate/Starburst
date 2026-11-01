@@ -1,5 +1,5 @@
 /*
- * (c) 2025 Raphael Mudge
+ * (c) 2025-2026 Adversary Fan Fiction Writers Guild
  * A very quick'n'dirty shellcode injector.
  *
  * Part of the Crystal Palace distribution
@@ -48,18 +48,6 @@ ULONG_PTR rev64(ULONG_PTR val) {
 
 LONG WINAPI CrashHandler(EXCEPTION_POINTERS * pExceptionPointers) {
 	PEXCEPTION_RECORD ExceptionRecord = pExceptionPointers->ExceptionRecord;
-
-	switch (ExceptionRecord->ExceptionCode) {
-		case EXCEPTION_ACCESS_VIOLATION:
-		case EXCEPTION_ILLEGAL_INSTRUCTION:
-		case EXCEPTION_BREAKPOINT:
-		case EXCEPTION_PRIV_INSTRUCTION:
-		case EXCEPTION_STACK_OVERFLOW:
-		case EXCEPTION_DATATYPE_MISALIGNMENT:
-			break;
-		default:
-			return EXCEPTION_CONTINUE_SEARCH;
-	}
 
 	/* basic crash info */
 	printf("** CRASH DETECTED **\n\n");
@@ -240,7 +228,7 @@ int main(int argc, char * argv[]) {
 
 	/* No debugger? I will become the debugger */
 	if (!IsDebuggerPresent())
-		AddVectoredExceptionHandler(FALSE, CrashHandler);
+		SetUnhandledExceptionFilter(CrashHandler);
 
 	/* ready? */
 	( (void (*)())data )();

@@ -197,6 +197,16 @@ def parse_download_init(p, task_id):
     }
     if is_screenshot:
         download["is_screenshot"] = True
+        # routes this response to the payload container's screenshot.py
+        # process_response, which resolves the registered file_id for the
+        # browser script so the PNG renders inline in the tasking panel
+        return {
+            "task_id": task_id,
+            "completed": False,
+            "download": download,
+            "process_response": "screenshot",
+            "user_output": f"Downloading {full_path} ({total_size} bytes, {total_chunks} chunks)",
+        }
 
     return {
         "task_id": task_id,

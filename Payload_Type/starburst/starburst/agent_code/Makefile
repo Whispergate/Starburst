@@ -83,7 +83,7 @@ x64: nasm64 $(OBJ64)
 x86: nasm86 $(OBJ86)
 	@ echo "compiling x86 project"
 	@ $(CCX86) bin/obj/*.x86.obj -o bin/$(NAME).x86.exe $(CFLAGS) $(CFLAGS_X86_INC)
-	@ objcopy --dump-section .text=bin/$(NAME).x86.bin bin/$(NAME).x86.exe
+	@ python3 scripts/gen_fixups.py bin/obj scripts/linker.ld bin/$(NAME).x86.bin
 
 %.x64.obj: %.cc
 	@ echo "-> compiling $< to $(notdir $@)"

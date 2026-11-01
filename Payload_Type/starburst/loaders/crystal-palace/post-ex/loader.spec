@@ -15,6 +15,7 @@ x64:
 x86:
     load "bin/loader-postex.x86.o"
         make pic +gofirst +optimize
+        fixptrs "_getretaddr"
 
         push $DLL
         preplen

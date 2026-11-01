@@ -11,6 +11,7 @@ x64:
 x86:
     load "bin/loader.x86.o"
         make pic +gofirst +optimize
+        fixptrs "_getretaddr"
 
         load %SHELLCODE
         preplen

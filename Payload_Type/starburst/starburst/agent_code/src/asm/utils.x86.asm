@@ -8,29 +8,27 @@ GLOBAL __alloca
 [SECTION .text$B]
     ; _alloca - x86 stack probe + allocation
     ; Called with requested size in EAX
-    ; Must probe pages and adjust ESP, preserving return address
-    ; Clobbers nothing except EAX (which becomes the new stack pointer)
+    ; Probes pages and sets ESP = original_ESP - SIZE
+    ; Preserves ECX; clobbers EAX
     __alloca:
-        push    ecx                 ; save ecx
-        mov     ecx, esp            ; ecx = current ESP (after push ecx)
-        add     ecx, 8              ; ecx = original ESP before call (skip saved ecx + ret addr)
+        push    ecx
+        mov     ecx, esp
+        add     ecx, 8              ; ecx = original ESP before call
     .loop:
         cmp     eax, 0x1000
         jb      .final
         sub     ecx, 0x1000
-        or      dword [ecx], 0     ; probe page (read-modify-write)
+        or      dword [ecx], 0
         sub     eax, 0x1000
         jmp     .loop
     .final:
-        sub     ecx, eax            ; subtract remaining bytes
-        or      dword [ecx], 0     ; probe final page
-        mov     eax, [esp]          ; restore ecx value
-        mov     [ecx], eax          ; store ecx at new stack location
-        mov     eax, [esp + 4]      ; get return address
-        mov     [ecx + 4], eax      ; place return address at new stack
-        lea     esp, [ecx]          ; set new stack pointer
-        pop     ecx                 ; restore ecx
-        ret                         ; return to caller with adjusted stack
+        sub     ecx, eax            ; ecx = original_ESP - SIZE (target)
+        or      dword [ecx], 0
+        mov     eax, esp            ; save old ESP
+        mov     esp, ecx            ; ESP = target
+        mov     ecx, [eax]          ; restore ecx from old stack
+        push    dword [eax + 4]     ; push return address
+        ret
 
 [SECTION .text$C]
     _RipData:

