@@ -43,7 +43,11 @@ auto declfn starburst::cmd_load(
         return;
     }
 
-    DBG_PRINT( inst, "cmd_load: %u bytes, init_offset=%u\n", pic_len, init_offset );
+    DBG_PRINT( inst, "cmd_load: %u bytes, init_offset=%u sizeof(LC)=%d handler_off=%d active_off=%d\n",
+               pic_len, init_offset,
+               (int)sizeof(instance::LoadedCommand),
+               (int)__builtin_offsetof(instance::LoadedCommand, handler),
+               (int)__builtin_offsetof(instance::LoadedCommand, active) );
 
     LPVOID mem = (LPVOID)SCALL( inst, kernel32.VirtualAlloc,
         nullptr, pic_len,
@@ -76,6 +80,8 @@ auto declfn starburst::cmd_load(
         &inst.loaded.entries[inst.loaded.count],
         static_cast<int>( slots_available ) );
 
+    DBG_PRINT( inst, "cmd_load: init returned %d\n", registered );
+
     if ( registered <= 0 ) {
         SCALL( inst, kernel32.VirtualFree, mem, 0, MEM_RELEASE );
         queue_response( inst, task_uuid, RESPONSE_ERROR,
@@ -83,9 +89,19 @@ auto declfn starburst::cmd_load(
         return;
     }
 
+    /* Dump what module_init wrote BEFORE we touch active */
+    for ( int i = 0; i < registered && i < 4; i++ ) {
+        auto& e = inst.loaded.entries[inst.loaded.count + i];
+        DBG_PRINT( inst, "cmd_load: entry[%d] cmd_id=0x%02x handler=%p active=%d\n",
+                   i, (unsigned)e.cmd_id, e.handler, (int)e.active );
+    }
+
     for ( int i = 0; i < registered; i++ ) {
         inst.loaded.entries[inst.loaded.count + i].active = true;
     }
+
+    DBG_PRINT( inst, "cmd_load: after active set, entry[0].handler=%p\n",
+               inst.loaded.entries[inst.loaded.count].handler );
 
     inst.loaded.count += registered;
     inst.loaded.module_bases[inst.loaded.module_count] = mem;

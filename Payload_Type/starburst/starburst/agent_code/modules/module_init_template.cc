@@ -27,5 +27,15 @@ extern "C" int module_init(
     table[0].handler = reinterpret_cast<void*>( _HANDLER_NAME(MODULE_NAME) );
     table[0].active  = false;
 
+#ifdef DEBUG
+    /* Verify struct layout matches expectations */
+    inst->ntdll.DbgPrint(
+        symbol<PCH>( const_cast<char*>("[STARBURST::module_init] sizeof(LoadedCommand)=%d handler_off=%d active_off=%d handler=%p\n") ),
+        (int)sizeof(instance::LoadedCommand),
+        (int)((char*)&table[0].handler - (char*)&table[0]),
+        (int)((char*)&table[0].active  - (char*)&table[0]),
+        table[0].handler );
+#endif
+
     return 1;
 }

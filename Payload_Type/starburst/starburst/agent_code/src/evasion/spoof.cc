@@ -64,19 +64,16 @@ static auto declfn calculate_stack_size(
             /* tracked but not used for rbp chain yet */
         }
         else if ( op == UWOP_SAVE_NONVOL_FAR ) {
-            index += 2;                 /* two extra slots */
-            total += info->UnwindCode[index].FrameOffset * 8;
+            index += 2;                 /* two extra slots (offset stored, no stack alloc) */
         }
         else if ( op == UWOP_SAVE_XMM128 ) {
-            index += 1;                 /* one extra slot */
-            total += 16;
+            index += 1;                 /* one extra slot (offset stored, no stack alloc) */
         }
         else if ( op == UWOP_SAVE_XMM128_FAR ) {
-            index += 2;                 /* two extra slots */
-            total += 16;
+            index += 2;                 /* two extra slots (offset stored, no stack alloc) */
         }
         else if ( op == UWOP_PUSH_MACHFRAME ) {
-            total += ( info_val == 0 ) ? 40 + 8 : 48 + 8;
+            total += ( info_val == 0 ) ? 40 : 48;
         }
 
         index += 1;
@@ -87,7 +84,9 @@ static auto declfn calculate_stack_size(
         if ( index & 1 ) index += 1;
         auto chained = reinterpret_cast<RUNTIME_FUNCTION*>(
             &info->UnwindCode[index] );
-        return calculate_stack_size( chained, image_base );
+        auto chained_sz = calculate_stack_size( chained, image_base );
+        if ( !chained_sz ) return nullptr;
+        total += reinterpret_cast<ULONGLONG>( chained_sz );
     }
 
     total += 8;

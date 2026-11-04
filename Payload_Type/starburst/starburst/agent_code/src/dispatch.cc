@@ -298,6 +298,31 @@ auto declfn dispatch_command(
     for ( uint32_t i = 0; i < inst.loaded.count; i++ ) {
         if ( inst.loaded.entries[i].active && inst.loaded.entries[i].cmd_id == cmd_id ) {
             auto handler = reinterpret_cast<CmdHandlerFn>( inst.loaded.entries[i].handler );
+            DBG_PRINT( inst, "dispatch: loaded[%d] cmd=0x%02x handler=%p active=%d sizeof(LC)=%d\n",
+                       i, (unsigned)inst.loaded.entries[i].cmd_id,
+                       inst.loaded.entries[i].handler,
+                       (int)inst.loaded.entries[i].active,
+                       (int)sizeof(instance::LoadedCommand) );
+            /* Hex dump raw bytes of the entry for mismatch debugging */
+            {
+                auto raw = reinterpret_cast<uint8_t*>( &inst.loaded.entries[i] );
+                DBG_PRINT( inst, "dispatch: raw[0..23]=%02x %02x %02x %02x %02x %02x %02x %02x  %02x %02x %02x %02x %02x %02x %02x %02x  %02x %02x %02x %02x %02x %02x %02x %02x\n",
+                           raw[0], raw[1], raw[2], raw[3], raw[4], raw[5], raw[6], raw[7],
+                           raw[8], raw[9], raw[10], raw[11], raw[12], raw[13], raw[14], raw[15],
+                           raw[16], raw[17], raw[18], raw[19], raw[20], raw[21], raw[22], raw[23] );
+            }
+#if defined(INCLUDE_EVASION_SPOOF) && defined(_WIN64)
+            DBG_PRINT( inst, "dispatch: call_fn=%p spoof.initialized=%d\n",
+                       inst.evasion.spoof.call_fn,
+                       (int)inst.evasion.spoof.initialized );
+            /* Verify first bytes at handler address are valid code */
+            {
+                auto code = reinterpret_cast<uint8_t*>( inst.loaded.entries[i].handler );
+                DBG_PRINT( inst, "dispatch: code@handler=%02x %02x %02x %02x %02x %02x %02x %02x\n",
+                           code[0], code[1], code[2], code[3],
+                           code[4], code[5], code[6], code[7] );
+            }
+#endif
             handler( inst, task_uuid, params );
             return;
         }

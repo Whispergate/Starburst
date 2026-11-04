@@ -726,7 +726,7 @@ auto declfn instance::beacon_loop() -> void {
 
         DBG_PRINT( *this, "loop:send\n" );
         bool ok = starburst::transport_send( *this, data, data_len, &response, &resp_len );
-        DBG_PRINT( *this, ok ? "loop:send_ok\n" : "loop:send_fail\n" );
+        DBG_PRINT( *this, "loop:send_%s\n", ok ? "ok" : "fail" );
 
         starburst::package_destroy( *this, pkg );
 
